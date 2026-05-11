@@ -8,6 +8,7 @@ import {
 } from "@/components/atoms";
 import { CapacityInput } from "@/components/controls/capacity-input";
 import { LogHoursButton } from "@/components/controls/log-hours-button";
+import { FdeActivity } from "@/components/sections/fde-activity";
 import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";
 import { loadAll } from "@/lib/data";
 import { isEngagementOpen } from "@/lib/derive";
@@ -192,7 +193,7 @@ export default async function FdeDetail({
       )}
 
       {myTemplates.length > 0 && (
-        <section>
+        <section className="mb-16">
           <SectionHeader eyebrow="— Templates" title="Patterns this FDE extracted." />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-line border border-line rounded-sm overflow-hidden">
             {myTemplates.map((t) => (
@@ -218,6 +219,11 @@ export default async function FdeDetail({
           </div>
         </section>
       )}
+
+      <section>
+        <SectionHeader eyebrow="— Recent activity" title="What this FDE has touched." />
+        <FdeActivity fdeSlug={fde.id} />
+      </section>
     </PageShell>
   );
 }

@@ -49,6 +49,17 @@ export const listUpdatesByEngagement = query({
       .collect(),
 });
 
+export const listUpdatesByActor = query({
+  args: { actor_fde_id: v.id("fdes"), limit: v.optional(v.number()) },
+  handler: async (ctx, { actor_fde_id, limit }) => {
+    const q = ctx.db
+      .query("engagement_updates")
+      .withIndex("by_actor", (q) => q.eq("actor_fde_id", actor_fde_id))
+      .order("desc");
+    return limit ? q.take(limit) : q.collect();
+  },
+});
+
 export const listNotesByEngagement = query({
   args: { engagement_id: v.id("engagements") },
   handler: async (ctx, { engagement_id }) =>

@@ -8,11 +8,14 @@ import {
   StatusChip,
 } from "@/components/atoms";
 import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";
+import { EndDateInput } from "@/components/controls/end-date-input";
+import { EngagementKeys } from "@/components/controls/engagement-keys";
 import { HealthMenu } from "@/components/controls/health-menu";
 import { NotesEditor } from "@/components/controls/notes-editor";
 import { PhaseMenu } from "@/components/controls/phase-menu";
 import { ProgressSlider } from "@/components/controls/progress-slider";
 import { TouchedButton } from "@/components/controls/touched-button";
+import { WeeklyHoursInput } from "@/components/controls/weekly-hours-input";
 import {
   NewDeploymentButton,
   ReassignButton,
@@ -44,6 +47,7 @@ export default async function EngagementDetail({
 
   return (
     <PageShell>
+      <EngagementKeys engagementSlug={eng.id} />
       <PageHeader
         eyebrow={
           <>
@@ -113,12 +117,25 @@ export default async function EngagementDetail({
             tabs.
           </p>
           <div className="mt-5 t-caption text-ink-3">
-            <span className="num">{formatHours(eng.weekly_hours)}</span> / wk
-            committed
+            <WeeklyHoursInput
+              engagementSlug={eng.id}
+              current={eng.weekly_hours}
+            />{" "}
+            / wk committed
             <br />
             Started{" "}
             <span className="num">{formatDate(eng.start_date)}</span> · ends{" "}
-            <span className="num">{formatDate(eng.expected_end_date)}</span>
+            <EndDateInput
+              engagementSlug={eng.id}
+              current={eng.expected_end_date}
+            />
+          </div>
+          <div className="mt-3 t-caption text-ink-3">
+            Tip: hit{" "}
+            <kbd className="rounded-sm border border-line bg-surface px-1 num text-[10px]">
+              u
+            </kbd>{" "}
+            to mark touched.
           </div>
         </div>
         <NotesEditor

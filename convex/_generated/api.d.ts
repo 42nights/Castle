@@ -42,6 +42,7 @@ export declare const api: {
     getBySlug: AnyQuery;
     listAssignments: AnyQuery;
     listUpdatesByEngagement: AnyQuery;
+    listUpdatesByActor: AnyQuery;
     listNotesByEngagement: AnyQuery;
     create: AnyMutation;
     update: AnyMutation;
