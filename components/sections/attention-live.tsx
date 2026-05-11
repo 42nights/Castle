@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Avatar } from "@/components/atoms";
 import { TouchedButton } from "@/components/controls/touched-button";
 import { api } from "@/convex/_generated/api";
@@ -59,6 +59,46 @@ export function AttentionListLive() {
   const resolve = useRunMutation(api.attention.resolve);
   const resolveManual = useRunMutation(api.attention.resolveManualItem);
 
+  const doSnooze = useCallback(
+    async (item_key: string, durationHours: number) => {
+      if (!actor) return;
+      const until = new Date(
+        Date.now() + durationHours * 3_600_000,
+      ).toISOString();
+      await snooze(
+        {
+          item_key,
+          until,
+          reason: "snoozed",
+          actor_fde_id: actor._id as never,
+        },
+        {
+          success:
+            durationHours < 24 ? "Snoozed" : `Snoozed ${durationHours / 24}d`,
+        },
+      );
+    },
+    [actor, snooze],
+  );
+
+  const doResolve = useCallback(
+    async (item: LiveItem) => {
+      if (!actor) return;
+      if (item.source === "manual" && item.manual_id) {
+        await resolveManual(
+          { id: item.manual_id as never, actor_fde_id: actor._id as never },
+          { success: "Resolved" },
+        );
+      } else {
+        await resolve(
+          { item_key: item.item_key, actor_fde_id: actor._id as never },
+          { success: "Resolved" },
+        );
+      }
+    },
+    [actor, resolve, resolveManual],
+  );
+
   if (items === undefined) {
     return (
       <section className="mb-14 border border-line rounded-md p-6 bg-surface">
@@ -83,36 +123,10 @@ export function AttentionListLive() {
     (acc, i) => ({ ...acc, [i.severity]: (acc[i.severity] ?? 0) + 1 }),
     { critical: 0, high: 0, medium: 0 },
   );
-
   const fdeById = new Map((fdes ?? []).map((f) => [f._id, f]));
   const engagementSlugById = new Map(
     (engagementsList ?? []).map((e) => [e._id, e.slug]),
   );
-
-  const doSnooze = async (item_key: string, durationHours: number) => {
-    if (!actor) return;
-    const until = new Date(
-      Date.now() + durationHours * 3_600_000,
-    ).toISOString();
-    await snooze(
-      { item_key, until, reason: "snoozed", actor_fde_id: actor._id as never },
-      { success: durationHours < 24 ? "Snoozed" : `Snoozed ${durationHours / 24}d` },
-    );
-  };
-  const doResolve = async (item: LiveItem) => {
-    if (!actor) return;
-    if (item.source === "manual" && item.manual_id) {
-      await resolveManual(
-        { id: item.manual_id as never, actor_fde_id: actor._id as never },
-        { success: "Resolved" },
-      );
-    } else {
-      await resolve(
-        { item_key: item.item_key, actor_fde_id: actor._id as never },
-        { success: "Resolved" },
-      );
-    }
-  };
 
   return (
     <section className="mb-14">

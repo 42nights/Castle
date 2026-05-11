@@ -6,22 +6,14 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { useActorSlug } from "@/lib/use-actor";
 import { useRunMutation } from "@/lib/use-run-mutation";
+import { useSyncedDraft } from "@/lib/use-synced-draft";
 
 type Kind = "customer" | "fde" | "template";
 
 const API = {
-  customer: {
-    get: api.customers.getBySlug,
-    update: api.customers.update,
-  },
-  fde: {
-    get: api.fdes.getBySlug,
-    update: api.fdes.update,
-  },
-  template: {
-    get: api.templates.getBySlug,
-    update: api.templates.update,
-  },
+  customer: { get: api.customers.getBySlug, update: api.customers.update },
+  fde: { get: api.fdes.getBySlug, update: api.fdes.update },
+  template: { get: api.templates.getBySlug, update: api.templates.update },
 } as const;
 
 export function InlineName({
@@ -47,10 +39,9 @@ export function InlineName({
   const run = useRunMutation(API[kind].update);
 
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(current);
+  const [draft, setDraft, resetDraft] = useSyncedDraft(current, editing);
   const ref = useRef<HTMLInputElement>(null);
 
-  useEffect(() => setDraft(current), [current]);
   useEffect(() => {
     if (editing) ref.current?.select();
   }, [editing]);
@@ -60,12 +51,12 @@ export function InlineName({
     if (draft.trim() === current.trim()) return;
     if (!draft.trim()) {
       toast.error("Name cannot be empty");
-      setDraft(current);
+      resetDraft();
       return;
     }
     if (!entity) {
       toast.error("Entity not in Convex.");
-      setDraft(current);
+      resetDraft();
       return;
     }
     await run(
@@ -102,7 +93,7 @@ export function InlineName({
           (e.target as HTMLInputElement).blur();
         }
         if (e.key === "Escape") {
-          setDraft(current);
+          resetDraft();
           setEditing(false);
         }
       }}

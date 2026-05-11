@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -45,13 +45,16 @@ export function ReassignEngagementDialog({
   const [pending, setPending] = useState(false);
 
   // Seed selection from current active assignments when they arrive.
-  useEffect(() => {
-    if (!assignments) return;
-    const active = assignments
-      .filter((a) => a.removed_at === null)
-      .map((a) => a.fde_id);
-    setSelected(active);
-  }, [assignments]);
+  // setState-during-render with prev-ref-tracking to avoid cascade renders.
+  const [prevAssignments, setPrevAssignments] = useState<typeof assignments>(
+    undefined,
+  );
+  if (assignments && assignments !== prevAssignments) {
+    setPrevAssignments(assignments);
+    setSelected(
+      assignments.filter((a) => a.removed_at === null).map((a) => a.fde_id),
+    );
+  }
 
   const submit = async () => {
     if (!eng || !actor) {

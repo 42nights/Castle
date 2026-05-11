@@ -3,8 +3,6 @@ import { notFound } from "next/navigation";
 import {
   AvatarGroup,
   HealthPip,
-  PhaseBadge,
-  ProgressBar,
   StatusChip,
 } from "@/components/atoms";
 import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";

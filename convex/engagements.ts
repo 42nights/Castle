@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { logEngagementUpdate } from "./lib/audit";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
@@ -70,10 +70,13 @@ export const listNotesByEngagement = query({
       .collect(),
 });
 
-async function activeAssignments(ctx: any, engagement_id: Id<"engagements">) {
+async function activeAssignments(
+  ctx: MutationCtx,
+  engagement_id: Id<"engagements">,
+) {
   return ctx.db
     .query("engagement_assignments")
-    .withIndex("by_engagement", (q: any) =>
+    .withIndex("by_engagement", (q) =>
       q.eq("engagement_id", engagement_id).eq("removed_at", null),
     )
     .collect();
@@ -181,16 +184,13 @@ export const movePhase = mutation({
     const eng = await ctx.db.get(id);
     if (!eng) throw new Error("engagement not found");
     const now = nowIso();
-    const patch: Record<string, unknown> = {
+    await ctx.db.patch(id, {
       phase: nextPhase,
       last_update_at: now,
       updated_at: now,
       updated_by_fde_id: actor_fde_id,
-    };
-    if (nextPhase === "support") {
-      patch.progress_pct = 100;
-    }
-    await ctx.db.patch(id, patch as any);
+      ...(nextPhase === "support" ? { progress_pct: 100 } : {}),
+    });
     await logEngagementUpdate(ctx, {
       engagement_id: id,
       actor_fde_id,
@@ -261,16 +261,16 @@ export const reassign = mutation({
     const eng = await ctx.db.get(id);
     if (!eng) throw new Error("engagement not found");
     const current = await activeAssignments(ctx, id);
-    const currentIds = new Set(current.map((a: any) => a.fde_id as string));
-    const nextIds = new Set(fde_ids as unknown as string[]);
+    const currentIds = new Set(current.map((a) => a.fde_id));
+    const nextIds = new Set(fde_ids);
     const now = nowIso();
     for (const a of current) {
-      if (!nextIds.has(a.fde_id as unknown as string)) {
+      if (!nextIds.has(a.fde_id)) {
         await ctx.db.patch(a._id, { removed_at: now });
       }
     }
     for (const fid of fde_ids) {
-      if (!currentIds.has(fid as unknown as string)) {
+      if (!currentIds.has(fid)) {
         await ctx.db.insert("engagement_assignments", {
           engagement_id: id,
           fde_id: fid,

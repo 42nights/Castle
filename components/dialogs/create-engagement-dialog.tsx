@@ -38,15 +38,14 @@ export function CreateEngagementDialog({
   ) as { _id: string } | null | undefined;
   const run = useRunMutation(api.engagements.create);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const sixWeeksOut = new Date(Date.now() + 42 * 86400000)
-    .toISOString()
-    .slice(0, 10);
-
   const [customerId, setCustomerId] = useState("");
   const [selectedFdes, setSelectedFdes] = useState<string[]>([]);
-  const [start, setStart] = useState(today);
-  const [end, setEnd] = useState(sixWeeksOut);
+  const [start, setStart] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+  const [end, setEnd] = useState(() =>
+    new Date(Date.now() + 42 * 86400000).toISOString().slice(0, 10),
+  );
   const [phase, setPhase] = useState<Phase>("discovery");
   const [weeklyHours, setWeeklyHours] = useState(20);
   const [progress, setProgress] = useState(0);

@@ -32,7 +32,6 @@ const sevRank: Record<AttentionSeverity, number> = {
   high: 1,
   medium: 2,
 };
-const healthRank = { red: 0, yellow: 1, green: 2 };
 
 function daysSince(iso: string, now: number): number {
   const t = Date.parse(iso.length === 10 ? `${iso}T00:00:00Z` : iso);

@@ -60,12 +60,15 @@ export function CommandPalette() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  useEffect(() => {
+  // Reset query + active when the palette opens (setState-during-render pattern).
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
       setQuery("");
       setActive(0);
     }
-  }, [open]);
+  }
 
   const filtered = ACTIONS.filter((a) =>
     a.label.toLowerCase().includes(query.toLowerCase()) ||

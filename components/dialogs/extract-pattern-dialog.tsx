@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -60,11 +60,15 @@ export function ExtractPatternDialog({
   const [pending, setPending] = useState(false);
 
   // Auto-populate summary from engagement notes when source picked.
-  useEffect(() => {
-    if (!engagementId || summary) return;
-    const eng = engagements?.find((e) => e._id === engagementId);
-    if (eng) setSummary(eng.notes_current);
-  }, [engagementId, engagements, summary]);
+  // setState-during-render to avoid the cascade-render lint.
+  const [prevEngId, setPrevEngId] = useState(engagementId);
+  if (engagementId !== prevEngId) {
+    setPrevEngId(engagementId);
+    if (engagementId && !summary) {
+      const eng = engagements?.find((e) => e._id === engagementId);
+      if (eng) setSummary(eng.notes_current);
+    }
+  }
 
   const customerById = useMemo(
     () => new Map((customers ?? []).map((c) => [c._id, c])),

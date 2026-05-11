@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import {
   CartesianGrid,
   Line,
@@ -16,13 +16,19 @@ import type { FounderHoursPoint } from "@/lib/derive";
 import { formatMonth, formatUsdCompact } from "@/lib/format";
 
 export function FounderHoursChart({ points }: { points: FounderHoursPoint[] }) {
-  const [mounted, setMounted] = useState(false);
+  // Recharts measures parent dimensions on mount; in SSR they're -1.
+  // useSyncExternalStore with constant snapshots is the canonical "have we
+  // hydrated yet" check that lints cleanly.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
   const [editing, setEditing] = useState<{
     month: string;
     hours: number;
     arr: number;
   } | null>(null);
-  useEffect(() => setMounted(true), []);
   const chartData = points.map((p) => ({
     month: p.month,
     monthLabel: formatMonth(p.month),

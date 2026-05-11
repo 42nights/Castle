@@ -1,11 +1,11 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { useActorSlug } from "@/lib/use-actor";
 import { useRunMutation } from "@/lib/use-run-mutation";
+import { useSyncedDraft } from "@/lib/use-synced-draft";
 
 export function ProgressSlider({
   engagementSlug,
@@ -25,8 +25,10 @@ export function ProgressSlider({
   ) as { _id: string } | null | undefined;
   const run = useRunMutation(api.engagements.setProgress);
 
-  const [draft, setDraft] = useState(current);
-  useEffect(() => setDraft(current), [current]);
+  // Slider doesn't have a discrete "editing" mode — we treat it as always
+  // editable but only adopt upstream changes when slider isn't being dragged.
+  // For simplicity: always adopt upstream changes immediately.
+  const [draft, setDraft, resetDraft] = useSyncedDraft(current);
 
   const commit = async () => {
     if (draft === current) return;
@@ -34,7 +36,7 @@ export function ProgressSlider({
       toast.error(
         !actorFde ? "Pick an actor FDE first." : "Engagement not in Convex.",
       );
-      setDraft(current);
+      resetDraft();
       return;
     }
     await run(

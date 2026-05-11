@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { useActorSlug } from "@/lib/use-actor";
 import { useRunMutation } from "@/lib/use-run-mutation";
+import { useSyncedDraft } from "@/lib/use-synced-draft";
 
 export function WeeklyHoursInput({
   engagementSlug,
@@ -26,10 +27,9 @@ export function WeeklyHoursInput({
   const run = useRunMutation(api.engagements.update);
 
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(current);
+  const [draft, setDraft, resetDraft] = useSyncedDraft(current, editing);
   const ref = useRef<HTMLInputElement>(null);
 
-  useEffect(() => setDraft(current), [current]);
   useEffect(() => {
     if (editing) ref.current?.select();
   }, [editing]);
@@ -39,12 +39,12 @@ export function WeeklyHoursInput({
     if (draft === current) return;
     if (!eng || !actor) {
       toast.error(!actor ? "Pick an actor FDE." : "Engagement missing.");
-      setDraft(current);
+      resetDraft();
       return;
     }
     if (draft < 0) {
       toast.error("Hours must be ≥ 0");
-      setDraft(current);
+      resetDraft();
       return;
     }
     await run(
@@ -86,7 +86,7 @@ export function WeeklyHoursInput({
           (e.target as HTMLInputElement).blur();
         }
         if (e.key === "Escape") {
-          setDraft(current);
+          resetDraft();
           setEditing(false);
         }
       }}

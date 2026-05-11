@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { useActorSlug } from "@/lib/use-actor";
@@ -48,26 +48,33 @@ export function NotesEditor({
 
   const [body, setBody] = useState(initialBody);
   const [baseVersion, setBaseVersion] = useState(initialVersion);
+  // Track what we successfully wrote last; backing this with state (not a ref)
+  // means React re-renders when it changes, so the "save now" disabled flag
+  // and the autosave guard observe up-to-date values.
+  const [lastSaved, setLastSaved] = useState(initialBody);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [saving, setSaving] = useState(false);
-  const clientId = useMemo(() => getOrCreateClientId(engagementSlug), [engagementSlug]);
-  const lastSavedRef = useRef(initialBody);
+  const clientId = useMemo(
+    () => getOrCreateClientId(engagementSlug),
+    [engagementSlug],
+  );
 
-  // Sync incoming Convex state if our local copy hasn't diverged.
-  useEffect(() => {
-    if (!live) return;
-    if (live.notes_current === lastSavedRef.current) {
-      // External update — adopt it.
-      if (live.notes_version !== baseVersion) {
-        setBaseVersion(live.notes_version);
-        setBody(live.notes_current);
-        lastSavedRef.current = live.notes_current;
-      }
+  // Adopt incoming Convex state when our local copy hasn't diverged.
+  // setState-during-render avoids the cascade-render lint.
+  const [prevLive, setPrevLive] = useState<LiveEngagement | null | undefined>(
+    undefined,
+  );
+  if (live && live !== prevLive) {
+    setPrevLive(live);
+    if (live.notes_current === lastSaved && live.notes_version !== baseVersion) {
+      setBaseVersion(live.notes_version);
+      setBody(live.notes_current);
+      setLastSaved(live.notes_current);
     }
-  }, [live, baseVersion]);
+  }
 
   const save = useCallback(async () => {
-    if (body === lastSavedRef.current) return;
+    if (body === lastSaved) return;
     if (!actorFde || !live) {
       toast.error(
         !actorFde ? "Pick an actor FDE first." : "Engagement not in Convex.",
@@ -88,19 +95,22 @@ export function NotesEditor({
     setSaving(false);
     if (result) {
       setBaseVersion(result.version);
-      lastSavedRef.current = body;
+      setLastSaved(body);
       setSavedAt(new Date());
     }
-  }, [body, actorFde, live, baseVersion, clientId, run]);
+  }, [body, lastSaved, actorFde, live, baseVersion, clientId, run]);
 
-  // Debounced autosave.
+  // Debounced autosave — setTimeout callback is fine; rule only flags
+  // synchronous setState within the effect body.
   useEffect(() => {
-    if (body === lastSavedRef.current) return;
+    if (body === lastSaved) return;
     const handle = setTimeout(() => {
       void save();
     }, 800);
     return () => clearTimeout(handle);
-  }, [body, save]);
+  }, [body, lastSaved, save]);
+
+  const dirty = body !== lastSaved;
 
   return (
     <div className="border border-line rounded-md bg-page">
@@ -125,7 +135,7 @@ export function NotesEditor({
         </span>
         <button
           onClick={save}
-          disabled={saving || body === lastSavedRef.current}
+          disabled={saving || !dirty}
           className="h-6 px-2 rounded-sm border border-line bg-page text-ink-2 hover:text-ink hover:bg-surface disabled:opacity-40 text-[11px]"
         >
           save now

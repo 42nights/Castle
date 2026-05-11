@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { useActorSlug } from "@/lib/use-actor";
 import { useRunMutation } from "@/lib/use-run-mutation";
+import { useSyncedDraft } from "@/lib/use-synced-draft";
 
 export function CapacityInput({
   fdeSlug,
@@ -26,10 +27,9 @@ export function CapacityInput({
   const run = useRunMutation(api.fdes.setCapacity);
 
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(current);
+  const [draft, setDraft, resetDraft] = useSyncedDraft(current, editing);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => setDraft(current), [current]);
   useEffect(() => {
     if (editing) inputRef.current?.select();
   }, [editing]);
@@ -39,12 +39,12 @@ export function CapacityInput({
     if (draft === current) return;
     if (!fde) {
       toast.error("FDE not in Convex.");
-      setDraft(current);
+      resetDraft();
       return;
     }
     if (draft < 0) {
       toast.error("Capacity must be ≥ 0");
-      setDraft(current);
+      resetDraft();
       return;
     }
     await run(
@@ -89,7 +89,7 @@ export function CapacityInput({
           (e.target as HTMLInputElement).blur();
         }
         if (e.key === "Escape") {
-          setDraft(current);
+          resetDraft();
           setEditing(false);
         }
       }}

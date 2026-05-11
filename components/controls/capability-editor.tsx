@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
+import { useSyncedDraft } from "@/lib/use-synced-draft";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { useActorSlug } from "@/lib/use-actor";
@@ -173,10 +174,9 @@ function CapRow({
   onDelete: () => void | Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(cap.body);
+  const [draft, setDraft, resetDraft] = useSyncedDraft(cap.body, editing);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => setDraft(cap.body), [cap.body]);
   useEffect(() => {
     if (editing) inputRef.current?.select();
   }, [editing]);
@@ -203,7 +203,7 @@ function CapRow({
               (e.target as HTMLInputElement).blur();
             }
             if (e.key === "Escape") {
-              setDraft(cap.body);
+              resetDraft();
               setEditing(false);
             }
           }}
