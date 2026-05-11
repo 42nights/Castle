@@ -11,11 +11,17 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { LogFounderMonthDialog } from "@/components/dialogs/log-founder-month-dialog";
 import type { FounderHoursPoint } from "@/lib/derive";
 import { formatMonth, formatUsdCompact } from "@/lib/format";
 
 export function FounderHoursChart({ points }: { points: FounderHoursPoint[] }) {
   const [mounted, setMounted] = useState(false);
+  const [editing, setEditing] = useState<{
+    month: string;
+    hours: number;
+    arr: number;
+  } | null>(null);
   useEffect(() => setMounted(true), []);
   const chartData = points.map((p) => ({
     month: p.month,
@@ -42,6 +48,20 @@ export function FounderHoursChart({ points }: { points: FounderHoursPoint[] }) {
             hours did it take to bring on a dollar of new ARR? Lower is more
             leverage. Target: <span className="text-ink">−50%</span> by Q3 2026.
           </p>
+          <button
+            onClick={() => {
+              const month = new Date().toISOString().slice(0, 7);
+              const existing = points.find((p) => p.month === month);
+              setEditing({
+                month,
+                hours: existing?.founder_hours_total ?? 0,
+                arr: existing?.new_arr_dollars ?? 0,
+              });
+            }}
+            className="mt-4 h-7 px-3 rounded-sm border border-line bg-page text-ink hover:bg-surface text-[12px]"
+          >
+            + Log this month
+          </button>
         </div>
 
         <div className="border border-line rounded-md p-5 bg-page">
@@ -113,6 +133,14 @@ export function FounderHoursChart({ points }: { points: FounderHoursPoint[] }) {
           </div>
         </div>
       </div>
+
+      <LogFounderMonthDialog
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        initialMonth={editing?.month}
+        initialHours={editing?.hours}
+        initialArr={editing?.arr}
+      />
     </section>
   );
 }

@@ -1,4 +1,5 @@
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { NewEngagementButton } from "@/components/sections/engagement-cta";
 import { loadAll } from "@/lib/data";
 import { engagementRows } from "@/lib/derive";
 import { EngagementsTable } from "./table";
@@ -12,6 +13,7 @@ export default function EngagementsPage() {
         eyebrow="— Engagements"
         title="What every FDE is working on, right now."
         description="The operational table. Red and yellow surface at top by default; click a row to open the engagement and read this week's notes."
+        actions={<NewEngagementButton />}
       />
       <EngagementsTable rows={rows} />
     </PageShell>
