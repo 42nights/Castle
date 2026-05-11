@@ -43,6 +43,22 @@ export function EditDeploymentDialog({
   const [deployedAt, setDeployedAt] = useState(initial.deployed_at);
   const [pending, setPending] = useState(false);
 
+  // Resync form state when the dialog opens with different `initial` props
+  // (e.g. user closes edit on deployment A and opens edit on B without
+  // unmounting the dialog).
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setAgentName(initial.agent_name);
+      setTemplateId(initial.template_id ?? "");
+      setHours(initial.hours_replaced_per_week);
+      setCustom(initial.customization_pct);
+      setDeployedAt(initial.deployed_at);
+      setPending(false);
+    }
+  }
+
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agentName.trim()) {

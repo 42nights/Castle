@@ -10,12 +10,16 @@ export default async function OverviewPage() {
   const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 
   if (convexUrl) {
-    // Live, reactive path via Convex.
-    const preloaded = await preloadQuery(api.dashboard.overview, {});
-    return <OverviewIsland preloaded={preloaded} />;
+    try {
+      // Live, reactive path via Convex.
+      const preloaded = await preloadQuery(api.dashboard.overview, {});
+      return <OverviewIsland preloaded={preloaded} />;
+    } catch (err) {
+      console.error("[/] preloadQuery failed; using JSON fixture:", err);
+    }
   }
 
-  // Fallback: v0 read-only path while Convex isn't provisioned.
+  // Fallback: v0 read-only path while Convex isn't provisioned / unreachable.
   const data = loadAll();
   return <OverviewSections data={data} />;
 }

@@ -60,13 +60,21 @@ export function NotesEditor({
   );
 
   // Adopt incoming Convex state when our local copy hasn't diverged.
-  // setState-during-render avoids the cascade-render lint.
-  const [prevLive, setPrevLive] = useState<LiveEngagement | null | undefined>(
-    undefined,
-  );
-  if (live && live !== prevLive) {
-    setPrevLive(live);
-    if (live.notes_current === lastSaved && live.notes_version !== baseVersion) {
+  //
+  // Track by `notes_version` rather than the Doc reference — Convex
+  // returns a fresh object on every query refresh, so the reference
+  // changes constantly even when content doesn't.
+  //
+  // Adoption rule: if the live version is newer than our base AND the
+  // user hasn't typed past their last save (body === lastSaved), pull
+  // the new content in. This catches "another tab wrote A→B while I had
+  // no local edits" even when live.notes_current differs from lastSaved.
+  const [prevVersion, setPrevVersion] = useState<number | null>(null);
+  if (live && live.notes_version !== prevVersion) {
+    setPrevVersion(live.notes_version);
+    const noLocalEdits = body === lastSaved;
+    const liveIsNewer = live.notes_version > baseVersion;
+    if (noLocalEdits && liveIsNewer) {
       setBaseVersion(live.notes_version);
       setBody(live.notes_current);
       setLastSaved(live.notes_current);

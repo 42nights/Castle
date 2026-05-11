@@ -20,11 +20,14 @@ type Category = "GTM" | "Ops" | "Content" | "BD" | "Research";
 export function ExtractPatternDialog({
   open,
   onClose,
-  sourceEngagementId,
+  sourceEngagementSlug,
 }: {
   open: boolean;
   onClose: () => void;
-  sourceEngagementId?: string;
+  /** Human-friendly engagement slug (`eng-pe-g`), not a Convex Id.
+   *  The dialog resolves it to the matching Convex _id once the
+   *  engagements list arrives. */
+  sourceEngagementSlug?: string;
 }) {
   const engagements = useQuery(api.engagements.list) as
     | Array<{
@@ -47,9 +50,7 @@ export function ExtractPatternDialog({
   ) as { _id: string } | null | undefined;
   const run = useRunMutation(api.patternExtractions.extract);
 
-  const [engagementId, setEngagementId] = useState<string>(
-    sourceEngagementId ?? "",
-  );
+  const [engagementId, setEngagementId] = useState<string>("");
   const [mode, setMode] = useState<"existing" | "new">("existing");
   const [templateId, setTemplateId] = useState<string>("");
   const [newName, setNewName] = useState("");
@@ -58,16 +59,53 @@ export function ExtractPatternDialog({
   const [summary, setSummary] = useState("");
   const [reused, setReused] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
+  // Tracks which engagementId we've already auto-populated summary for,
+  // so reopening the dialog (which clears it) triggers a fresh seed.
+  const [summarySeededFor, setSummarySeededFor] = useState<string | null>(null);
 
-  // Auto-populate summary from engagement notes when source picked.
-  // setState-during-render to avoid the cascade-render lint.
-  const [prevEngId, setPrevEngId] = useState(engagementId);
-  if (engagementId !== prevEngId) {
-    setPrevEngId(engagementId);
-    if (engagementId && !summary) {
-      const eng = engagements?.find((e) => e._id === engagementId);
-      if (eng) setSummary(eng.notes_current);
+  // Resolve the slug prop to a Convex _id once engagements load.
+  const presetId =
+    sourceEngagementSlug && engagements
+      ? (engagements.find((e) => e.slug === sourceEngagementSlug)?._id ?? "")
+      : "";
+
+  // Reset form state when the dialog opens. Without this, reopening the
+  // same dialog with a different `sourceEngagementSlug` keeps stale fields.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setEngagementId(presetId);
+      setMode("existing");
+      setTemplateId("");
+      setNewName("");
+      setNewCategory("Ops");
+      setNewCapsText("");
+      setSummary("");
+      setReused([]);
+      setSummarySeededFor(null); // re-seed on next open
+      setPending(false);
     }
+  }
+
+  // If the dialog opened before engagements arrived, adopt the resolved
+  // preset id as soon as it's available.
+  if (open && presetId && !engagementId) {
+    setEngagementId(presetId);
+  }
+
+  // Auto-populate summary from engagement notes when source is chosen.
+  // Re-runs when either the user picks an engagement OR the engagements
+  // query finishes loading (covers the preselected-source-on-open case).
+  if (
+    engagementId &&
+    !summary &&
+    engagements &&
+    summarySeededFor !== engagementId
+  ) {
+    setSummarySeededFor(engagementId);
+    const eng = engagements.find((e) => e._id === engagementId);
+    if (eng) setSummary(eng.notes_current);
   }
 
   const customerById = useMemo(

@@ -26,11 +26,24 @@ export function LogFounderMonthDialog({
 }) {
   const run = useRunMutation(api.founderHours.upsertMonth);
   const [month, setMonth] = useState(
-    initialMonth ?? new Date().toISOString().slice(0, 7),
+    () => initialMonth ?? new Date().toISOString().slice(0, 7),
   );
   const [hours, setHours] = useState(initialHours);
   const [arr, setArr] = useState(initialArr);
   const [pending, setPending] = useState(false);
+
+  // Reset form state when the dialog opens with different initial props.
+  // setState-during-render pattern keeps this lint-clean under React 19.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setMonth(initialMonth ?? new Date().toISOString().slice(0, 7));
+      setHours(initialHours);
+      setArr(initialArr);
+      setPending(false);
+    }
+  }
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

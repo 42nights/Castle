@@ -6,11 +6,12 @@ import { ExtractPatternDialog } from "@/components/dialogs/extract-pattern-dialo
 export function ExtractPatternButton({
   label = "+ Extract pattern",
   className = "",
-  sourceEngagementId,
+  sourceEngagementSlug,
 }: {
   label?: string;
   className?: string;
-  sourceEngagementId?: string;
+  /** Human-friendly slug (`eng-pe-g`), not a Convex Id. */
+  sourceEngagementSlug?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -24,7 +25,7 @@ export function ExtractPatternButton({
       <ExtractPatternDialog
         open={open}
         onClose={() => setOpen(false)}
-        sourceEngagementId={sourceEngagementId}
+        sourceEngagementSlug={sourceEngagementSlug}
       />
     </>
   );

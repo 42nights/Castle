@@ -228,7 +228,7 @@ export default async function EngagementDetail({
             <div className="t-eyebrow mb-2">— Patterns extracted from this engagement</div>
             <h2 className="t-h2 text-ink">What we kept.</h2>
           </div>
-          <ExtractPatternButton sourceEngagementId={eng.id} />
+          <ExtractPatternButton sourceEngagementSlug={eng.id} />
         </div>
         {relatedExtractions.length === 0 ? (
           <p className="text-ink-3 text-sm">

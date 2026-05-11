@@ -38,7 +38,7 @@ export function CapabilityEditor({
   ) as { _id: string } | null | undefined;
   const add = useRunMutation(api.templates.addCapability);
   const update = useRunMutation(api.templates.updateCapability);
-  const reorder = useRunMutation(api.templates.reorderCapability);
+  const swap = useRunMutation(api.templates.swapCapabilityPositions);
   const remove = useRunMutation(api.templates.removeCapability);
 
   // Fallback path
@@ -84,18 +84,12 @@ export function CapabilityEditor({
     const idx = sorted.findIndex((c) => c._id === cap._id);
     const neighbor = sorted[idx + dir];
     if (!neighbor) return;
-    await reorder(
+    // Atomic swap — single Convex mutation = single transaction. No
+    // half-swapped state visible to other clients, no duplicate positions.
+    await swap(
       {
-        capability_id: cap._id as never,
-        new_position: neighbor.position,
-        actor_fde_id: (actor?._id ?? null) as never,
-      },
-      { success: "Reordered" },
-    );
-    await reorder(
-      {
-        capability_id: neighbor._id as never,
-        new_position: cap.position,
+        a_id: cap._id as never,
+        b_id: neighbor._id as never,
         actor_fde_id: (actor?._id ?? null) as never,
       },
       { success: "Reordered" },

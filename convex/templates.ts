@@ -146,6 +146,40 @@ export const reorderCapability = mutation({
   },
 });
 
+/**
+ * Swap two capability positions atomically. Replaces the previous two-call
+ * client-side dance which could leave the list with duplicate positions
+ * or in a half-swapped state if a refresh / concurrent reorder landed in
+ * the middle. Convex mutations are transactional, so this is safe.
+ */
+export const swapCapabilityPositions = mutation({
+  args: {
+    a_id: v.id("template_capabilities"),
+    b_id: v.id("template_capabilities"),
+    actor_fde_id: v.union(v.id("fdes"), v.null()),
+  },
+  handler: async (ctx, { a_id, b_id, actor_fde_id }) => {
+    if (a_id === b_id) return;
+    const a = await ctx.db.get(a_id);
+    const b = await ctx.db.get(b_id);
+    if (!a || !b) throw new Error("capability not found");
+    if (a.template_id !== b.template_id) {
+      throw new Error("cannot swap capabilities across templates");
+    }
+    const now = nowIso();
+    await ctx.db.patch(a_id, {
+      position: b.position,
+      updated_at: now,
+      updated_by_fde_id: actor_fde_id,
+    });
+    await ctx.db.patch(b_id, {
+      position: a.position,
+      updated_at: now,
+      updated_by_fde_id: actor_fde_id,
+    });
+  },
+});
+
 export const removeCapability = mutation({
   args: { capability_id: v.id("template_capabilities") },
   handler: async (ctx, { capability_id }) => {

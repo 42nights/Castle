@@ -33,26 +33,32 @@ export type LoadedOverview = {
  */
 export async function loadOverview(): Promise<LoadedOverview> {
   if (process.env.NEXT_PUBLIC_CONVEX_URL) {
-    const snapshot = (await fetchQuery(
-      api.dashboard.overview,
-      {},
-    )) as unknown as ConvexOverview;
-    const adapted = adaptOverview(snapshot);
-    const convexIdBySlug: Record<string, string> = {};
-    for (const f of snapshot.fdes) convexIdBySlug[f.slug] = f._id;
-    for (const c of snapshot.customers) convexIdBySlug[c.slug] = c._id;
-    for (const e of snapshot.engagements) convexIdBySlug[e.slug] = e._id;
-    for (const t of snapshot.templates) convexIdBySlug[t.slug] = t._id;
-    return {
-      fdes: adapted.fdes,
-      customers: adapted.customers,
-      engagements: adapted.engagements,
-      templates: adapted.templates,
-      deployments: adapted.deployments,
-      patternExtractions: adapted.patternExtractions,
-      founderHours: adapted.founderHours,
-      convexIdBySlug,
-    };
+    try {
+      const snapshot = (await fetchQuery(
+        api.dashboard.overview,
+        {},
+      )) as unknown as ConvexOverview;
+      const adapted = adaptOverview(snapshot);
+      const convexIdBySlug: Record<string, string> = {};
+      for (const f of snapshot.fdes) convexIdBySlug[f.slug] = f._id;
+      for (const c of snapshot.customers) convexIdBySlug[c.slug] = c._id;
+      for (const e of snapshot.engagements) convexIdBySlug[e.slug] = e._id;
+      for (const t of snapshot.templates) convexIdBySlug[t.slug] = t._id;
+      return {
+        fdes: adapted.fdes,
+        customers: adapted.customers,
+        engagements: adapted.engagements,
+        templates: adapted.templates,
+        deployments: adapted.deployments,
+        patternExtractions: adapted.patternExtractions,
+        founderHours: adapted.founderHours,
+        convexIdBySlug,
+      };
+    } catch (err) {
+      // Convex unreachable / mis-configured. Fall back to the v0 JSON
+      // snapshot so pages still render instead of throwing a server error.
+      console.error("[loadOverview] Convex fetch failed; using JSON fixture:", err);
+    }
   }
   const json = loadJson();
   return { ...json, convexIdBySlug: {} };
