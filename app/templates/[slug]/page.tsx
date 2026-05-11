@@ -8,12 +8,12 @@ import { formatDate, formatHours } from "@/lib/format";
 export default async function TemplateDetail({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { id } = await params;
+  const { slug } = await params;
   const { templates, customers, deployments, fdes, patternExtractions } =
     loadAll();
-  const tpl = templates.find((t) => t.id === id);
+  const tpl = templates.find((t) => t.id === slug);
   if (!tpl) notFound();
   const origin = customers.find((c) => c.id === tpl.origin_customer_id);
   const author = fdes.find((f) => f.id === tpl.authored_by_fde_id);

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { ConvexClientProvider } from "@/components/convex-provider";
 import { TopNav } from "@/components/top-nav";
 
 const fraunces = Fraunces({
@@ -37,8 +38,10 @@ export default function RootLayout({
       className={`${fraunces.variable} ${inter.variable} ${jetbrains.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-page text-ink font-sans">
-        <TopNav />
-        {children}
+        <ConvexClientProvider>
+          <TopNav />
+          {children}
+        </ConvexClientProvider>
       </body>
     </html>
   );

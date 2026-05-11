@@ -14,11 +14,11 @@ import { formatDate, formatHours, formatPct, formatUsd } from "@/lib/format";
 export default async function EngagementDetail({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { id } = await params;
+  const { slug } = await params;
   const { engagements, customers, fdes, deployments, templates, patternExtractions } = loadAll();
-  const eng = engagements.find((e) => e.id === id);
+  const eng = engagements.find((e) => e.id === slug);
   if (!eng) notFound();
   const customer = customers.find((c) => c.id === eng.customer_id)!;
   const team = eng.fde_ids

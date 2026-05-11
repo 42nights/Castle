@@ -8,9 +8,9 @@ import { formatDate, formatHours, formatUsd } from "@/lib/format";
 export default async function CustomerDetail({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { id } = await params;
+  const { slug } = await params;
   const {
     customers,
     engagements,
@@ -18,7 +18,7 @@ export default async function CustomerDetail({
     templates,
     patternExtractions,
   } = loadAll();
-  const customer = customers.find((c) => c.id === id);
+  const customer = customers.find((c) => c.id === slug);
   if (!customer) notFound();
 
   const myEngagements = engagements.filter((e) => e.customer_id === customer.id);

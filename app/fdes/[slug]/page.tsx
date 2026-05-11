@@ -14,11 +14,11 @@ import { formatDate, formatHours } from "@/lib/format";
 export default async function FdeDetail({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { id } = await params;
+  const { slug } = await params;
   const { fdes, engagements, customers, deployments, templates } = loadAll();
-  const fde = fdes.find((f) => f.id === id);
+  const fde = fdes.find((f) => f.id === slug);
   if (!fde) notFound();
 
   const cById = new Map(customers.map((c) => [c.id, c]));
