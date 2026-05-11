@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { HealthPip, PhaseBadge, StatusChip } from "@/components/atoms";
+import { HealthPip, PhaseBadge } from "@/components/atoms";
+import { CustomerHealthMenu } from "@/components/controls/customer-health-menu";
+import { CustomerStatusMenu } from "@/components/controls/customer-status-menu";
+import { MrrInput } from "@/components/controls/mrr-input";
 import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";
 import { loadAll } from "@/lib/data";
 import { formatDate, formatHours, formatUsd } from "@/lib/format";
@@ -51,8 +54,14 @@ export default async function CustomerDetail({
         }
         actions={
           <div className="flex items-center gap-4">
-            <StatusChip status={customer.status} />
-            <HealthPip value={customer.health} label={`Health · ${customer.health}`} />
+            <CustomerStatusMenu
+              customerSlug={customer.id}
+              current={customer.status}
+            />
+            <CustomerHealthMenu
+              customerSlug={customer.id}
+              current={customer.health}
+            />
           </div>
         }
       />
@@ -60,7 +69,14 @@ export default async function CustomerDetail({
       <section className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-6 border-y border-line py-6 mb-14">
         <Field
           label="MRR"
-          value={<span className="num text-ink t-h3">{formatUsd(customer.current_mrr)}</span>}
+          value={
+            <div className="text-ink t-h3">
+              <MrrInput
+                customerSlug={customer.id}
+                current={customer.current_mrr}
+              />
+            </div>
+          }
         />
         <Field
           label="ARR run-rate"

@@ -6,6 +6,8 @@ import {
   HealthPip,
   PhaseBadge,
 } from "@/components/atoms";
+import { CapacityInput } from "@/components/controls/capacity-input";
+import { LogHoursButton } from "@/components/controls/log-hours-button";
 import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";
 import { loadAll } from "@/lib/data";
 import { isEngagementOpen } from "@/lib/derive";
@@ -54,13 +56,29 @@ export default async function FdeDetail({
         actions={<Avatar name={fde.name} size={56} />}
       />
 
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-6 border-y border-line py-6 mb-14">
+      <section className="grid grid-cols-2 md:grid-cols-5 gap-x-8 gap-y-6 border-y border-line py-6 mb-14">
         <Field
           label="Hours this week"
-          value={<span className="num text-ink t-h3">{formatHours(fde.hours_this_week)}</span>}
+          value={
+            <span className="num text-ink t-h3 inline-flex items-center gap-2">
+              {formatHours(fde.hours_this_week)}
+              <LogHoursButton fdeSlug={fde.id} />
+            </span>
+          }
         />
         <Field
-          label="Active engagements"
+          label="Capacity / wk"
+          value={
+            <span className="text-ink t-h3 num">
+              <CapacityInput
+                fdeSlug={fde.id}
+                current={fde.capacity_hours_per_week}
+              />
+            </span>
+          }
+        />
+        <Field
+          label="Active eng"
           value={<span className="num text-ink t-h3">{active.length}</span>}
         />
         <Field

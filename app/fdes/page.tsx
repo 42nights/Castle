@@ -1,4 +1,5 @@
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { NewFdeButton } from "@/components/ctas";
 import { loadAll } from "@/lib/data";
 import { fdeRows } from "@/lib/derive";
 import { FdesTable } from "./table";
@@ -12,6 +13,7 @@ export default function FdesPage() {
         eyebrow="— FDEs"
         title="Who&rsquo;s on the bench."
         description="Two founders right now. This page is built for when there are ten."
+        actions={<NewFdeButton />}
       />
       <FdesTable rows={rows} />
     </PageShell>

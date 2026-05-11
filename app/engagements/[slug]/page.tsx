@@ -13,6 +13,12 @@ import { NotesEditor } from "@/components/controls/notes-editor";
 import { PhaseMenu } from "@/components/controls/phase-menu";
 import { ProgressSlider } from "@/components/controls/progress-slider";
 import { TouchedButton } from "@/components/controls/touched-button";
+import {
+  NewDeploymentButton,
+  ReassignButton,
+} from "@/components/ctas";
+import { ExtractPatternButton } from "@/components/sections/extraction-cta";
+import { EngagementTimeline } from "@/components/sections/engagement-timeline";
 import { loadAll } from "@/lib/data";
 import { formatDate, formatHours, formatPct, formatUsd } from "@/lib/format";
 
@@ -122,7 +128,19 @@ export default async function EngagementDetail({
       </section>
 
       <section className="mb-16">
-        <SectionHeader eyebrow="— Agents on this engagement" title="Deployments." />
+        <div className="flex items-end justify-between gap-6 mb-6 border-b border-line pb-4">
+          <div>
+            <div className="t-eyebrow mb-2">— Agents on this engagement</div>
+            <h2 className="t-h2 text-ink">Deployments.</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <ReassignButton engagementSlug={eng.id} />
+            <NewDeploymentButton
+              engagementId={eng.id}
+              customerId={customer.id}
+            />
+          </div>
+        </div>
         {deps.length === 0 ? (
           <div className="text-ink-3 text-sm">None deployed yet.</div>
         ) : (
@@ -173,12 +191,21 @@ export default async function EngagementDetail({
         )}
       </section>
 
-      {relatedExtractions.length > 0 && (
-        <section className="mb-16">
-          <SectionHeader
-            eyebrow="— Patterns extracted from this engagement"
-            title="What we kept."
-          />
+      <section className="mb-16">
+        <div className="flex items-end justify-between gap-6 mb-6 border-b border-line pb-4">
+          <div>
+            <div className="t-eyebrow mb-2">— Patterns extracted from this engagement</div>
+            <h2 className="t-h2 text-ink">What we kept.</h2>
+          </div>
+          <ExtractPatternButton sourceEngagementId={eng.id} />
+        </div>
+        {relatedExtractions.length === 0 ? (
+          <p className="text-ink-3 text-sm">
+            Nothing extracted yet. When this engagement teaches us a pattern
+            worth reusing, capture it with{" "}
+            <span className="t-mono">+ Extract pattern</span>.
+          </p>
+        ) : (
           <ul className="border-t border-line">
             {relatedExtractions.map((p) => {
               const tpl = tplById.get(p.extracted_into_template_id);
@@ -204,8 +231,13 @@ export default async function EngagementDetail({
               );
             })}
           </ul>
-        </section>
-      )}
+        )}
+      </section>
+
+      <section className="mb-16">
+        <SectionHeader eyebrow="— Activity" title="Touch log." />
+        <EngagementTimeline engagementSlug={eng.id} />
+      </section>
     </PageShell>
   );
 }
