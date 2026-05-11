@@ -6,11 +6,19 @@ export function nowIso(): string {
 }
 
 export function slugify(input: string): string {
-  return input
+  // NFD-decompose accents (José → Jose) then strip combining marks.
+  // Without this, accented Latin chars were silently dropped.
+  // Non-Latin scripts (e.g. CJK) still fall through to the "x" fallback;
+  // call sites are expected to validate that anyway.
+  const normalized = input
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64) || "x";
+    .replace(/[^a-z0-9]+/g, "-");
+  // Slice FIRST, then trim — slicing after trim could re-introduce a
+  // trailing dash when the cut lands inside a dash run.
+  const sliced = normalized.slice(0, 64).replace(/^-+|-+$/g, "");
+  return sliced || "x";
 }
 
 /**

@@ -30,8 +30,13 @@ export function checkSlug(label: string, s: string): string {
   if (typeof s !== "string" || s.length === 0) {
     throw new Error(`${label} cannot be empty`);
   }
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(s)) {
-    throw new Error(`${label} must be lowercase alnum + dashes`);
+  // Canonical slug: starts + ends with [a-z0-9], single dashes between
+  // alnum runs. Rejects "a--b" (double dashes) and "abc-" (trailing
+  // dash) so this stays in sync with what slugify() actually produces.
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s)) {
+    throw new Error(
+      `${label} must be canonical slug: lowercase alnum runs separated by single dashes`,
+    );
   }
   return s;
 }

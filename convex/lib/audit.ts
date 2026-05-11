@@ -12,6 +12,24 @@ type Kind =
   | "create"
   | "delete";
 
+/**
+ * Stringify a payload defensively. `JSON.stringify` can:
+ *   - return `undefined` for top-level functions/symbols/undefined
+ *   - throw on circular references or BigInt
+ * Neither should crash the parent mutation. Fall back to "{}" + log,
+ * so the audit row still lands.
+ */
+function safeJsonString(payload: unknown): string {
+  try {
+    const out = JSON.stringify(payload ?? {});
+    if (typeof out !== "string") return "{}";
+    return out;
+  } catch (err) {
+    console.warn("[audit] payload serialization failed; storing {}:", err);
+    return "{}";
+  }
+}
+
 export async function logEngagementUpdate(
   ctx: MutationCtx,
   args: {
@@ -25,7 +43,7 @@ export async function logEngagementUpdate(
     engagement_id: args.engagement_id,
     actor_fde_id: args.actor_fde_id,
     kind: args.kind,
-    payload_json: JSON.stringify(args.payload ?? {}),
+    payload_json: safeJsonString(args.payload),
     at: nowIso(),
   });
 }
