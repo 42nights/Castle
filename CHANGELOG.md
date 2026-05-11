@@ -180,9 +180,41 @@ state when `open` transitions to true.
 
 ---
 
+**P23 — CHANGELOG.md + integration tests** ([…](https://github.com/local/P23))
+- Linear phase log P0–P22 (replacing scattered git-log archaeology).
+- `convex/integration.test.ts` (3 tests): full engagement lifecycle,
+  multi-tab notes concurrency, dashboard.overview workload accuracy.
+
+**P24 — Codex pass #9: convex/lib helpers + missing concurrently dep** ([…](https://github.com/local/P24))
+1. `slugify` decomposes accented Latin via NFD (José → jose; was jos).
+2. `slugify` trims after slice (no reintroduced trailing dash post-cut).
+3. `checkSlug` regex tightened to match what `slugify` actually produces
+   (rejects `a--b` and `abc-`).
+4. `logEngagementUpdate` `safeJsonString` wrapper (no crash on circular/
+   BigInt; falls back to `"{}"`).
+5. Installed `concurrently` (referenced by `pnpm dev:all` but missing).
+- `convex/lib/util.test.ts` (12 tests).
+
+**P25 — Full live-backend smoke verification** ([latest])
+- Booted Convex local + Next.js together.
+- All 10 routes 200 from the Convex live path (zero JSON-fallback
+  log entries).
+- One mutation per surface verified end-to-end:
+  - `markTouched`: `last_update_at` advanced past server time
+  - `setHealth`: green → yellow → green
+  - `founderHours.upsertMonth`: idempotent (2 calls = 1 row)
+  - `attention.list`: 9 derived items, severity-sorted exactly as
+    expected (2 critical, 3 high, 3 medium) — every rule firing:
+    `red-eng`, `stale-eng`, `churn`, `yellow-eng`, `overcommit`
+
+---
+
 ## Totals at last verified iteration
 
-- **Phases**: P0 → P22
-- **Tests**: 92 across 7 files (~299ms wall)
-- **Codex passes**: 8 (26 real bugs found and fixed)
+- **Phases**: P0 → P25
+- **Tests**: 104 across 9 files (~342ms wall)
+- **Codex passes**: 9 (30 real bugs found and fixed)
 - **Build / tsc / lint**: clean throughout
+- **End-to-end verified**: all 10 routes Convex live path; mutations
+  round-tripped for markTouched / setHealth / upsertMonth /
+  attention.list (9 derived rows, severity-sorted)
