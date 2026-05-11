@@ -3,8 +3,9 @@ import path from "node:path";
 
 export default defineConfig({
   test: {
-    include: ["lib/**/*.test.ts"],
-    environment: "node",
+    include: ["lib/**/*.test.ts", "convex/**/*.test.ts"],
+    environment: "edge-runtime",
+    server: { deps: { inline: ["convex-test"] } },
   },
   resolve: {
     alias: {
