@@ -11,7 +11,7 @@ import { InlineName } from "@/components/controls/inline-name";
 import { LogHoursButton } from "@/components/controls/log-hours-button";
 import { FdeActivity } from "@/components/sections/fde-activity";
 import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";
-import { loadAll } from "@/lib/data";
+import { loadOverview } from "@/lib/load-overview";
 import { isEngagementOpen } from "@/lib/derive";
 import { formatDate, formatHours } from "@/lib/format";
 
@@ -21,7 +21,7 @@ export default async function FdeDetail({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const { fdes, engagements, customers, deployments, templates } = loadAll();
+  const { fdes, engagements, customers, deployments, templates } = await loadOverview();
   const fde = fdes.find((f) => f.id === slug);
   if (!fde) notFound();
 

@@ -1,13 +1,13 @@
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { NewCustomerButton } from "@/components/ctas";
-import { loadAll } from "@/lib/data";
+import { loadOverview } from "@/lib/load-overview";
 import { customerRows } from "@/lib/derive";
 import { CustomersTable } from "./table";
 
 export const dynamic = "force-dynamic";
 
-export default function CustomersPage() {
-  const { customers, deployments } = loadAll();
+export default async function CustomersPage() {
+  const { customers, deployments } = await loadOverview();
   const rows = customerRows(customers, deployments);
   return (
     <PageShell>

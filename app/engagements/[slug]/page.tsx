@@ -23,7 +23,7 @@ import {
 import { ExtractPatternButton } from "@/components/sections/extraction-cta";
 import { EngagementTimeline } from "@/components/sections/engagement-timeline";
 import { NotesJournal } from "@/components/sections/notes-journal";
-import { loadAll } from "@/lib/data";
+import { loadOverview } from "@/lib/load-overview";
 import { formatDate, formatHours, formatPct, formatUsd } from "@/lib/format";
 
 export default async function EngagementDetail({
@@ -32,7 +32,7 @@ export default async function EngagementDetail({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const { engagements, customers, fdes, deployments, templates, patternExtractions } = loadAll();
+  const { engagements, customers, fdes, deployments, templates, patternExtractions } = await loadOverview();
   const eng = engagements.find((e) => e.id === slug);
   if (!eng) notFound();
   const customer = customers.find((c) => c.id === eng.customer_id)!;

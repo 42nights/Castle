@@ -1,13 +1,13 @@
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { NewEngagementButton } from "@/components/sections/engagement-cta";
-import { loadAll } from "@/lib/data";
+import { loadOverview } from "@/lib/load-overview";
 import { engagementRows } from "@/lib/derive";
 import { EngagementsTable } from "./table";
 
 export const dynamic = "force-dynamic";
 
-export default function EngagementsPage() {
-  const { engagements, customers, fdes } = loadAll();
+export default async function EngagementsPage() {
+  const { engagements, customers, fdes } = await loadOverview();
   const rows = engagementRows(engagements, customers, fdes);
   return (
     <PageShell>

@@ -4,7 +4,7 @@ import { CategoryBadge } from "@/components/atoms";
 import { CapabilityEditor } from "@/components/controls/capability-editor";
 import { InlineName } from "@/components/controls/inline-name";
 import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";
-import { loadAll } from "@/lib/data";
+import { loadOverview } from "@/lib/load-overview";
 import { formatDate, formatHours } from "@/lib/format";
 
 export default async function TemplateDetail({
@@ -14,7 +14,7 @@ export default async function TemplateDetail({
 }) {
   const { slug } = await params;
   const { templates, customers, deployments, fdes, patternExtractions } =
-    loadAll();
+    await loadOverview();
   const tpl = templates.find((t) => t.id === slug);
   if (!tpl) notFound();
   const origin = customers.find((c) => c.id === tpl.origin_customer_id);

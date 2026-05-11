@@ -1,11 +1,13 @@
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { NewTemplateButton } from "@/components/ctas";
-import { loadAll } from "@/lib/data";
+import { loadOverview } from "@/lib/load-overview";
 import { templateUsage } from "@/lib/derive";
 import { TemplateGrid } from "./grid";
 
-export default function TemplatesPage() {
-  const { templates, deployments, customers, fdes } = loadAll();
+export const dynamic = "force-dynamic";
+
+export default async function TemplatesPage() {
+  const { templates, deployments, customers, fdes } = await loadOverview();
   const usage = templateUsage(templates, deployments);
   return (
     <PageShell>

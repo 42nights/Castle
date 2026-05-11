@@ -6,7 +6,7 @@ import { CustomerStatusMenu } from "@/components/controls/customer-status-menu";
 import { InlineName } from "@/components/controls/inline-name";
 import { MrrInput } from "@/components/controls/mrr-input";
 import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";
-import { loadAll } from "@/lib/data";
+import { loadOverview } from "@/lib/load-overview";
 import { formatDate, formatHours, formatUsd } from "@/lib/format";
 
 export default async function CustomerDetail({
@@ -21,7 +21,7 @@ export default async function CustomerDetail({
     deployments,
     templates,
     patternExtractions,
-  } = loadAll();
+  } = await loadOverview();
   const customer = customers.find((c) => c.id === slug);
   if (!customer) notFound();
 

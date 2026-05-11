@@ -1,13 +1,13 @@
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { NewFdeButton } from "@/components/ctas";
-import { loadAll } from "@/lib/data";
+import { loadOverview } from "@/lib/load-overview";
 import { fdeRows } from "@/lib/derive";
 import { FdesTable } from "./table";
 
 export const dynamic = "force-dynamic";
 
-export default function FdesPage() {
-  const { fdes, engagements, customers } = loadAll();
+export default async function FdesPage() {
+  const { fdes, engagements, customers } = await loadOverview();
   const rows = fdeRows(fdes, engagements, customers);
   return (
     <PageShell>
