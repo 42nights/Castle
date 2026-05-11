@@ -144,6 +144,15 @@ export function EngagementsTable({ rows }: { rows: EngagementRow[] }) {
       ]}
       rowHref={(r) => `/engagements/${r.engagement.id}`}
       urlKey="eng"
+      emptyContent={
+        <span>
+          No engagements yet — use{" "}
+          <kbd className="rounded-sm border border-line bg-surface px-1 num text-[10px]">
+            ⌘K
+          </kbd>{" "}
+          → New engagement, or click the button above.
+        </span>
+      }
     />
   );
 }

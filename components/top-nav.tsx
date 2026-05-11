@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ActorBar } from "@/components/actor-bar";
+import { InFlightDot } from "@/components/in-flight-dot";
 
 const links = [
   { href: "/", label: "Overview" },
@@ -23,7 +24,11 @@ export function TopNav() {
           className="group flex items-baseline gap-2.5"
           aria-label="Castle, by 42nights Inc."
         >
-          <span className="inline-block h-1.5 w-1.5 translate-y-[-2px] rounded-full bg-accent" />
+          <span className="relative inline-block h-1.5 w-1.5 translate-y-[-2px] rounded-full bg-accent">
+            <span className="absolute -top-2 -right-1.5">
+              <InFlightDot />
+            </span>
+          </span>
           <span className="t-display text-[19px] leading-none text-ink group-hover:opacity-80 transition-opacity">
             Castle
           </span>

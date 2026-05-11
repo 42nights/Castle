@@ -129,6 +129,11 @@ export function FdesTable({ rows }: { rows: FdeRow[] }) {
       ]}
       rowHref={(r) => `/fdes/${r.fde.id}`}
       urlKey="fde"
+      emptyContent={
+        <span>
+          No FDEs yet — click <span className="t-mono">+ New FDE</span> above.
+        </span>
+      }
     />
   );
 }

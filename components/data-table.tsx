@@ -28,6 +28,7 @@ export function DataTable<TData, TValue>({
   searchPlaceholder = "Search…",
   rowHref,
   urlKey,
+  emptyContent,
 }: {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
@@ -39,6 +40,9 @@ export function DataTable<TData, TValue>({
   /** Namespace for URL search params (e.g. "eng", "cust"). When set,
    *  filter + search state is mirrored to / hydrated from search params. */
   urlKey?: string;
+  /** Rendered in the empty-row cell when there are no rows at all (not
+   *  just a no-filter-match). Useful for surfacing a + CTA. */
+  emptyContent?: React.ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -181,7 +185,9 @@ export function DataTable<TData, TValue>({
                   colSpan={columns.length}
                   className="py-14 text-center text-ink-3 text-sm"
                 >
-                  No rows match.
+                  {data.length === 0 && emptyContent
+                    ? emptyContent
+                    : "No rows match."}
                 </td>
               </tr>
             ) : (
