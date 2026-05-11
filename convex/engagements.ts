@@ -107,7 +107,10 @@ export const create = mutation({
       expected_end_date: args.expected_end_date,
       last_update_at: now,
       phase: args.phase,
-      progress_pct: args.progress_pct,
+      // Invariant: support phase implies the build is done. Clamp on entry
+      // so we don't depend on the caller passing the right value.
+      progress_pct:
+        args.phase === "support" ? 100 : Math.max(0, Math.min(100, args.progress_pct)),
       weekly_hours: args.weekly_hours,
       health: args.health,
       notes_current: args.notes,
@@ -210,6 +213,13 @@ export const setProgress = mutation({
     if (pct < 0 || pct > 100) throw new Error("progress must be 0-100");
     const eng = await ctx.db.get(id);
     if (!eng) throw new Error("engagement not found");
+    // Support phase pins progress at 100; setProgress can't lower it.
+    // Move the engagement out of support first if you want a different value.
+    if (eng.phase === "support" && pct !== 100) {
+      throw new Error(
+        "engagement is in support phase — progress locked at 100. Move phase first.",
+      );
+    }
     const now = nowIso();
     await ctx.db.patch(id, {
       progress_pct: pct,
@@ -260,17 +270,33 @@ export const reassign = mutation({
   handler: async (ctx, { id, actor_fde_id, fde_ids }) => {
     const eng = await ctx.db.get(id);
     if (!eng) throw new Error("engagement not found");
+    // Dedupe input — same FDE picked twice in the dialog shouldn't write two rows.
+    const nextIds = new Set(fde_ids);
     const current = await activeAssignments(ctx, id);
     const currentIds = new Set(current.map((a) => a.fde_id));
-    const nextIds = new Set(fde_ids);
     const now = nowIso();
+
+    // Drop FDEs that are no longer assigned.
     for (const a of current) {
       if (!nextIds.has(a.fde_id)) {
         await ctx.db.patch(a._id, { removed_at: now });
       }
     }
-    for (const fid of fde_ids) {
-      if (!currentIds.has(fid)) {
+
+    // Add FDEs that aren't already active. Resurrect a previously-removed
+    // row when one exists so per-assignment history compacts cleanly.
+    for (const fid of nextIds) {
+      if (currentIds.has(fid)) continue;
+      const ghost = await ctx.db
+        .query("engagement_assignments")
+        .withIndex("by_engagement_fde", (q) =>
+          q.eq("engagement_id", id).eq("fde_id", fid),
+        )
+        .order("desc")
+        .first();
+      if (ghost && ghost.removed_at !== null) {
+        await ctx.db.patch(ghost._id, { removed_at: null, assigned_at: now });
+      } else {
         await ctx.db.insert("engagement_assignments", {
           engagement_id: id,
           fde_id: fid,

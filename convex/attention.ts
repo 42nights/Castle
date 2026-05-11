@@ -41,7 +41,12 @@ function daysSince(iso: string, now: number): number {
 export const list = query({
   args: { nowBucket: v.number() },
   handler: async (ctx, { nowBucket }) => {
-    const nowMs = nowBucket * 60_000;
+    // The `nowBucket` (floor-minute) is purely a re-query trigger: it
+    // changes once per minute so subscribers wake up. For the actual
+    // snooze comparison we want server-precise time so a snooze expiring
+    // at 12:01:30 doesn't stay hidden until 12:02:00.
+    void nowBucket;
+    const nowMs = Date.now();
     const nowIsoStr = new Date(nowMs).toISOString();
 
     const customers = await ctx.db.query("customers").collect();

@@ -18,9 +18,26 @@ import { nowIso, slugify, uniqueSlug } from "./lib/util";
 export const importPayload = internalMutation({
   args: { payloadJson: v.string() },
   handler: async (ctx, { payloadJson }) => {
-    const existing = await ctx.db.query("fdes").take(1);
-    if (existing.length > 0) {
-      return { skipped: true, reason: "already seeded" };
+    // Check every root table — guarding only on `fdes` means a partial
+    // seed (fdes inserted, crash before customers) would never recover,
+    // and a manual customer-only insert would let the seed proceed and
+    // duplicate rows via uniqueSlug's collision suffix.
+    for (const table of [
+      "fdes",
+      "customers",
+      "engagements",
+      "templates",
+      "deployments",
+      "pattern_extractions",
+      "founder_hours",
+    ] as const) {
+      const existing = await ctx.db.query(table).take(1);
+      if (existing.length > 0) {
+        return {
+          skipped: true,
+          reason: `${table} already populated — refusing to seed`,
+        };
+      }
     }
     const payload = JSON.parse(payloadJson) as any;
     const now = nowIso();
