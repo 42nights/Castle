@@ -8,6 +8,11 @@ import {
   StatusChip,
 } from "@/components/atoms";
 import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";
+import { HealthMenu } from "@/components/controls/health-menu";
+import { NotesEditor } from "@/components/controls/notes-editor";
+import { PhaseMenu } from "@/components/controls/phase-menu";
+import { ProgressSlider } from "@/components/controls/progress-slider";
+import { TouchedButton } from "@/components/controls/touched-button";
 import { loadAll } from "@/lib/data";
 import { formatDate, formatHours, formatPct, formatUsd } from "@/lib/format";
 
@@ -65,29 +70,30 @@ export default async function EngagementDetail({
       />
 
       <section className="grid grid-cols-2 md:grid-cols-5 gap-x-8 gap-y-6 border-y border-line py-6 mb-14">
-        <Field label="Phase" value={<PhaseBadge phase={eng.phase} />} />
+        <Field
+          label="Phase"
+          value={<PhaseMenu engagementSlug={eng.id} current={eng.phase} />}
+        />
         <Field
           label="Progress"
           value={
-            <div className="flex items-center gap-3">
-              <span className="num text-ink">{eng.progress_pct}%</span>
-              <ProgressBar value={eng.progress_pct} className="w-20" />
-            </div>
+            <ProgressSlider
+              engagementSlug={eng.id}
+              current={eng.progress_pct}
+            />
           }
+        />
+        <Field
+          label="Health"
+          value={<HealthMenu engagementSlug={eng.id} current={eng.health} />}
         />
         <Field
           label="Team"
           value={<AvatarGroup names={team.map((f) => f!.name)} />}
         />
         <Field
-          label="Started"
-          value={<span className="num text-ink">{formatDate(eng.start_date)}</span>}
-        />
-        <Field
-          label="Expected end"
-          value={
-            <span className="num text-ink">{formatDate(eng.expected_end_date)}</span>
-          }
+          label="Activity"
+          value={<TouchedButton engagementSlug={eng.id} />}
         />
       </section>
 
@@ -95,14 +101,24 @@ export default async function EngagementDetail({
         <div>
           <div className="t-eyebrow mb-2">— This week</div>
           <h2 className="t-h2 text-ink">Notes.</h2>
-        </div>
-        <div className="border border-line rounded-md p-6 bg-page">
-          <p className="text-[15px] leading-relaxed text-ink">{eng.notes}</p>
-          <div className="mt-5 pt-4 border-t border-line t-caption text-ink-3">
+          <p className="mt-3 text-ink-2 text-[13px] leading-relaxed">
+            Autosaves on idle. Versioned — rejects stale writes from other
+            tabs.
+          </p>
+          <div className="mt-5 t-caption text-ink-3">
             <span className="num">{formatHours(eng.weekly_hours)}</span> / wk
             committed
+            <br />
+            Started{" "}
+            <span className="num">{formatDate(eng.start_date)}</span> · ends{" "}
+            <span className="num">{formatDate(eng.expected_end_date)}</span>
           </div>
         </div>
+        <NotesEditor
+          engagementSlug={eng.id}
+          initialBody={eng.notes}
+          initialVersion={1}
+        />
       </section>
 
       <section className="mb-16">

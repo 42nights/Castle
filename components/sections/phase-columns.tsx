@@ -2,8 +2,11 @@ import Link from "next/link";
 import {
   AvatarGroup,
   HealthPip,
-  ProgressBar,
 } from "@/components/atoms";
+import { HealthMenu } from "@/components/controls/health-menu";
+import { PhaseMenu } from "@/components/controls/phase-menu";
+import { ProgressSlider } from "@/components/controls/progress-slider";
+import { TouchedButton } from "@/components/controls/touched-button";
 import type { EngagementRow } from "@/lib/derive";
 import { daysSince } from "@/lib/derive";
 import type { EngagementPhase } from "@/lib/types";
@@ -49,9 +52,7 @@ export function PhaseColumns({
                   <div className="t-h3">{col.label}</div>
                   <div className="t-caption text-ink-3">{col.sub}</div>
                 </div>
-                <span className="num text-ink-3 text-[13px]">
-                  {rows.length}
-                </span>
+                <span className="num text-ink-3 text-[13px]">{rows.length}</span>
               </header>
               <ol className="flex flex-col gap-2.5">
                 {rows.length === 0 && (
@@ -64,21 +65,21 @@ export function PhaseColumns({
                   const isStale = stale > STALE_THRESHOLD;
                   return (
                     <li key={e.id}>
-                      <Link
-                        href={`/engagements/${e.id}`}
-                        className="block border border-line rounded-sm p-3 hover:bg-surface transition-colors"
-                      >
+                      <div className="block border border-line rounded-sm p-3 hover:bg-surface transition-colors">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-ink text-[14px] truncate">
+                          <Link
+                            href={`/engagements/${e.id}`}
+                            className="text-ink text-[14px] truncate hover:underline"
+                          >
                             {customer.name}
-                          </span>
+                          </Link>
                           <HealthPip value={e.health} />
                         </div>
-                        <div className="mt-2 flex items-center gap-3">
-                          <ProgressBar value={e.progress_pct} className="flex-1" />
-                          <span className="num text-ink-3 text-[11px] w-8 text-right">
-                            {e.progress_pct}%
-                          </span>
+                        <div className="mt-3">
+                          <ProgressSlider
+                            engagementSlug={e.id}
+                            current={e.progress_pct}
+                          />
                         </div>
                         <div className="mt-3 flex items-center justify-between t-caption">
                           <AvatarGroup names={fdes.map((f) => f.name)} />
@@ -86,6 +87,19 @@ export function PhaseColumns({
                             <span className="num">{formatHours(e.weekly_hours)}</span>
                             /wk
                           </span>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-line flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <PhaseMenu
+                              engagementSlug={e.id}
+                              current={e.phase}
+                            />
+                            <HealthMenu
+                              engagementSlug={e.id}
+                              current={e.health}
+                            />
+                          </div>
+                          <TouchedButton engagementSlug={e.id} />
                         </div>
                         <div className="mt-2 t-caption flex items-center justify-between">
                           <span
@@ -102,7 +116,7 @@ export function PhaseColumns({
                             </span>
                           )}
                         </div>
-                      </Link>
+                      </div>
                     </li>
                   );
                 })}

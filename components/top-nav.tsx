@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ActorBar } from "@/components/actor-bar";
 
 const links = [
   { href: "/", label: "Overview" },
@@ -58,8 +59,9 @@ export function TopNav() {
           })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-3">
-          <span className="t-caption hidden md:inline">
+        <div className="ml-auto flex items-center gap-4">
+          <ActorBar />
+          <span className="t-caption hidden lg:inline">
             Internal · operator console
           </span>
         </div>

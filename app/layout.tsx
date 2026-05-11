@@ -3,6 +3,7 @@ import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ConvexClientProvider } from "@/components/convex-provider";
 import { TopNav } from "@/components/top-nav";
+import { Toaster } from "@/components/ui/sonner";
 
 const fraunces = Fraunces({
   variable: "--font-display",
@@ -41,6 +42,7 @@ export default function RootLayout({
         <ConvexClientProvider>
           <TopNav />
           {children}
+          <Toaster position="bottom-right" />
         </ConvexClientProvider>
       </body>
     </html>

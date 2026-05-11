@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Avatar } from "@/components/atoms";
+import { TouchedButton } from "@/components/controls/touched-button";
 import type { AttentionItem, AttentionSeverity } from "@/lib/derive";
 
 const severityLabel: Record<AttentionSeverity, string> = {
@@ -41,38 +42,51 @@ export function AttentionList({ items }: { items: AttentionItem[] }) {
       </div>
 
       <ul className="border-t border-line">
-        {items.map((item) => (
-          <li
-            key={item.id}
-            className="border-b border-line last:border-b-0 group"
-          >
-            <Link
-              href={item.href}
-              className="grid grid-cols-[88px_1fr_auto] items-center gap-5 py-4 px-3 -mx-3 rounded-sm hover:bg-surface transition-colors"
+        {items.map((item) => {
+          const engagementSlug = item.engagement?.id;
+          const showTouch =
+            engagementSlug &&
+            (item.id.startsWith("stale-") ||
+              item.id.startsWith("red-") ||
+              item.id.startsWith("yellow-"));
+          return (
+            <li
+              key={item.id}
+              className="border-b border-line last:border-b-0 group"
             >
-              <SeverityChip severity={item.severity} />
-              <div className="min-w-0">
-                <div className="text-[14.5px] text-ink leading-tight">
-                  {item.title}
+              <div className="grid grid-cols-[88px_1fr_auto] items-center gap-5 py-4 px-3 -mx-3 rounded-sm hover:bg-surface transition-colors">
+                <SeverityChip severity={item.severity} />
+                <Link href={item.href} className="min-w-0 block">
+                  <div className="text-[14.5px] text-ink leading-tight hover:underline">
+                    {item.title}
+                  </div>
+                  <p className="mt-1 text-[12.5px] text-ink-2 leading-relaxed line-clamp-2">
+                    {item.subtitle}
+                  </p>
+                </Link>
+                <div className="flex items-center gap-3">
+                  {item.owner && (
+                    <span className="inline-flex items-center gap-2">
+                      <Avatar name={item.owner.name} size={20} />
+                      <span className="t-caption">
+                        {item.owner.name.split(" ")[0]}
+                      </span>
+                    </span>
+                  )}
+                  {showTouch && engagementSlug && (
+                    <TouchedButton engagementSlug={engagementSlug} />
+                  )}
+                  <Link
+                    href={item.href}
+                    className="t-caption text-ink-3 group-hover:text-ink"
+                  >
+                    open →
+                  </Link>
                 </div>
-                <p className="mt-1 text-[12.5px] text-ink-2 leading-relaxed line-clamp-2">
-                  {item.subtitle}
-                </p>
               </div>
-              <div className="flex items-center gap-3">
-                {item.owner && (
-                  <span className="inline-flex items-center gap-2">
-                    <Avatar name={item.owner.name} size={20} />
-                    <span className="t-caption">{item.owner.name.split(" ")[0]}</span>
-                  </span>
-                )}
-                <span className="t-caption text-ink-3 group-hover:text-ink">
-                  open →
-                </span>
-              </div>
-            </Link>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
