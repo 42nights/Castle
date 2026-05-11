@@ -1,0 +1,92 @@
+[
+  {
+    "id": "pe-g",
+    "name": "Customer G",
+    "backed_by": ["—"],
+    "start_date": "2026-04-08",
+    "status": "active",
+    "current_mrr": 26000,
+    "is_pe": true,
+    "health": "green"
+  },
+  {
+    "id": "eragon",
+    "name": "Eragon",
+    "backed_by": ["Y Combinator"],
+    "start_date": "2026-03-22",
+    "status": "active",
+    "current_mrr": 3500,
+    "is_pe": false,
+    "health": "green"
+  },
+  {
+    "id": "pe-h",
+    "name": "Customer H",
+    "backed_by": ["—"],
+    "start_date": "2026-05-02",
+    "status": "active",
+    "current_mrr": 2400,
+    "is_pe": true,
+    "health": "yellow"
+  },
+  {
+    "id": "cust-a",
+    "name": "Customer A",
+    "backed_by": ["a16z"],
+    "start_date": "2026-04-19",
+    "status": "active",
+    "current_mrr": 850,
+    "is_pe": false,
+    "health": "green"
+  },
+  {
+    "id": "cust-b",
+    "name": "Customer B",
+    "backed_by": ["Lightspeed"],
+    "start_date": "2026-04-21",
+    "status": "active",
+    "current_mrr": 500,
+    "is_pe": false,
+    "health": "red"
+  },
+  {
+    "id": "cust-c",
+    "name": "Customer C",
+    "backed_by": ["HF0"],
+    "start_date": "2026-04-12",
+    "status": "active",
+    "current_mrr": 300,
+    "is_pe": false,
+    "health": "green"
+  },
+  {
+    "id": "cust-d",
+    "name": "Customer D",
+    "backed_by": ["Susa Ventures"],
+    "start_date": "2026-03-28",
+    "status": "active",
+    "current_mrr": 200,
+    "is_pe": false,
+    "health": "green"
+  },
+  {
+    "id": "cust-e",
+    "name": "Customer E",
+    "backed_by": ["Y Combinator"],
+    "start_date": "2026-04-05",
+    "status": "active",
+    "current_mrr": 100,
+    "is_pe": false,
+    "health": "yellow"
+  },
+  {
+    "id": "uniquehuman",
+    "name": "UniqueHuman",
+    "backed_by": ["Afore Capital"],
+    "start_date": "2026-04-26",
+    "status": "churned",
+    "current_mrr": 0,
+    "is_pe": false,
+    "health": "red"
+  }
+]

@@ -1,0 +1,24 @@
+[
+  {
+    "id": "jerry",
+    "name": "Jerry X",
+    "role": "Founder",
+    "is_founder": true,
+    "start_date": "2026-04-01",
+    "hours_this_week": 38,
+    "capacity_hours_per_week": 45,
+    "agents_shipped_total": 6,
+    "templates_authored": 3
+  },
+  {
+    "id": "ayaan",
+    "name": "Ayaan Gazali",
+    "role": "Founder",
+    "is_founder": true,
+    "start_date": "2026-04-01",
+    "hours_this_week": 36,
+    "capacity_hours_per_week": 45,
+    "agents_shipped_total": 5,
+    "templates_authored": 2
+  }
+]
