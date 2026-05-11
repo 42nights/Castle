@@ -7,6 +7,7 @@ import {
   PhaseBadge,
 } from "@/components/atoms";
 import { CapacityInput } from "@/components/controls/capacity-input";
+import { InlineName } from "@/components/controls/inline-name";
 import { LogHoursButton } from "@/components/controls/log-hours-button";
 import { FdeActivity } from "@/components/sections/fde-activity";
 import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";
@@ -46,7 +47,14 @@ export default async function FdeDetail({
             ← FDEs
           </Link>
         }
-        title={fde.name}
+        title={
+          <InlineName
+            kind="fde"
+            slug={fde.id}
+            current={fde.name}
+            className="t-h1 text-ink"
+          />
+        }
         description={
           <>
             {fde.role}

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { HealthPip, PhaseBadge } from "@/components/atoms";
 import { CustomerHealthMenu } from "@/components/controls/customer-health-menu";
 import { CustomerStatusMenu } from "@/components/controls/customer-status-menu";
+import { InlineName } from "@/components/controls/inline-name";
 import { MrrInput } from "@/components/controls/mrr-input";
 import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";
 import { loadAll } from "@/lib/data";
@@ -44,7 +45,14 @@ export default async function CustomerDetail({
             ← Customers
           </Link>
         }
-        title={customer.name}
+        title={
+          <InlineName
+            kind="customer"
+            slug={customer.id}
+            current={customer.name}
+            className="t-h1 text-ink"
+          />
+        }
         description={
           <>
             Backed by {customer.backed_by.join(", ")} ·{" "}

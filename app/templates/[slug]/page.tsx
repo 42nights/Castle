@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CategoryBadge } from "@/components/atoms";
 import { CapabilityEditor } from "@/components/controls/capability-editor";
+import { InlineName } from "@/components/controls/inline-name";
 import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";
 import { loadAll } from "@/lib/data";
 import { formatDate, formatHours } from "@/lib/format";
@@ -33,7 +34,14 @@ export default async function TemplateDetail({
             ← Templates
           </Link>
         }
-        title={tpl.name}
+        title={
+          <InlineName
+            kind="template"
+            slug={tpl.id}
+            current={tpl.name}
+            className="t-h1 text-ink"
+          />
+        }
         description={
           <>
             Authored{" "}

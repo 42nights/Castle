@@ -8,6 +8,8 @@ import {
   StatusChip,
 } from "@/components/atoms";
 import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";
+import { DeleteEngagementZone } from "@/components/controls/danger-zone";
+import { EditDeploymentButton } from "@/components/controls/deployment-row-button";
 import { EndDateInput } from "@/components/controls/end-date-input";
 import { EngagementKeys } from "@/components/controls/engagement-keys";
 import { HealthMenu } from "@/components/controls/health-menu";
@@ -171,6 +173,7 @@ export default async function EngagementDetail({
                   <th className="text-right h-9 px-3 font-medium">Custom %</th>
                   <th className="text-right h-9 px-3 font-medium">Hrs/wk replaced</th>
                   <th className="text-right h-9 px-3 font-medium">Deployed</th>
+                  <th className="text-right h-9 px-3 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
@@ -199,6 +202,18 @@ export default async function EngagementDetail({
                       </td>
                       <td className="px-3 py-3 num text-right text-ink-3">
                         {formatDate(d.deployed_at)}
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        <EditDeploymentButton
+                          deploymentId={d.id}
+                          initial={{
+                            agent_name: d.agent_name,
+                            template_id: d.template_id,
+                            hours_replaced_per_week: d.hours_replaced_per_week,
+                            customization_pct: d.customization_pct,
+                            deployed_at: d.deployed_at,
+                          }}
+                        />
                       </td>
                     </tr>
                   );
@@ -261,6 +276,11 @@ export default async function EngagementDetail({
         <SectionHeader eyebrow="— Activity" title="Touch log." />
         <EngagementTimeline engagementSlug={eng.id} />
       </section>
+
+      <DeleteEngagementZone
+        engagementSlug={eng.id}
+        customerName={customer.name}
+      />
     </PageShell>
   );
 }
