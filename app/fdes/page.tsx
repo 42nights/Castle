@@ -4,6 +4,8 @@ import { loadAll } from "@/lib/data";
 import { fdeRows } from "@/lib/derive";
 import { FdesTable } from "./table";
 
+export const dynamic = "force-dynamic";
+
 export default function FdesPage() {
   const { fdes, engagements, customers } = loadAll();
   const rows = fdeRows(fdes, engagements, customers);

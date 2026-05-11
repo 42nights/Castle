@@ -4,6 +4,8 @@ import { loadAll } from "@/lib/data";
 import { customerRows } from "@/lib/derive";
 import { CustomersTable } from "./table";
 
+export const dynamic = "force-dynamic";
+
 export default function CustomersPage() {
   const { customers, deployments } = loadAll();
   const rows = customerRows(customers, deployments);

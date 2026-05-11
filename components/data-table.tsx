@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -26,6 +27,7 @@ export function DataTable<TData, TValue>({
   searchColumnId,
   searchPlaceholder = "Search…",
   rowHref,
+  urlKey,
 }: {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
@@ -34,12 +36,53 @@ export function DataTable<TData, TValue>({
   searchColumnId?: string;
   searchPlaceholder?: string;
   rowHref?: (row: TData) => string;
+  /** Namespace for URL search params (e.g. "eng", "cust"). When set,
+   *  filter + search state is mirrored to / hydrated from search params. */
+  urlKey?: string;
 }) {
-  const [sorting, setSorting] = React.useState<SortingState>(defaultSort ?? []);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    []
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const paramFor = React.useCallback(
+    (k: string) => (urlKey ? `${urlKey}.${k}` : k),
+    [urlKey],
   );
-  const [globalFilter, setGlobalFilter] = React.useState("");
+
+  const initialFilters: ColumnFiltersState = React.useMemo(() => {
+    if (!urlKey) return [];
+    return filters
+      .map((f) => {
+        const v = searchParams.get(paramFor(f.id));
+        return v ? { id: f.id, value: v } : null;
+      })
+      .filter(Boolean) as ColumnFiltersState;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const initialQuery = urlKey ? (searchParams.get(paramFor("q")) ?? "") : "";
+
+  const [sorting, setSorting] = React.useState<SortingState>(defaultSort ?? []);
+  const [columnFilters, setColumnFilters] =
+    React.useState<ColumnFiltersState>(initialFilters);
+  const [globalFilter, setGlobalFilter] = React.useState(initialQuery);
+
+  // Mirror filter state → URL.
+  React.useEffect(() => {
+    if (!urlKey) return;
+    const next = new URLSearchParams(searchParams.toString());
+    for (const f of filters) {
+      next.delete(paramFor(f.id));
+    }
+    for (const cf of columnFilters) {
+      if (cf.value) next.set(paramFor(cf.id), String(cf.value));
+    }
+    if (globalFilter) next.set(paramFor("q"), globalFilter);
+    else next.delete(paramFor("q"));
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columnFilters, globalFilter, urlKey]);
 
   const table = useReactTable({
     data,

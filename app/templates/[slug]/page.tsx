@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CategoryBadge } from "@/components/atoms";
+import { CapabilityEditor } from "@/components/controls/capability-editor";
 import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";
 import { loadAll } from "@/lib/data";
 import { formatDate, formatHours } from "@/lib/format";
@@ -93,17 +94,16 @@ export default async function TemplateDetail({
         <div>
           <div className="t-eyebrow mb-2">— Capabilities</div>
           <h2 className="t-h2 text-ink">What this template does.</h2>
+          <p className="mt-3 text-ink-2 text-[13px] leading-relaxed">
+            Click a row to edit. Use ↑↓ to reorder.
+          </p>
         </div>
-        <ul className="border-t border-line">
-          {tpl.capabilities.map((cap) => (
-            <li
-              key={cap}
-              className="border-b border-line py-3 text-[14.5px] text-ink"
-            >
-              {cap}
-            </li>
-          ))}
-        </ul>
+        <div>
+          <CapabilityEditor
+            templateSlug={tpl.id}
+            fallback={tpl.capabilities}
+          />
+        </div>
       </section>
 
       <section className="mb-16">

@@ -19,6 +19,7 @@ import {
 } from "@/components/ctas";
 import { ExtractPatternButton } from "@/components/sections/extraction-cta";
 import { EngagementTimeline } from "@/components/sections/engagement-timeline";
+import { NotesJournal } from "@/components/sections/notes-journal";
 import { loadAll } from "@/lib/data";
 import { formatDate, formatHours, formatPct, formatUsd } from "@/lib/format";
 
@@ -232,6 +233,11 @@ export default async function EngagementDetail({
             })}
           </ul>
         )}
+      </section>
+
+      <section className="mb-16">
+        <SectionHeader eyebrow="— Notes journal" title="Versioned history." />
+        <NotesJournal engagementSlug={eng.id} />
       </section>
 
       <section className="mb-16">

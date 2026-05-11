@@ -4,10 +4,11 @@ import { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
 import {
   AvatarGroup,
-  HealthPip,
-  PhaseBadge,
   ProgressBar,
 } from "@/components/atoms";
+import { HealthMenu } from "@/components/controls/health-menu";
+import { PhaseMenu } from "@/components/controls/phase-menu";
+import { TouchedButton } from "@/components/controls/touched-button";
 import type { EngagementRow } from "@/lib/derive";
 import { formatDate, formatHours } from "@/lib/format";
 import type { Health } from "@/lib/types";
@@ -28,7 +29,12 @@ export function EngagementsTable({ rows }: { rows: EngagementRow[] }) {
       id: "phase",
       header: "Phase",
       accessorFn: (r) => r.engagement.phase,
-      cell: ({ row }) => <PhaseBadge phase={row.original.engagement.phase} />,
+      cell: ({ row }) => (
+        <PhaseMenu
+          engagementSlug={row.original.engagement.id}
+          current={row.original.engagement.phase}
+        />
+      ),
       filterFn: (row, _id, value) => row.original.engagement.phase === value,
     },
     {
@@ -88,13 +94,20 @@ export function EngagementsTable({ rows }: { rows: EngagementRow[] }) {
       sortingFn: (a, b, columnId) =>
         (a.getValue(columnId) as number) - (b.getValue(columnId) as number),
       cell: ({ row }) => (
-        <HealthPip
-          value={row.original.engagement.health}
-          label={row.original.engagement.health}
+        <HealthMenu
+          engagementSlug={row.original.engagement.id}
+          current={row.original.engagement.health}
         />
       ),
       filterFn: (row, _id, value) =>
         row.original.engagement.health === value,
+    },
+    {
+      id: "touch",
+      header: "",
+      cell: ({ row }) => (
+        <TouchedButton engagementSlug={row.original.engagement.id} />
+      ),
     },
   ];
 
@@ -130,6 +143,7 @@ export function EngagementsTable({ rows }: { rows: EngagementRow[] }) {
         },
       ]}
       rowHref={(r) => `/engagements/${r.engagement.id}`}
+      urlKey="eng"
     />
   );
 }

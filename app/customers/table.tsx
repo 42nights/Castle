@@ -148,6 +148,7 @@ export function CustomersTable({ rows }: { rows: CustomerRow[] }) {
         },
       ]}
       rowHref={(r) => `/customers/${r.customer.id}`}
+      urlKey="cust"
     />
   );
 }

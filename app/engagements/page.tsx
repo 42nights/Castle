@@ -4,6 +4,8 @@ import { loadAll } from "@/lib/data";
 import { engagementRows } from "@/lib/derive";
 import { EngagementsTable } from "./table";
 
+export const dynamic = "force-dynamic";
+
 export default function EngagementsPage() {
   const { engagements, customers, fdes } = loadAll();
   const rows = engagementRows(engagements, customers, fdes);

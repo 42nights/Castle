@@ -128,6 +128,7 @@ export function FdesTable({ rows }: { rows: FdeRow[] }) {
         },
       ]}
       rowHref={(r) => `/fdes/${r.fde.id}`}
+      urlKey="fde"
     />
   );
 }
