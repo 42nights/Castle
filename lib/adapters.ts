@@ -223,9 +223,12 @@ export function adaptOverview(snapshot: ConvexOverview): AdaptedOverview {
       id: d._id,
       customer_id: slugById[d.customer_id] ?? d.customer_id,
       engagement_id: slugById[d.engagement_id] ?? d.engagement_id,
-      template_id: d.template_id
-        ? (slugById[d.template_id] ?? d.template_id)
-        : null,
+      // If the template was deleted, the FK no longer resolves. Don't
+      // leak a raw Convex _id downstream as if it were a slug — that
+      // would (a) break "Based on …" links and (b) inflate the
+      // "% template-based" metric in customerRows since any non-null
+      // template_id counts. Treat orphaned references as fully-custom.
+      template_id: d.template_id ? (slugById[d.template_id] ?? null) : null,
       agent_name: d.agent_name,
       deployed_at: d.deployed_at,
       hours_replaced_per_week: d.hours_replaced_per_week,

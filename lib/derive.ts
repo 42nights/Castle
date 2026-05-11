@@ -24,10 +24,17 @@ export function totalHoursReplaced(deployments: Deployment[]): number {
   return deployments.reduce((s, d) => s + d.hours_replaced_per_week, 0);
 }
 
-/** ARR sitting on yellow/red customers (or anyone non-green). */
+/**
+ * ARR sitting on non-green, still-billing customers.
+ *
+ * Includes both `active` and `paused` — a paused engagement is itself a
+ * risk signal (we stopped because something's wrong). Excludes `churned`
+ * since their `current_mrr` is already $0 and the loss is realized, not
+ * at-risk.
+ */
 export function atRiskArr(customers: Customer[]): number {
   return customers
-    .filter((c) => c.status === "active" && c.health !== "green")
+    .filter((c) => c.status !== "churned" && c.health !== "green")
     .reduce((s, c) => s + c.current_mrr * 12, 0);
 }
 
@@ -59,7 +66,10 @@ export function sortByHealthThenDate<
 
 export function daysSince(iso: string, today: Date = new Date()): number {
   const d = new Date(iso + (iso.length === 10 ? "T00:00:00Z" : ""));
-  return Math.floor((today.getTime() - d.getTime()) / 86400000);
+  // Clamp at 0 — a future-dated `last_update_at` (data entry typo) would
+  // otherwise produce a negative value and suppress stale-engagement
+  // alerts indefinitely. Treat future-dated as "just now."
+  return Math.max(0, Math.floor((today.getTime() - d.getTime()) / 86400000));
 }
 
 /* ───────────────────────── templates ───────────────────────── */
@@ -440,7 +450,15 @@ export type FounderHoursPoint = {
 export function founderHoursSeries(
   entries: FounderHoursEntry[]
 ): FounderHoursPoint[] {
-  const sorted = [...entries].sort((a, b) => a.month.localeCompare(b.month));
+  // Dedupe by month — server enforces uniqueness on the Convex path via
+  // `upsertMonth`, but the JSON fallback or a partial seed could land
+  // duplicates that double-count points and skew the target slope.
+  // Last entry per month wins (stable for sorted input below).
+  const byMonth = new Map<string, FounderHoursEntry>();
+  for (const e of entries) byMonth.set(e.month, e);
+  const sorted = [...byMonth.values()].sort((a, b) =>
+    a.month.localeCompare(b.month),
+  );
   const base = sorted.map((e) => ({
     month: e.month,
     founder_hours_total: e.founder_hours_total,
