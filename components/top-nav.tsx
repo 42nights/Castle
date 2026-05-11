@@ -62,7 +62,10 @@ export function TopNav() {
         <div className="ml-auto flex items-center gap-4">
           <ActorBar />
           <span className="t-caption hidden lg:inline">
-            Internal · operator console
+            <kbd className="rounded-sm border border-line bg-surface px-1 num text-[10px]">
+              ⌘K
+            </kbd>{" "}
+            for actions
           </span>
         </div>
       </div>

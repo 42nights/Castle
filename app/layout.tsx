@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { CommandPalette } from "@/components/command-palette";
 import { ConvexClientProvider } from "@/components/convex-provider";
 import { TopNav } from "@/components/top-nav";
 import { Toaster } from "@/components/ui/sonner";
@@ -42,6 +43,7 @@ export default function RootLayout({
         <ConvexClientProvider>
           <TopNav />
           {children}
+          <CommandPalette />
           <Toaster position="bottom-right" />
         </ConvexClientProvider>
       </body>

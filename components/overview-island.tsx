@@ -12,5 +12,5 @@ export function OverviewIsland({
 }) {
   const snapshot = usePreloadedQuery(preloaded) as unknown as ConvexOverview;
   const data = adaptOverview(snapshot);
-  return <OverviewSections data={data} />;
+  return <OverviewSections data={data} liveAttention />;
 }

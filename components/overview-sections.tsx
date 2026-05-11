@@ -1,5 +1,6 @@
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { AttentionList } from "@/components/sections/attention";
+import { AttentionListLive } from "@/components/sections/attention-live";
 import { StatsStrip } from "@/components/sections/stats-strip";
 import { FdeWorkloadBoard } from "@/components/sections/fde-workload-board";
 import { PhaseColumns } from "@/components/sections/phase-columns";
@@ -43,7 +44,13 @@ type OverviewData =
       founderHours: FounderHoursEntry[];
     };
 
-export function OverviewSections({ data }: { data: OverviewData }) {
+export function OverviewSections({
+  data,
+  liveAttention = false,
+}: {
+  data: OverviewData;
+  liveAttention?: boolean;
+}) {
   const { fdes, customers, engagements, templates, deployments, patternExtractions, founderHours } = data;
   const today = new Date("2026-05-11T12:00:00Z");
 
@@ -83,7 +90,7 @@ export function OverviewSections({ data }: { data: OverviewData }) {
         }
       />
 
-      <AttentionList items={attention} />
+      {liveAttention ? <AttentionListLive /> : <AttentionList items={attention} />}
 
       <StatsStrip
         payingCustomers={paying}
