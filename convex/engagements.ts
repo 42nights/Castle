@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { logEngagementUpdate } from "./lib/audit";
+import { checkNonNegative, checkPercent } from "./lib/bounds";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
 
 const phase = v.union(
@@ -96,6 +97,8 @@ export const create = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, args) => {
+    checkNonNegative("weekly_hours", args.weekly_hours);
+    checkPercent("progress_pct", args.progress_pct);
     const customer = await ctx.db.get(args.customer_id);
     if (!customer) throw new Error("customer not found");
     const base = slugify(`${customer.slug}-${args.phase}`);
@@ -151,6 +154,9 @@ export const update = mutation({
     actor_fde_id: v.id("fdes"),
   },
   handler: async (ctx, { id, patch, actor_fde_id }) => {
+    if (patch.weekly_hours !== undefined) {
+      checkNonNegative("weekly_hours", patch.weekly_hours);
+    }
     await ctx.db.patch(id, { ...patch, updated_at: nowIso(), updated_by_fde_id: actor_fde_id });
   },
 });
@@ -329,8 +335,18 @@ export const saveNotes = mutation({
     client_id: v.string(),
   },
   handler: async (ctx, { id, actor_fde_id, body, base_version, client_id }) => {
+    if (!Number.isInteger(base_version) || base_version < 1) {
+      throw new Error(
+        "base_version must be a positive integer (clients start at 1)",
+      );
+    }
     const eng = await ctx.db.get(id);
     if (!eng) throw new Error("engagement not found");
+    if (base_version > eng.notes_version) {
+      throw new Error(
+        `INVALID_BASE_VERSION: client claims v${base_version}, server is at v${eng.notes_version}`,
+      );
+    }
     if (eng.notes_version !== base_version) {
       throw new Error("STALE_BASE_VERSION");
     }
@@ -374,11 +390,38 @@ export const remove = mutation({
       .withIndex("by_engagement", (q) => q.eq("engagement_id", id))
       .collect();
     for (const d of deployments) await ctx.db.delete(d._id);
+
+    // Cascade pattern_extractions sourced from this engagement (and
+    // their reuse junction rows). Without this, /extractions would
+    // render orphan rows whose `source_engagement_id` references a
+    // dead Convex Id, and any link to /engagements/[slug] from
+    // pattern timelines would 404.
+    const extractions = await ctx.db
+      .query("pattern_extractions")
+      .withIndex("by_source_engagement", (q) =>
+        q.eq("source_engagement_id", id),
+      )
+      .collect();
+    for (const p of extractions) {
+      const reuses = await ctx.db
+        .query("pattern_extraction_reuses")
+        .withIndex("by_extraction_customer", (q) =>
+          q.eq("extraction_id", p._id),
+        )
+        .collect();
+      for (const r of reuses) await ctx.db.delete(r._id);
+      await ctx.db.delete(p._id);
+    }
+
     await logEngagementUpdate(ctx, {
       engagement_id: id,
       actor_fde_id,
       kind: "delete",
-      payload: {},
+      payload: {
+        cascaded_assignments: assignments.length,
+        cascaded_deployments: deployments.length,
+        cascaded_extractions: extractions.length,
+      },
     });
     await ctx.db.delete(id);
   },

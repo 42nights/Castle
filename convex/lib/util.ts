@@ -23,6 +23,11 @@ export async function uniqueSlug<T extends TableNames>(
   table: T,
   base: string,
 ): Promise<string> {
+  if (!base || base === "x") {
+    // `slugify` returns "x" as a fallback for purely-non-alnum input.
+    // Don't let that propagate as a stored slug.
+    throw new Error("Refusing to generate a slug from empty/invalid input");
+  }
   let candidate = base;
   let i = 2;
   while (true) {

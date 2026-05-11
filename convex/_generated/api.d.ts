@@ -16,6 +16,7 @@ import type * as engagements from "../engagements.js";
 import type * as fdes from "../fdes.js";
 import type * as founderHours from "../founderHours.js";
 import type * as lib_audit from "../lib/audit.js";
+import type * as lib_bounds from "../lib/bounds.js";
 import type * as lib_util from "../lib/util.js";
 import type * as patternExtractions from "../patternExtractions.js";
 import type * as seed from "../seed.js";
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   fdes: typeof fdes;
   founderHours: typeof founderHours;
   "lib/audit": typeof lib_audit;
+  "lib/bounds": typeof lib_bounds;
   "lib/util": typeof lib_util;
   patternExtractions: typeof patternExtractions;
   seed: typeof seed;

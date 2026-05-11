@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { checkNonNegative, checkPercent } from "./lib/bounds";
 import { nowIso } from "./lib/util";
 
 export const list = query({
@@ -36,6 +37,8 @@ export const create = mutation({
     customization_pct: v.number(),
   },
   handler: async (ctx, args) => {
+    checkNonNegative("hours_replaced_per_week", args.hours_replaced_per_week);
+    checkPercent("customization_pct", args.customization_pct);
     const now = nowIso();
     return ctx.db.insert("deployments", {
       ...args,
@@ -57,6 +60,12 @@ export const update = mutation({
     }),
   },
   handler: async (ctx, { id, patch }) => {
+    if (patch.hours_replaced_per_week !== undefined) {
+      checkNonNegative("hours_replaced_per_week", patch.hours_replaced_per_week);
+    }
+    if (patch.customization_pct !== undefined) {
+      checkPercent("customization_pct", patch.customization_pct);
+    }
     await ctx.db.patch(id, { ...patch, updated_at: nowIso() });
   },
 });

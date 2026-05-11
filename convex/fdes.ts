@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { checkNonNegative } from "./lib/bounds";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
 
 export const list = query({
@@ -31,6 +32,7 @@ export const create = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, args) => {
+    checkNonNegative("capacity_hours_per_week", args.capacity_hours_per_week);
     const slug = await uniqueSlug(ctx, "fdes", slugify(args.name));
     const now = nowIso();
     return ctx.db.insert("fdes", {
@@ -71,6 +73,9 @@ export const update = mutation({
   handler: async (ctx, { id, patch, actor_fde_id }) => {
     const fde = await ctx.db.get(id);
     if (!fde) throw new Error("FDE not found");
+    if (patch.capacity_hours_per_week !== undefined) {
+      checkNonNegative("capacity_hours_per_week", patch.capacity_hours_per_week);
+    }
     await ctx.db.patch(id, {
       ...patch,
       updated_at: nowIso(),

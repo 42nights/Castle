@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { checkNonNegative } from "./lib/bounds";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
 
 const status = v.union(
@@ -39,6 +40,7 @@ export const create = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, args) => {
+    checkNonNegative("current_mrr", args.current_mrr);
     const slug = await uniqueSlug(ctx, "customers", slugify(args.name));
     const now = nowIso();
     return ctx.db.insert("customers", {
