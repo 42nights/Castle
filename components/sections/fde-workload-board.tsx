@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Avatar, HealthPip } from "@/components/atoms";
+import { CapacityInput } from "@/components/controls/capacity-input";
+import { LogHoursButton } from "@/components/controls/log-hours-button";
 import type {
   FdeWorkload,
   FdeWorkloadStatus,
@@ -78,21 +80,23 @@ function FdeCard({
   const utilDisplay = Math.min(150, Math.round(workload.utilization * 100));
   const barWidth = Math.min(100, (workload.utilization / 1.5) * 100);
   return (
-    <Link
-      href={`/fdes/${workload.fde.id}`}
-      className="block border border-line rounded-md p-5 bg-page hover:bg-surface transition-colors"
-    >
+    <div className="block border border-line rounded-md p-5 bg-page hover:bg-surface transition-colors">
       <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
+        <Link
+          href={`/fdes/${workload.fde.id}`}
+          className="flex items-center gap-3 min-w-0 group"
+        >
           <Avatar name={workload.fde.name} size={40} />
           <div className="min-w-0">
-            <div className="t-h3 truncate">{workload.fde.name}</div>
+            <div className="t-h3 truncate group-hover:underline">
+              {workload.fde.name}
+            </div>
             <div className="t-caption text-ink-3">
               {workload.fde.role}
               {workload.fde.is_founder && " · co-founder"}
             </div>
           </div>
-        </div>
+        </Link>
         <span
           className={`t-caption inline-flex h-5 items-center rounded-sm px-2 uppercase tracking-[0.08em] ${tone.chip}`}
         >
@@ -107,7 +111,12 @@ function FdeCard({
             <span className="num text-ink">
               {workload.committedHours.toFixed(0)}
             </span>{" "}
-            / <span className="num">{workload.capacityHours}</span> h committed ·{" "}
+            /{" "}
+            <CapacityInput
+              fdeSlug={workload.fde.id}
+              current={workload.capacityHours}
+            />{" "}
+            committed ·{" "}
             <span className="num text-ink">{utilDisplay}%</span>
           </span>
         </div>
@@ -121,13 +130,14 @@ function FdeCard({
             style={{ width: `${barWidth}%` }}
           />
         </div>
-        <div className="mt-1 t-caption text-ink-3 flex justify-between">
-          <span>
+        <div className="mt-1 t-caption text-ink-3 flex items-center justify-between">
+          <span className="inline-flex items-center gap-2">
             Actual{" "}
             <span className="num text-ink-2">
               {formatHours(workload.actualHours)}
             </span>{" "}
             / wk
+            <LogHoursButton fdeSlug={workload.fde.id} />
           </span>
           <span>
             Gap{" "}
@@ -172,7 +182,7 @@ function FdeCard({
           </li>
         )}
       </ul>
-    </Link>
+    </div>
   );
 }
 

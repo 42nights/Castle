@@ -2,9 +2,11 @@
 
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
-import { HealthPip, StatusChip } from "@/components/atoms";
+import { CustomerHealthMenu } from "@/components/controls/customer-health-menu";
+import { CustomerStatusMenu } from "@/components/controls/customer-status-menu";
+import { MrrInput } from "@/components/controls/mrr-input";
 import type { CustomerRow } from "@/lib/derive";
-import { formatHours, formatPct, formatUsd } from "@/lib/format";
+import { formatHours, formatPct } from "@/lib/format";
 
 export function CustomersTable({ rows }: { rows: CustomerRow[] }) {
   const backers = Array.from(
@@ -40,7 +42,12 @@ export function CustomersTable({ rows }: { rows: CustomerRow[] }) {
       id: "status",
       header: "Status",
       accessorFn: (r) => r.customer.status,
-      cell: ({ row }) => <StatusChip status={row.original.customer.status} />,
+      cell: ({ row }) => (
+        <CustomerStatusMenu
+          customerSlug={row.original.customer.id}
+          current={row.original.customer.status}
+        />
+      ),
       filterFn: (row, _id, value) => row.original.customer.status === value,
     },
     {
@@ -48,9 +55,9 @@ export function CustomersTable({ rows }: { rows: CustomerRow[] }) {
       header: "Health",
       accessorFn: (r) => r.customer.health,
       cell: ({ row }) => (
-        <HealthPip
-          value={row.original.customer.health}
-          label={row.original.customer.health}
+        <CustomerHealthMenu
+          customerSlug={row.original.customer.id}
+          current={row.original.customer.health}
         />
       ),
       filterFn: (row, _id, value) => row.original.customer.health === value,
@@ -60,9 +67,12 @@ export function CustomersTable({ rows }: { rows: CustomerRow[] }) {
       header: "MRR",
       accessorFn: (r) => r.customer.current_mrr,
       cell: ({ row }) => (
-        <span className="num text-ink text-right block">
-          {formatUsd(row.original.customer.current_mrr)}
-        </span>
+        <div className="text-right">
+          <MrrInput
+            customerSlug={row.original.customer.id}
+            current={row.original.customer.current_mrr}
+          />
+        </div>
       ),
     },
     {
