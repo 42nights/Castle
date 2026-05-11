@@ -1,11 +1,21 @@
 export function formatUsdCompact(n: number): string {
   if (n === 0) return "$0";
-  if (Math.abs(n) >= 1_000_000) {
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) {
     const m = n / 1_000_000;
     return `$${m % 1 === 0 ? m.toFixed(0) : m.toFixed(2)}M`;
   }
-  if (Math.abs(n) >= 10_000) return `$${Math.round(n / 1_000)}K`;
-  if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
+  if (abs >= 10_000) {
+    const k = Math.round(n / 1_000);
+    // Boundary case: 999_500 rounds to 1000K. Escalate to $1M instead
+    // of printing "$1000K" which looks like a formatting glitch.
+    if (Math.abs(k) >= 1000) {
+      const m = k / 1000;
+      return `$${m % 1 === 0 ? m.toFixed(0) : m.toFixed(2)}M`;
+    }
+    return `$${k}K`;
+  }
+  if (abs >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
   return `$${n.toFixed(0)}`;
 }
 

@@ -42,6 +42,29 @@ export const importPayload = internalMutation({
     const payload = JSON.parse(payloadJson) as any;
     const now = nowIso();
 
+    // Defensive shape check on every top-level array. Without this a
+    // missing field produces "x is not iterable" deep in the loop body,
+    // which is a confusing failure mode.
+    const requireArray = (key: string, value: unknown): unknown[] => {
+      if (!Array.isArray(value)) {
+        throw new Error(
+          `seed payload.${key} must be an array (got ${typeof value})`,
+        );
+      }
+      return value as unknown[];
+    };
+    for (const key of [
+      "fdes",
+      "customers",
+      "engagements",
+      "templates",
+      "deployments",
+      "extractions",
+      "founderHours",
+    ] as const) {
+      requireArray(key, payload[key]);
+    }
+
     const fdeIdByKey = new Map<string, Id<"fdes">>();
     for (const f of payload.fdes) {
       const slug = await uniqueSlug(ctx, "fdes", slugify(f.id));
@@ -148,12 +171,24 @@ export const importPayload = internalMutation({
     for (const d of payload.deployments) {
       const c = customerIdByKey.get(d.customer_id);
       const e = engagementIdByKey.get(d.engagement_id);
-      const t = d.template_id ? templateIdByKey.get(d.template_id) : null;
       if (!c || !e) throw new Error(`bad deployment refs ${d.id}`);
+      // A non-null template_id in seed data MUST resolve. Silently
+      // coercing a typo to null would make a template-based deployment
+      // look fully custom in the % template-based metric.
+      let t: Id<"templates"> | null = null;
+      if (d.template_id !== null && d.template_id !== undefined) {
+        const resolved = templateIdByKey.get(d.template_id);
+        if (!resolved) {
+          throw new Error(
+            `bad template ref ${d.template_id} on deployment ${d.id}`,
+          );
+        }
+        t = resolved;
+      }
       await ctx.db.insert("deployments", {
         customer_id: c,
         engagement_id: e,
-        template_id: t ?? null,
+        template_id: t,
         agent_name: d.agent_name,
         deployed_at: d.deployed_at,
         hours_replaced_per_week: d.hours_replaced_per_week,

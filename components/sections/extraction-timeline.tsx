@@ -66,12 +66,18 @@ export function ExtractionTimeline({
                     {src?.name ?? "—"}
                   </Link>{" "}
                   <span className="text-ink-3">→ extracted into</span>{" "}
-                  <Link
-                    href={`/templates/${tpl?.id ?? ""}`}
-                    className="text-ink hover:underline"
-                  >
-                    {tpl?.name ?? "—"}
-                  </Link>{" "}
+                  {tpl ? (
+                    <Link
+                      href={`/templates/${tpl.id}`}
+                      className="text-ink hover:underline"
+                    >
+                      {tpl.name}
+                    </Link>
+                  ) : (
+                    <span className="text-ink-3 italic">
+                      a template that no longer exists
+                    </span>
+                  )}{" "}
                   <span className="text-ink-3">→ reused at</span>{" "}
                   <span className="text-ink num">
                     {reused.length} customer{reused.length === 1 ? "" : "s"}
