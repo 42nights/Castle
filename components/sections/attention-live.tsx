@@ -2,9 +2,7 @@
 
 import { useQuery } from "convex/react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { Avatar } from "@/components/atoms";
-import { TouchedButton } from "@/components/controls/touched-button";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import { useActorSlug } from "@/lib/use-actor";
 import { useRunMutation } from "@/lib/use-run-mutation";
@@ -23,12 +21,6 @@ type LiveItem = {
   manual_id?: string;
 };
 
-const sevLabel: Record<Severity, string> = {
-  critical: "Critical",
-  high: "High",
-  medium: "Watch",
-};
-
 function useNowBucket() {
   const [b, setB] = useState(() => Math.floor(Date.now() / 60_000));
   useEffect(() => {
@@ -38,13 +30,24 @@ function useNowBucket() {
   return b;
 }
 
+/**
+ * Operator queue.
+ *
+ * Layout choices:
+ * - No surrounding card. Section sits directly on the page.
+ * - Ledger rows: single hairline between rows, no row borders.
+ * - The pip IS the severity. Critical = red. High = ink. Medium = ink-3.
+ *   No "Critical/High/Watch" text label competing with the title.
+ * - One always-visible action ("touched" — only when relevant). Snooze and
+ *   resolve live behind a hover-revealed kebab so they don't fight the
+ *   title for attention.
+ * - Owner avatar dropped from the rest state (it lives on the engagement
+ *   page). Cuts a column of noise.
+ */
 export function AttentionListLive() {
   const nowBucket = useNowBucket();
   const items = useQuery(api.attention.list, { nowBucket }) as
     | LiveItem[]
-    | undefined;
-  const fdes = useQuery(api.fdes.list) as
-    | Array<{ _id: string; name: string }>
     | undefined;
   const engagementsList = useQuery(api.engagements.list) as
     | Array<{ _id: string; slug: string }>
@@ -101,19 +104,23 @@ export function AttentionListLive() {
 
   if (items === undefined) {
     return (
-      <section className="mb-14 border border-line rounded-md p-6 bg-surface">
-        <div className="t-eyebrow mb-2">— What needs you today</div>
-        <p className="text-ink-2 text-[14px]">Loading…</p>
+      <section className="panel mb-4">
+        <header className="panel-header">
+          <h2 className="t-h2 text-ink">Today</h2>
+        </header>
+        <p className="px-3 py-3 text-ink-3 text-[12px]">Loading…</p>
       </section>
     );
   }
 
   if (items.length === 0) {
     return (
-      <section className="mb-14 border border-line rounded-md p-6 bg-surface">
-        <div className="t-eyebrow mb-2">— What needs you today</div>
-        <p className="text-ink-2 text-[14px]">
-          Nothing flagged. Everything green, no engagement stale beyond 7 days.
+      <section className="panel mb-4">
+        <header className="panel-header">
+          <h2 className="t-h2 text-ink">Today</h2>
+        </header>
+        <p className="px-3 py-3 text-ink-2 text-[13px] leading-snug">
+          Nothing flagged. All green, nothing stale &gt; 7d.
         </p>
       </section>
     );
@@ -123,121 +130,198 @@ export function AttentionListLive() {
     (acc, i) => ({ ...acc, [i.severity]: (acc[i.severity] ?? 0) + 1 }),
     { critical: 0, high: 0, medium: 0 },
   );
-  const fdeById = new Map((fdes ?? []).map((f) => [f._id, f]));
   const engagementSlugById = new Map(
     (engagementsList ?? []).map((e) => [e._id, e.slug]),
   );
 
   return (
-    <section className="mb-14">
-      <div className="flex items-end justify-between mb-4">
-        <div>
-          <div className="t-eyebrow mb-2">— What needs you today</div>
-          <h2 className="t-h2 text-ink">Operator queue.</h2>
+    <section className="panel mb-4">
+      <header className="panel-header">
+        <h2 className="t-h2 text-ink">Today</h2>
+        <div className="text-[11px] text-ink-3 flex items-baseline gap-4 num">
+          {counts.critical > 0 && (
+            <span className="inline-flex items-baseline gap-1.5">
+              <span className="hp" data-health="red" /> {counts.critical}
+            </span>
+          )}
+          {counts.high > 0 && (
+            <span className="inline-flex items-baseline gap-1.5">
+              <span className="hp" data-health="yellow" /> {counts.high}
+            </span>
+          )}
+          {counts.medium > 0 && (
+            <span className="inline-flex items-baseline gap-1.5">
+              <span className="hp" /> {counts.medium}
+            </span>
+          )}
         </div>
-        <div className="t-caption flex items-center gap-3">
-          {counts.critical > 0 && <Badge severity="critical" count={counts.critical} />}
-          {counts.high > 0 && <Badge severity="high" count={counts.high} />}
-          {counts.medium > 0 && <Badge severity="medium" count={counts.medium} />}
-        </div>
-      </div>
+      </header>
 
-      <ul className="border-t border-line">
+      <ol className="ledger">
         {items.map((item) => {
-          const owner = item.owner_fde_id
-            ? fdeById.get(item.owner_fde_id)
-            : null;
           const engagementSlug = item.related_engagement_id
             ? engagementSlugById.get(item.related_engagement_id)
             : null;
           const showTouch =
-            engagementSlug &&
+            !!engagementSlug &&
             (item.item_key.startsWith("stale-eng:") ||
               item.item_key.startsWith("red-eng:") ||
               item.item_key.startsWith("yellow-eng:"));
+          const sevPip =
+            item.severity === "critical"
+              ? "red"
+              : item.severity === "high"
+                ? "yellow"
+                : undefined;
           return (
-            <li key={item.item_key} className="border-b border-line group">
-              <div className="grid grid-cols-[88px_1fr_auto] items-center gap-5 py-4 px-3 -mx-3 rounded-sm hover:bg-surface transition-colors">
-                <SeverityChip severity={item.severity} />
-                <Link href={item.href} className="min-w-0 block">
-                  <div className="text-[14.5px] text-ink leading-tight hover:underline">
-                    {item.title}
-                  </div>
-                  <p className="mt-1 text-[12.5px] text-ink-2 leading-relaxed line-clamp-2">
-                    {item.subtitle}
-                  </p>
-                </Link>
-                <div className="flex items-center gap-2">
-                  {owner && (
-                    <span className="inline-flex items-center gap-2">
-                      <Avatar name={owner.name} size={20} />
-                      <span className="t-caption">
-                        {owner.name.split(" ")[0]}
-                      </span>
-                    </span>
-                  )}
-                  {showTouch && engagementSlug && (
-                    <TouchedButton engagementSlug={engagementSlug} />
-                  )}
-                  <button
-                    onClick={() => doSnooze(item.item_key, 24)}
-                    className="t-caption text-ink-3 hover:text-ink h-6 px-1.5 rounded-sm hover:bg-page"
-                    title="Snooze 24h"
-                  >
-                    24h
-                  </button>
-                  <button
-                    onClick={() => doSnooze(item.item_key, 24 * 7)}
-                    className="t-caption text-ink-3 hover:text-ink h-6 px-1.5 rounded-sm hover:bg-page"
-                    title="Snooze 7d"
-                  >
-                    7d
-                  </button>
-                  <button
-                    onClick={() => doResolve(item)}
-                    className="t-caption text-ink h-6 px-2 rounded-sm bg-page border border-line hover:bg-surface"
-                    title="Resolve"
-                  >
-                    resolve
-                  </button>
-                </div>
-              </div>
-            </li>
+            <QueueRow
+              key={item.item_key}
+              title={item.title}
+              subtitle={item.subtitle}
+              href={item.href}
+              sevPip={sevPip}
+              engagementSlug={showTouch ? engagementSlug! : undefined}
+              onSnooze={(hours) => doSnooze(item.item_key, hours)}
+              onResolve={() => doResolve(item)}
+            />
           );
         })}
-      </ul>
+      </ol>
     </section>
   );
 }
 
-function SeverityChip({ severity }: { severity: Severity }) {
-  const tone =
-    severity === "critical"
-      ? "bg-accent text-page"
-      : severity === "high"
-        ? "bg-ink text-page"
-        : "border border-line text-ink-2 bg-page";
+/** Single queue row. Hover reveals snooze/resolve; touched is always shown
+ *  when relevant since it's the single most-frequent action. */
+function QueueRow({
+  title,
+  subtitle,
+  href,
+  sevPip,
+  engagementSlug,
+  onSnooze,
+  onResolve,
+}: {
+  title: string;
+  subtitle: string;
+  href: string;
+  sevPip?: "red" | "yellow";
+  engagementSlug?: string;
+  onSnooze: (hours: number) => void;
+  onResolve: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const ref = useRef<HTMLLIElement>(null);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
   return (
-    <span
-      className={`inline-flex h-5 w-fit items-center rounded-sm px-1.5 uppercase tracking-[0.08em] font-medium text-[10px] ${tone}`}
+    <li
+      ref={ref}
+      className="group relative grid grid-cols-[16px_1fr_auto] items-baseline gap-3 py-2 px-3 hover:bg-surface"
     >
-      {sevLabel[severity]}
-    </span>
+      <span
+        className="hp self-center"
+        data-health={sevPip ?? undefined}
+        aria-hidden
+      />
+      <Link href={href} className="min-w-0 block">
+        <div className="text-[15px] text-ink leading-snug">{title}</div>
+        <p className="mt-1 text-[13px] text-ink-2 leading-relaxed line-clamp-1">
+          {subtitle}
+        </p>
+      </Link>
+      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        {engagementSlug && <TouchedQuick slug={engagementSlug} />}
+        <button
+          onClick={() => setMenuOpen((v) => !v)}
+          className="h-6 w-6 rounded-sm text-ink-3 hover:text-ink hover:bg-page text-[14px] leading-none flex items-center justify-center"
+          aria-label="More actions"
+        >
+          ⋯
+        </button>
+      </div>
+
+      {menuOpen && (
+        <div className="absolute right-3 top-full z-10 mt-1 w-44 rounded-md border border-line bg-page shadow-[0_8px_24px_-12px_rgba(10,10,10,0.18)] py-1 text-[13px]">
+          <button
+            onClick={() => {
+              onSnooze(24);
+              setMenuOpen(false);
+            }}
+            className="block w-full text-left px-3 py-1.5 text-ink-2 hover:text-ink hover:bg-surface"
+          >
+            Snooze 24h
+          </button>
+          <button
+            onClick={() => {
+              onSnooze(24 * 7);
+              setMenuOpen(false);
+            }}
+            className="block w-full text-left px-3 py-1.5 text-ink-2 hover:text-ink hover:bg-surface"
+          >
+            Snooze 7d
+          </button>
+          <button
+            onClick={() => {
+              onResolve();
+              setMenuOpen(false);
+            }}
+            className="block w-full text-left px-3 py-1.5 text-ink-2 hover:text-ink hover:bg-surface"
+          >
+            Resolve
+          </button>
+        </div>
+      )}
+    </li>
   );
 }
 
-function Badge({ severity, count }: { severity: Severity; count: number }) {
-  const dot =
-    severity === "critical"
-      ? "bg-accent"
-      : severity === "high"
-        ? "bg-ink"
-        : "bg-ink-3";
+/** Tiny inline "touched" affordance — text only, no chrome. */
+function TouchedQuick({ slug }: { slug: string }) {
+  // Reuse the existing TouchedButton's logic but render as a text link.
+  // Importing the component would keep the pill styling, so inline the
+  // small piece we need here.
+  const [actorSlug] = useActorSlug();
+  const eng = useQuery(api.engagements.getBySlug, { slug }) as
+    | { _id: string }
+    | null
+    | undefined;
+  const actorFde = useQuery(
+    api.fdes.getBySlug,
+    actorSlug ? { slug: actorSlug } : "skip",
+  ) as { _id: string } | null | undefined;
+  const run = useRunMutation(api.engagements.markTouched);
+  const [pending, setPending] = useState(false);
+
+  const onClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!eng || !actorFde) return;
+    setPending(true);
+    await run(
+      { id: eng._id as never, actor_fde_id: actorFde._id as never },
+      { success: "Marked updated" },
+    );
+    setPending(false);
+  };
+
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={`inline-block h-1.5 w-1.5 rounded-full ${dot}`} />
-      <span className="num text-ink">{count}</span>
-      <span className="text-ink-3">{sevLabel[severity].toLowerCase()}</span>
-    </span>
+    <button
+      onClick={onClick}
+      disabled={pending}
+      className="text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
+    >
+      {pending ? "saving…" : "touched today"}
+    </button>
   );
 }

@@ -1,9 +1,18 @@
 import Link from "next/link";
-import { CategoryBadge } from "@/components/atoms";
 import type { TemplateUsage } from "@/lib/derive";
 import { templatesByMostReused } from "@/lib/derive";
 import type { Customer } from "@/lib/types";
 
+/**
+ * Agent template library.
+ *
+ * Two-column ledger, not a 3-up card grid. Each template = one row:
+ *
+ *   [Name]                    [category]
+ *   Reused by 3 customers across 4 deployments. From Customer A.
+ *
+ * No surrounding boxes. Hairlines between rows.
+ */
 export function TemplateOverview({
   usage,
   customers,
@@ -16,55 +25,50 @@ export function TemplateOverview({
   const ranked = templatesByMostReused(usage).slice(0, limit);
   const cById = new Map(customers.map((c) => [c.id, c]));
   return (
-    <section className="mb-14">
-      <div className="flex items-end justify-between mb-4">
-        <div>
-          <div className="t-eyebrow mb-2">— Agent template library</div>
-          <h2 className="t-h2 text-ink">What we&rsquo;ve productized so far.</h2>
-        </div>
+    <section className="panel mb-4">
+      <header className="panel-header">
+        <h2 className="t-h2 text-ink">Library</h2>
         <Link
           href="/templates"
-          className="t-caption text-ink-2 hover:text-ink"
+          className="text-[12px] text-ink-3 hover:text-ink"
         >
           all templates →
         </Link>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-line border border-line rounded-sm overflow-hidden">
-        {ranked.map((u) => {
+      </header>
+      <ol className="md:grid md:grid-cols-2 md:divide-x divide-line">
+        {ranked.map((u, i) => {
           const origin = cById.get(u.template.origin_customer_id);
+          const lastRow = i >= ranked.length - 2;
           return (
-            <Link
+            <li
               key={u.template.id}
-              href={`/templates/${u.template.id}`}
-              className="group bg-page p-5 hover:bg-surface transition-colors"
+              className={`px-3 py-2.5 ${lastRow ? "" : "border-b border-line"}`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="t-h3">{u.template.name}</div>
-                <CategoryBadge category={u.template.category} />
-              </div>
-              <ul className="mt-3 space-y-1 text-[13px] text-ink-2">
-                {u.template.capabilities.slice(0, 3).map((cap) => (
-                  <li key={cap} className="flex gap-2">
-                    <span className="text-ink-3">·</span>
-                    <span>{cap}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-4 pt-3 border-t border-line t-caption flex items-center justify-between">
-                <span>
+              <Link
+                href={`/templates/${u.template.id}`}
+                className="group block"
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <div className="t-h3 text-ink group-hover:underline">
+                    {u.template.name}
+                  </div>
+                  <span className="text-[11px] text-ink-3 uppercase tracking-[0.08em]">
+                    {u.template.category}
+                  </span>
+                </div>
+                <p className="mt-1 text-[13.5px] text-ink-2 leading-relaxed">
+                  Reused at{" "}
                   <span className="num text-ink">{u.customerCount}</span>{" "}
-                  customers ·{" "}
+                  {u.customerCount === 1 ? "customer" : "customers"} across{" "}
                   <span className="num text-ink">{u.deploymentCount}</span>{" "}
-                  deployments
-                </span>
-                <span className="text-ink-3">
-                  from {origin?.name ?? "—"}
-                </span>
-              </div>
-            </Link>
+                  {u.deploymentCount === 1 ? "deployment" : "deployments"}.
+                  From {origin?.name ?? "—"}.
+                </p>
+              </Link>
+            </li>
           );
         })}
-      </div>
+      </ol>
     </section>
   );
 }

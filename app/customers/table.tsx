@@ -2,6 +2,7 @@
 
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
+import { BackedByInput } from "@/components/controls/backed-by-input";
 import { CustomerHealthMenu } from "@/components/controls/customer-health-menu";
 import { CustomerStatusMenu } from "@/components/controls/customer-status-menu";
 import { MrrInput } from "@/components/controls/mrr-input";
@@ -27,9 +28,10 @@ export function CustomersTable({ rows }: { rows: CustomerRow[] }) {
       header: "Backed by",
       accessorFn: (r) => r.customer.backed_by.join(", "),
       cell: ({ row }) => (
-        <span className="text-ink-2 text-[13px]">
-          {row.original.customer.backed_by.join(", ")}
-        </span>
+        <BackedByInput
+          customerSlug={row.original.customer.id}
+          current={row.original.customer.backed_by}
+        />
       ),
       filterFn: (row, _id, value) => {
         if (!value) return true;

@@ -109,6 +109,43 @@ export const setStatus = mutation({
   },
 });
 
+/** Distinct backers across all customers (alphabetical, "—" filtered).
+ *  Used for the typed-selection autocomplete in the BackedBy editor. */
+export const listBackers = query({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("customers").collect();
+    const set = new Set<string>();
+    for (const c of all) {
+      for (const b of c.backed_by) {
+        const trimmed = b.trim();
+        if (trimmed && trimmed !== "—") set.add(trimmed);
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  },
+});
+
+/** Replace the full backers array on a customer. Trims, dedupes, drops
+ *  empties so the BackedBy editor doesn't have to be defensive. */
+export const setBackedBy = mutation({
+  args: {
+    id: v.id("customers"),
+    backed_by: v.array(v.string()),
+    actor_fde_id: v.union(v.id("fdes"), v.null()),
+  },
+  handler: async (ctx, { id, backed_by, actor_fde_id }) => {
+    const clean = Array.from(
+      new Set(backed_by.map((b) => b.trim()).filter(Boolean)),
+    );
+    await ctx.db.patch(id, {
+      backed_by: clean,
+      updated_at: nowIso(),
+      updated_by_fde_id: actor_fde_id,
+    });
+  },
+});
+
 export const setMrr = mutation({
   args: {
     id: v.id("customers"),

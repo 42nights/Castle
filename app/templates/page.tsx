@@ -12,7 +12,6 @@ export default async function TemplatesPage() {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="— Templates"
         title="The library, growing one engagement at a time."
         description="Each template is a real customer workflow we kept building. Reuse count is the productization story."
         actions={<NewTemplateButton />}

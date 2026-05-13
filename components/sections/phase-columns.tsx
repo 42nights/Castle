@@ -1,25 +1,29 @@
 import Link from "next/link";
-import {
-  AvatarGroup,
-  HealthPip,
-} from "@/components/atoms";
-import { HealthMenu } from "@/components/controls/health-menu";
-import { PhaseMenu } from "@/components/controls/phase-menu";
-import { ProgressSlider } from "@/components/controls/progress-slider";
-import { TouchedButton } from "@/components/controls/touched-button";
-import type { EngagementRow } from "@/lib/derive";
+import { EngagementMenu } from "@/components/controls/engagement-menu";
 import { daysSince } from "@/lib/derive";
+import type { EngagementRow } from "@/lib/derive";
 import type { EngagementPhase } from "@/lib/types";
 import { formatHours } from "@/lib/format";
 
-const COLUMNS: { key: EngagementPhase; label: string; sub: string }[] = [
-  { key: "discovery", label: "Discovery", sub: "Scoping" },
-  { key: "build", label: "Build", sub: "Active work" },
-  { key: "deployed", label: "Deployed", sub: "Live & supported" },
+const COLUMNS: { key: EngagementPhase; label: string }[] = [
+  { key: "discovery", label: "Discovery" },
+  { key: "build", label: "Build" },
+  { key: "deployed", label: "Deployed" },
+  { key: "support", label: "Support" },
 ];
 
 const STALE_THRESHOLD = 7;
 
+/**
+ * Engagement pipeline by phase.
+ *
+ * Each phase = one column with no surrounding box. Each engagement = a
+ * paragraph, not a card. Hairlines between rows inside a column. All
+ * controls collapsed into a hover-revealed ⋯ button — at rest, the
+ * row reads as a sentence the operator can scan.
+ *
+ * Progress is a 2px line at rest. Open the menu to change.
+ */
 export function PhaseColumns({
   groups,
   today = new Date(),
@@ -28,99 +32,96 @@ export function PhaseColumns({
   today?: Date;
 }) {
   return (
-    <section className="mb-14">
-      <div className="flex items-end justify-between mb-5">
-        <div>
-          <div className="t-eyebrow mb-2">— Engagements · pipeline</div>
-          <h2 className="t-h2 text-ink">By phase, right now.</h2>
-        </div>
+    <section className="panel mb-4">
+      <header className="panel-header">
+        <h2 className="t-h2 text-ink">Pipeline</h2>
         <Link
           href="/engagements"
-          className="t-caption text-ink-2 hover:text-ink"
+          className="text-[12px] text-ink-3 hover:text-ink"
         >
           full table →
         </Link>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-line border border-line rounded-sm overflow-hidden">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 divide-x divide-line">
         {COLUMNS.map((col) => {
           const rows = groups[col.key] ?? [];
           return (
-            <div key={col.key} className="bg-page p-4 flex flex-col">
-              <header className="px-1 mb-3 flex items-baseline justify-between">
-                <div>
-                  <div className="t-h3">{col.label}</div>
-                  <div className="t-caption text-ink-3">{col.sub}</div>
-                </div>
-                <span className="num text-ink-3 text-[13px]">{rows.length}</span>
+            <div key={col.key} className="min-w-0">
+              <header className="flex items-baseline justify-between px-3 py-2 border-b border-line">
+                <h3 className="text-[12px] tracking-[0.04em] text-ink uppercase font-medium">
+                  {col.label}
+                </h3>
+                <span className="text-[11px] text-ink-3 num">
+                  {rows.length}
+                </span>
               </header>
-              <ol className="flex flex-col gap-2.5">
-                {rows.length === 0 && (
-                  <li className="t-caption text-ink-3 italic p-3">
-                    nothing here
-                  </li>
-                )}
-                {rows.map(({ engagement: e, customer, fdes }) => {
-                  const stale = daysSince(e.last_update_at, today);
-                  const isStale = stale > STALE_THRESHOLD;
-                  return (
-                    <li key={e.id}>
-                      <div className="block border border-line rounded-sm p-3 hover:bg-surface transition-colors">
-                        <div className="flex items-center justify-between gap-3">
+
+              {rows.length === 0 ? (
+                <p className="px-3 py-2 text-[12px] text-ink-3">—</p>
+              ) : (
+                <ol className="ledger">
+                  {rows.map(({ engagement: e, customer, fdes }) => {
+                    const stale = daysSince(e.last_update_at, today);
+                    const isStale = stale > STALE_THRESHOLD;
+                    const pip =
+                      e.health === "red"
+                        ? "red"
+                        : e.health === "yellow"
+                          ? "yellow"
+                          : undefined;
+                    return (
+                      <li
+                        key={e.id}
+                        className="group px-3 py-2 hover:bg-surface"
+                      >
+                        <div className="flex items-baseline justify-between gap-2">
                           <Link
                             href={`/engagements/${e.id}`}
-                            className="text-ink text-[14px] truncate hover:underline"
+                            className="text-[13.5px] text-ink truncate flex items-baseline gap-2 min-w-0 hover:underline"
                           >
-                            {customer.name}
-                          </Link>
-                          <HealthPip value={e.health} />
-                        </div>
-                        <div className="mt-3">
-                          <ProgressSlider
-                            engagementSlug={e.id}
-                            current={e.progress_pct}
-                          />
-                        </div>
-                        <div className="mt-3 flex items-center justify-between t-caption">
-                          <AvatarGroup names={fdes.map((f) => f.name)} />
-                          <span className="text-ink-3">
-                            <span className="num">{formatHours(e.weekly_hours)}</span>
-                            /wk
-                          </span>
-                        </div>
-                        <div className="mt-3 pt-3 border-t border-line flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5">
-                            <PhaseMenu
-                              engagementSlug={e.id}
-                              current={e.phase}
+                            <span
+                              className="hp inline-block translate-y-[1px] flex-shrink-0"
+                              data-health={pip}
                             />
-                            <HealthMenu
+                            <span className="truncate">{customer.name}</span>
+                          </Link>
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <EngagementMenu
                               engagementSlug={e.id}
-                              current={e.health}
+                              currentPhase={e.phase}
+                              currentHealth={e.health}
+                              currentProgress={e.progress_pct}
                             />
                           </div>
-                          <TouchedButton engagementSlug={e.id} />
                         </div>
-                        <div className="mt-2 t-caption flex items-center justify-between">
+
+                        <div className="mt-1.5 h-px bg-line relative overflow-hidden">
                           <span
-                            className={
-                              isStale ? "text-accent" : "text-ink-3"
-                            }
-                          >
-                            {isStale ? "stalled · " : "updated · "}
-                            <span className="num">{stale}d</span>
-                          </span>
-                          {isStale && (
-                            <span className="inline-flex h-4 items-center rounded-sm border border-accent px-1 uppercase tracking-[0.1em] text-[9px] font-medium text-accent">
-                              stalled
-                            </span>
-                          )}
+                            className="absolute inset-y-0 left-0 bg-ink"
+                            style={{ width: `${e.progress_pct}%` }}
+                          />
                         </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
+
+                        <div className="mt-1 flex items-baseline justify-between text-[11.5px] text-ink-3">
+                          <span className="truncate">
+                            {fdes.map((f) => f.name.split(" ")[0]).join(" · ")}
+                          </span>
+                          <span className="num">
+                            {formatHours(e.weekly_hours)}/wk
+                          </span>
+                        </div>
+
+                        {isStale && (
+                          <div className="mt-0.5 text-[11px] text-accent">
+                            stale · <span className="num">{stale}d</span>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
             </div>
           );
         })}

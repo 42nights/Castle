@@ -12,9 +12,8 @@ export default async function CustomersPage() {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="— Customers"
-        title="Who pays us, and how productized are they."
-        description="Sorted by MRR. % template-based tells you which contracts are running on shared infrastructure vs. fully bespoke work."
+        title="Customers"
+        description="Sorted by MRR. % template indicates shared infrastructure vs. bespoke."
         actions={<NewCustomerButton />}
       />
       <CustomersTable rows={rows} />

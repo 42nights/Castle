@@ -1,6 +1,6 @@
 # /data — seed JSON
 
-Single source of truth for the dashboard. Edit these files directly; the app reads them at request time. No DB.
+Data files for seeding Convex. All files currently empty - ready for new data.
 
 - `fdes.json` — engineers on the bench
 - `customers.json` — companies we're contracted with

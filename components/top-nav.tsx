@@ -6,34 +6,42 @@ import { ActorBar } from "@/components/actor-bar";
 import { InFlightDot } from "@/components/in-flight-dot";
 
 const links = [
-  { href: "/", label: "Overview" },
+  { href: "/", label: "Ask" },
+  { href: "/overview", label: "Overview" },
   { href: "/fdes", label: "FDEs" },
   { href: "/engagements", label: "Engagements" },
   { href: "/customers", label: "Customers" },
   { href: "/templates", label: "Templates" },
   { href: "/extractions", label: "Extractions" },
+  { href: "/connections", label: "Connections" },
 ] as const;
 
+/**
+ * Top nav.
+ *
+ * The accent dot is the brand mark — single chromatic moment in the
+ * shell. ⌘K is the only meta hint shown at rest (right side), and only
+ * on wide screens. Active link gets a 1px ink underline aligned to the
+ * nav's bottom border, so the "you are here" feels continuous with the
+ * rule instead of pasted on.
+ */
 export function TopNav() {
   const pathname = usePathname();
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-page/85 backdrop-blur supports-[backdrop-filter]:bg-page/70">
-      <div className="mx-auto flex h-14 max-w-screen-2xl items-center gap-10 px-6 md:px-10">
+    <header className="sticky top-0 z-30 border-b border-line bg-page/90 backdrop-blur supports-[backdrop-filter]:bg-page/75">
+      <div className="mx-auto flex h-14 max-w-screen-xl items-center gap-10 px-8 md:px-12">
         <Link
           href="/"
-          className="group flex items-baseline gap-2.5"
-          aria-label="Castle, by 42nights Inc."
+          className="group flex items-baseline gap-2"
+          aria-label="Castle"
         >
-          <span className="relative inline-block h-1.5 w-1.5 translate-y-[-2px] rounded-full bg-accent">
-            <span className="absolute -top-2 -right-1.5">
+          <span className="relative inline-block h-[7px] w-[7px] translate-y-[-2px] rounded-full bg-accent">
+            <span className="absolute -top-1.5 -right-1.5">
               <InFlightDot />
             </span>
           </span>
-          <span className="t-display text-[19px] leading-none text-ink group-hover:opacity-80 transition-opacity">
+          <span className="t-display text-[18px] leading-none text-ink group-hover:opacity-80 transition-opacity">
             Castle
-          </span>
-          <span className="t-caption translate-y-[-1px]">
-            by 42nights Inc.
           </span>
         </Link>
 
@@ -49,28 +57,25 @@ export function TopNav() {
                 href={link.href}
                 aria-current={active ? "page" : undefined}
                 className={[
-                  "relative px-3 py-1.5 text-[13px] tracking-[-0.005em] rounded-sm transition-colors",
+                  "relative px-2.5 py-2 text-[13px] tracking-[-0.005em] transition-colors",
                   active
                     ? "text-ink"
-                    : "text-ink-2 hover:text-ink hover:bg-surface",
+                    : "text-ink-3 hover:text-ink",
                 ].join(" ")}
               >
                 {link.label}
                 {active && (
-                  <span className="absolute left-3 right-3 -bottom-[15px] h-px bg-ink" />
+                  <span className="absolute left-2.5 right-2.5 -bottom-[1px] h-[1.5px] bg-ink" />
                 )}
               </Link>
             );
           })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-4">
+        <div className="ml-auto flex items-center gap-5">
           <ActorBar />
-          <span className="t-caption hidden lg:inline">
-            <kbd className="rounded-sm border border-line bg-surface px-1 num text-[10px]">
-              ⌘K
-            </kbd>{" "}
-            for actions
+          <span className="hidden lg:inline text-[11px] text-ink-3">
+            <kbd className="num text-[10px] text-ink-2">⌘K</kbd>
           </span>
         </div>
       </div>

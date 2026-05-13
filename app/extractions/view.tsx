@@ -1,9 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { ColumnDef } from "@tanstack/react-table";
+import { DataTable } from "@/components/data-table";
 import type { Customer, PatternExtraction, Template } from "@/lib/types";
 import { formatDate } from "@/lib/format";
+
+type Row = {
+  extraction: PatternExtraction;
+  source: Customer | undefined;
+  template: Template | undefined;
+  reused: Customer[];
+};
 
 export function ExtractionsView({
   extractions,
@@ -14,120 +22,108 @@ export function ExtractionsView({
   customers: Customer[];
   templates: Template[];
 }) {
-  const [templateFilter, setTemplateFilter] = useState<string>("");
-  const [sourceFilter, setSourceFilter] = useState<string>("");
-
   const cById = new Map(customers.map((c) => [c.id, c]));
   const tById = new Map(templates.map((t) => [t.id, t]));
 
-  const filtered = useMemo(() => {
-    return extractions
-      .filter(
-        (p) =>
-          !templateFilter || p.extracted_into_template_id === templateFilter
-      )
-      .filter((p) => !sourceFilter || p.source_customer_id === sourceFilter)
-      .sort((a, b) => b.extracted_at.localeCompare(a.extracted_at));
-  }, [extractions, templateFilter, sourceFilter]);
+  const rows: Row[] = extractions
+    .map((p) => ({
+      extraction: p,
+      source: cById.get(p.source_customer_id),
+      template: tById.get(p.extracted_into_template_id),
+      reused: p.reused_at_customer_ids
+        .map((id) => cById.get(id))
+        .filter(Boolean) as Customer[],
+    }));
+
+  const columns: ColumnDef<Row>[] = [
+    {
+      id: "date",
+      header: "Date",
+      accessorFn: (r) => r.extraction.extracted_at,
+      cell: ({ row }) => (
+        <span className="num text-[12px] text-ink-3">
+          {formatDate(row.original.extraction.extracted_at)}
+        </span>
+      ),
+      sortingFn: "alphanumeric",
+    },
+    {
+      id: "source",
+      header: "Source",
+      accessorFn: (r) => r.source?.name ?? "",
+      cell: ({ row }) =>
+        row.original.source ? (
+          <Link
+            href={`/customers/${row.original.source.id}`}
+            className="text-ink text-[13.5px] hover:underline underline-offset-2 decoration-line"
+          >
+            {row.original.source.name}
+          </Link>
+        ) : (
+          <span className="text-ink-3">—</span>
+        ),
+      filterFn: (row, _id, value) =>
+        row.original.extraction.source_customer_id === value,
+    },
+    {
+      id: "template",
+      header: "Template",
+      accessorFn: (r) => r.template?.name ?? "",
+      cell: ({ row }) =>
+        row.original.template ? (
+          <Link
+            href={`/templates/${row.original.template.id}`}
+            className="text-ink text-[13.5px] hover:underline underline-offset-2 decoration-line"
+          >
+            {row.original.template.name}
+          </Link>
+        ) : (
+          <span className="text-ink-3">—</span>
+        ),
+      filterFn: (row, _id, value) =>
+        row.original.extraction.extracted_into_template_id === value,
+    },
+    {
+      id: "reused",
+      header: "Reused at",
+      accessorFn: (r) => r.reused.length,
+      cell: ({ row }) => (
+        <span className="num text-[12.5px] text-ink-2">
+          {row.original.reused.length}
+        </span>
+      ),
+    },
+    {
+      id: "summary",
+      header: "Summary",
+      accessorFn: (r) => r.extraction.source_engagement_summary,
+      cell: ({ row }) => (
+        <span className="text-[12.5px] text-ink-2 line-clamp-1">
+          {row.original.extraction.source_engagement_summary}
+        </span>
+      ),
+    },
+  ];
 
   return (
-    <>
-      <div className="flex flex-wrap items-center gap-3 mb-8">
-        <select
-          value={templateFilter}
-          onChange={(e) => setTemplateFilter(e.target.value)}
-          className="h-8 rounded-sm border border-line bg-page px-2 text-[13px] text-ink-2 focus:outline-none focus:ring-1 focus:ring-ink"
-        >
-          <option value="">All templates</option>
-          {templates.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value)}
-          className="h-8 rounded-sm border border-line bg-page px-2 text-[13px] text-ink-2 focus:outline-none focus:ring-1 focus:ring-ink"
-        >
-          <option value="">All source customers</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <span className="ml-auto t-caption">{filtered.length} extractions</span>
-      </div>
-
-      <ol className="relative">
-        <span className="absolute left-[59px] top-2 bottom-2 w-px bg-line" aria-hidden />
-        {filtered.length === 0 ? (
-          <li className="text-ink-3 text-sm py-10">Nothing matches.</li>
-        ) : (
-          filtered.map((p) => {
-            const src = cById.get(p.source_customer_id);
-            const tpl = tById.get(p.extracted_into_template_id);
-            const reused = p.reused_at_customer_ids
-              .map((id) => cById.get(id))
-              .filter(Boolean) as Customer[];
-            return (
-              <li
-                key={p.id}
-                className="relative grid grid-cols-[120px_1fr] gap-6 py-8 border-b border-line last:border-b-0"
-              >
-                <div className="t-caption num text-ink-3 pt-1 relative">
-                  {formatDate(p.extracted_at)}
-                  <span className="absolute left-[51px] top-2 h-2 w-2 rounded-full bg-accent" />
-                </div>
-                <div>
-                  <div className="text-[14.5px] leading-snug">
-                    <Link
-                      href={`/customers/${src?.id ?? ""}`}
-                      className="text-ink hover:underline"
-                    >
-                      {src?.name ?? "—"}
-                    </Link>
-                    <span className="text-ink-3"> needed a custom workflow</span>
-                    <span className="text-ink-3 mx-1">→</span>
-                    <Link
-                      href={`/templates/${tpl?.id ?? ""}`}
-                      className="text-ink hover:underline"
-                    >
-                      {tpl?.name ?? "—"}
-                    </Link>
-                    <span className="text-ink-3 mx-1">→</span>
-                    <span className="text-ink">
-                      reused at{" "}
-                      <span className="num">
-                        {reused.length} customer
-                        {reused.length === 1 ? "" : "s"}
-                      </span>
-                    </span>
-                  </div>
-                  <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2 max-w-3xl">
-                    {p.source_engagement_summary}
-                  </p>
-                  {reused.length > 0 && (
-                    <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 t-caption">
-                      {reused.map((c) => (
-                        <li key={c.id}>
-                          <Link
-                            href={`/customers/${c.id}`}
-                            className="text-ink-2 hover:text-ink hover:underline"
-                          >
-                            {c.name}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </li>
-            );
-          })
-        )}
-      </ol>
-    </>
+    <DataTable
+      columns={columns}
+      data={rows}
+      defaultSort={[{ id: "date", desc: true }]}
+      urlKey="ext"
+      filters={[
+        {
+          id: "template",
+          label: "All templates",
+          options: templates.map((t) => ({ label: t.name, value: t.id })),
+        },
+        {
+          id: "source",
+          label: "All sources",
+          options: customers.map((c) => ({ label: c.name, value: c.id })),
+        },
+      ]}
+      emptyContent={<span>No extractions yet.</span>}
+    />
   );
 }

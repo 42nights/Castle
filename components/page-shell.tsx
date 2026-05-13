@@ -1,56 +1,77 @@
 import { ReactNode } from "react";
 
+/**
+ * Page container. 1280px max. Tight B2B padding.
+ */
 export function PageShell({ children }: { children: ReactNode }) {
   return (
-    <main className="mx-auto w-full max-w-screen-2xl px-6 md:px-10 py-10 md:py-14">
+    <main className="mx-auto w-full max-w-screen-xl px-6 md:px-10 py-5 md:py-6">
       {children}
     </main>
   );
 }
 
+/**
+ * Page header. Small h1, hairline divider below.
+ *
+ * `kicker` is a breadcrumb (e.g. "← Engagements"), rendered above title.
+ */
 export function PageHeader({
-  eyebrow,
+  kicker,
   title,
   description,
   actions,
 }: {
-  eyebrow?: ReactNode;
+  kicker?: ReactNode;
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
 }) {
   return (
-    <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between border-b border-line pb-8 mb-10">
-      <div className="max-w-3xl">
-        {eyebrow && <div className="t-eyebrow mb-3">{eyebrow}</div>}
+    <header className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between border-b border-line pb-3 mb-5">
+      <div className="min-w-0">
+        {kicker && (
+          <div className="mb-0.5 text-[11px] text-ink-3">{kicker}</div>
+        )}
         <h1 className="t-h1 text-ink">{title}</h1>
         {description && (
-          <p className="mt-3 text-ink-2 max-w-2xl text-[15px] leading-relaxed">
+          <p className="mt-0.5 text-ink-2 text-[12px] leading-snug max-w-2xl">
             {description}
           </p>
         )}
       </div>
-      {actions && <div className="flex items-center gap-3">{actions}</div>}
+      {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
     </header>
   );
 }
 
+/**
+ * Section header. Uppercase mini-label, terse.
+ */
 export function SectionHeader({
-  eyebrow,
   title,
-  rightSlot,
+  description,
+  right,
 }: {
-  eyebrow?: string;
   title: string;
-  rightSlot?: ReactNode;
+  description?: ReactNode;
+  right?: ReactNode;
 }) {
   return (
-    <div className="flex items-end justify-between gap-6 mb-6 border-b border-line pb-4">
+    <div className="flex items-baseline justify-between gap-6 mb-2">
       <div>
-        {eyebrow && <div className="t-eyebrow mb-2">{eyebrow}</div>}
         <h2 className="t-h2 text-ink">{title}</h2>
+        {description && (
+          <p className="mt-0.5 text-ink-2 text-[11.5px] leading-snug max-w-xl">
+            {description}
+          </p>
+        )}
       </div>
-      {rightSlot}
+      {right}
     </div>
   );
+}
+
+export function Section({ children }: { children: ReactNode }) {
+  return <section className="mb-6">{children}</section>;
 }

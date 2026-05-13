@@ -41,18 +41,17 @@ export function FounderHoursChart({ points }: { points: FounderHoursPoint[] }) {
   }));
 
   return (
-    <section className="mb-14">
-      <div className="grid md:grid-cols-[280px_1fr] gap-10">
-        <div>
-          <div className="t-eyebrow mb-3">— Founder leverage</div>
-          <h2 className="t-h2 text-ink mb-3">
-            Founder hours per <span className="t-mono text-[20px]">$1K</span>{" "}
-            of new ARR.
-          </h2>
-          <p className="text-ink-2 text-[14px] leading-relaxed">
-            The one chart that matters to investors. Each month: how many founder
-            hours did it take to bring on a dollar of new ARR? Lower is more
-            leverage. Target: <span className="text-ink">−50%</span> by Q3 2026.
+    <section className="panel mb-4">
+      <header className="panel-header">
+        <h2 className="t-h2 text-ink">Founder hours / $1K ARR</h2>
+        <span className="text-[11px] text-ink-3">
+          target <span className="num text-ink-2">−50%</span> by Q3 2026
+        </span>
+      </header>
+      <div className="grid md:grid-cols-[200px_1fr] md:divide-x divide-line">
+        <div className="px-3 py-3">
+          <p className="text-ink-2 text-[12px] leading-snug">
+            Lower is more leverage.
           </p>
           <button
             onClick={() => {
@@ -64,21 +63,21 @@ export function FounderHoursChart({ points }: { points: FounderHoursPoint[] }) {
                 arr: existing?.new_arr_dollars ?? 0,
               });
             }}
-            className="mt-4 h-7 px-3 rounded-sm border border-line bg-page text-ink hover:bg-surface text-[12px]"
+            className="mt-3 text-[12px] text-ink-2 hover:text-ink underline underline-offset-4 decoration-line"
           >
-            + Log this month
+            + log this month
           </button>
         </div>
 
-        <div className="border border-line rounded-md p-5 bg-page">
-          <div className="h-[320px] w-full">
+        <div className="px-3 py-3">
+          <div className="h-[260px] w-full">
             {mounted && (
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <LineChart
                 data={chartData}
                 margin={{ top: 8, right: 24, left: 0, bottom: 0 }}
               >
-                <CartesianGrid stroke="rgba(10,10,10,0.08)" vertical={false} />
+                <CartesianGrid stroke="rgba(255,255,255,0.12)" vertical={false} />
                 <XAxis
                   dataKey="monthLabel"
                   axisLine={false}
@@ -102,7 +101,7 @@ export function FounderHoursChart({ points }: { points: FounderHoursPoint[] }) {
                 <Line
                   type="monotone"
                   dataKey="target"
-                  stroke="#888888"
+                  stroke="rgba(255,255,255,0.45)"
                   strokeWidth={1}
                   strokeDasharray="3 4"
                   dot={false}
@@ -111,16 +110,16 @@ export function FounderHoursChart({ points }: { points: FounderHoursPoint[] }) {
                 <Line
                   type="monotone"
                   dataKey="actual"
-                  stroke="#0A0A0A"
+                  stroke="#ffffff"
                   strokeWidth={2}
-                  dot={{ r: 3, fill: "#0A0A0A" }}
-                  activeDot={{ r: 5, fill: "#D72638" }}
+                  dot={{ r: 3, fill: "#ffffff" }}
+                  activeDot={{ r: 5, fill: "#ff3b47" }}
                   connectNulls={false}
                   isAnimationActive={false}
                 />
                 <ReferenceLine
                   y={0}
-                  stroke="rgba(10,10,10,0.16)"
+                  stroke="rgba(255,255,255,0.25)"
                   strokeWidth={1}
                 />
               </LineChart>

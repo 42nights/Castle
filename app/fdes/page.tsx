@@ -12,7 +12,6 @@ export default async function FdesPage() {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="— FDEs"
         title="Who&rsquo;s on the bench."
         description="Two founders right now. This page is built for when there are ten."
         actions={<NewFdeButton />}

@@ -12,7 +12,6 @@ export default async function EngagementsPage() {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="— Engagements"
         title="What every FDE is working on, right now."
         description="The operational table. Red and yellow surface at top by default; click a row to open the engagement and read this week's notes."
         actions={<NewEngagementButton />}

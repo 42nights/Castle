@@ -45,6 +45,8 @@ export type Template = {
   created_at: string;
   origin_customer_id: string;
   authored_by_fde_id: string;
+  /** GitHub repo path "<org>/<repo>", e.g. "42nights/deal-flow-scout". */
+  github_repo?: string;
 };
 
 export type CustomerStatus = "active" | "churned" | "paused";

@@ -12,7 +12,7 @@ const severityLabel: Record<AttentionSeverity, string> = {
 export function AttentionList({ items }: { items: AttentionItem[] }) {
   if (items.length === 0) {
     return (
-      <section className="mb-14 border border-line rounded-md p-6 bg-surface">
+      <section className="mb-8 border border-line rounded-md p-4 bg-surface">
         <div className="t-eyebrow mb-2">— What needs you today</div>
         <p className="text-ink-2 text-[14px]">
           Nothing flagged. Everything green, no engagement stale beyond 7 days.
@@ -26,11 +26,11 @@ export function AttentionList({ items }: { items: AttentionItem[] }) {
   );
 
   return (
-    <section className="mb-14">
+    <section className="mb-8">
       <div className="flex items-end justify-between mb-4">
         <div>
           <div className="t-eyebrow mb-2">— What needs you today</div>
-          <h2 className="t-h2 text-ink">Operator queue.</h2>
+          <h2 className="t-h2 text-ink">Operator queue</h2>
         </div>
         <div className="t-caption flex items-center gap-3">
           {counts.critical > 0 && (

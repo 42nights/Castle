@@ -89,6 +89,38 @@ export const update = mutation({
   },
 });
 
+/** Set the GitHub repo path for a template. Accepts forms like
+ *  "42nights/repo", "https://github.com/42nights/repo", or
+ *  "github.com/42nights/repo". Stored as the canonical "owner/repo"
+ *  shape. Pass null/empty to clear. */
+export const setGithubRepo = mutation({
+  args: {
+    id: v.id("templates"),
+    repo: v.union(v.string(), v.null()),
+    actor_fde_id: v.union(v.id("fdes"), v.null()),
+  },
+  handler: async (ctx, { id, repo, actor_fde_id }) => {
+    let normalized: string | null = null;
+    if (repo) {
+      const m = repo
+        .trim()
+        .replace(/^https?:\/\/(www\.)?github\.com\//, "")
+        .replace(/^github\.com\//, "")
+        .replace(/\.git$/, "")
+        .replace(/\/$/, "");
+      if (!/^[\w.-]+\/[\w.-]+$/.test(m)) {
+        throw new Error("Expected '<owner>/<repo>' or a github.com URL");
+      }
+      normalized = m;
+    }
+    await ctx.db.patch(id, {
+      github_repo: normalized ?? undefined,
+      updated_at: nowIso(),
+      updated_by_fde_id: actor_fde_id,
+    });
+  },
+});
+
 export const addCapability = mutation({
   args: {
     template_id: v.id("templates"),

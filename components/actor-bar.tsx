@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
+import { useEffect, useRef, useState } from "react";
 import { useActorSlug } from "@/lib/use-actor";
 import { api } from "@/convex/_generated/api";
 
@@ -12,28 +13,76 @@ const FALLBACK: FdeLite[] = [
   { slug: "ayaan", name: "Ayaan Gazali" },
 ];
 
+/**
+ * Custom trigger + popover instead of a native <select>. Native selects
+ * render OS-chrome that breaks the design — particularly noticeable in
+ * the top nav. Custom keeps everything in the system's voice.
+ */
 export function ActorBar() {
   const [actor, setActor] = useActorSlug();
   const live = useQuery(api.fdes.list) as FdeLite[] | undefined;
   const fdes = live ?? FALLBACK;
   const me = fdes.find((f) => f.slug === actor) ?? null;
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
 
   return (
-    <div className="hidden md:flex items-center gap-2 t-caption text-ink-3">
-      <span>you are</span>
-      <select
-        value={me?.slug ?? ""}
-        onChange={(e) => setActor(e.target.value || null)}
-        className="h-6 rounded-sm border border-line bg-page px-1.5 text-[11px] text-ink focus:outline-none focus:ring-1 focus:ring-ink"
-        aria-label="Acting as"
+    <div
+      ref={ref}
+      className="hidden md:flex items-baseline gap-2 text-[11px] text-ink-3 relative"
+    >
+      <span>as</span>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="text-[12px] text-ink hover:text-ink-2 underline underline-offset-4 decoration-line"
       >
-        <option value="">— pick FDE —</option>
-        {fdes.map((f) => (
-          <option key={f.slug} value={f.slug}>
-            {f.name}
-          </option>
-        ))}
-      </select>
+        {me ? me.name.split(" ")[0] : "pick"}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-40 mt-2 w-44 rounded-md border border-line bg-page shadow-[0_8px_24px_-12px_rgba(10,10,10,0.18)] py-1">
+          {fdes.map((f) => {
+            const isMe = f.slug === me?.slug;
+            return (
+              <button
+                key={f.slug}
+                onClick={() => {
+                  setActor(f.slug);
+                  setOpen(false);
+                }}
+                className={`block w-full text-left px-3 py-1.5 text-[13px] ${
+                  isMe
+                    ? "text-ink bg-surface"
+                    : "text-ink-2 hover:text-ink hover:bg-surface"
+                }`}
+              >
+                {f.name}
+              </button>
+            );
+          })}
+          {me && (
+            <button
+              onClick={() => {
+                setActor(null);
+                setOpen(false);
+              }}
+              className="block w-full text-left px-3 py-1.5 text-[12px] text-ink-3 hover:text-ink hover:bg-surface border-t border-line"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

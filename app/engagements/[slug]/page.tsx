@@ -5,7 +5,7 @@ import {
   HealthPip,
   StatusChip,
 } from "@/components/atoms";
-import { PageHeader, PageShell, SectionHeader } from "@/components/page-shell";
+import { PageHeader, PageShell } from "@/components/page-shell";
 import { DeleteEngagementZone } from "@/components/controls/danger-zone";
 import { EditDeploymentButton } from "@/components/controls/deployment-row-button";
 import { EndDateInput } from "@/components/controls/end-date-input";
@@ -49,108 +49,104 @@ export default async function EngagementDetail({
     <PageShell>
       <EngagementKeys engagementSlug={eng.id} />
       <PageHeader
-        eyebrow={
-          <>
-            <Link
-              href="/engagements"
-              className="hover:text-ink"
-            >
-              ← Engagements
-            </Link>
-          </>
+        kicker={
+          <Link href="/engagements" className="hover:text-ink">
+            ← Engagements
+          </Link>
         }
         title={customer.name}
         description={
-          <span>
+          <>
             <Link
               href={`/customers/${customer.id}`}
-              className="hover:underline"
+              className="hover:underline underline-offset-2 decoration-line"
             >
               {customer.is_pe ? "PE" : "VC-backed startup"}
             </Link>
             {" · "}backed by {customer.backed_by.join(", ")}
-            {" · "}MRR <span className="num text-ink">{formatUsd(customer.current_mrr)}</span>
-          </span>
+            {" · MRR "}
+            <span className="num text-ink">
+              {formatUsd(customer.current_mrr)}
+            </span>
+          </>
         }
         actions={
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 text-[12px]">
             <HealthPip value={eng.health} label={`Health · ${eng.health}`} />
             <StatusChip status={customer.status} />
           </div>
         }
       />
 
-      <section className="grid grid-cols-2 md:grid-cols-5 gap-x-8 gap-y-6 border-y border-line py-6 mb-14">
-        <Field
-          label="Phase"
-          value={<PhaseMenu engagementSlug={eng.id} current={eng.phase} />}
-        />
-        <Field
-          label="Progress"
-          value={
+      <Panel title="Status">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-3 px-3 py-3">
+          <Field label="Phase">
+            <PhaseMenu engagementSlug={eng.id} current={eng.phase} />
+          </Field>
+          <Field label="Progress">
             <ProgressSlider
               engagementSlug={eng.id}
               current={eng.progress_pct}
             />
-          }
-        />
-        <Field
-          label="Health"
-          value={<HealthMenu engagementSlug={eng.id} current={eng.health} />}
-        />
-        <Field
-          label="Team"
-          value={<AvatarGroup names={team.map((f) => f!.name)} />}
-        />
-        <Field
-          label="Activity"
-          value={<TouchedButton engagementSlug={eng.id} />}
-        />
-      </section>
+          </Field>
+          <Field label="Health">
+            <HealthMenu engagementSlug={eng.id} current={eng.health} />
+          </Field>
+          <Field label="Team">
+            <AvatarGroup names={team.map((f) => f!.name)} />
+          </Field>
+          <Field label="Activity">
+            <TouchedButton engagementSlug={eng.id} />
+          </Field>
+        </div>
+      </Panel>
 
-      <section className="grid md:grid-cols-[240px_1fr] gap-10 mb-16">
-        <div>
-          <div className="t-eyebrow mb-2">— This week</div>
-          <h2 className="t-h2 text-ink">Notes.</h2>
-          <p className="mt-3 text-ink-2 text-[13px] leading-relaxed">
-            Autosaves on idle. Versioned — rejects stale writes from other
-            tabs.
-          </p>
-          <div className="mt-5 t-caption text-ink-3">
-            <WeeklyHoursInput
+      <Panel title="Notes">
+        <div className="grid md:grid-cols-[200px_1fr] gap-0 divide-x divide-line">
+          <div className="px-3 py-3 text-[12px] text-ink-3 leading-snug">
+            <div className="text-ink-2">
+              Autosaves on idle · versioned.
+            </div>
+            <div className="mt-3 flex items-baseline gap-1.5">
+              <WeeklyHoursInput
+                engagementSlug={eng.id}
+                current={eng.weekly_hours}
+              />
+              <span>/ wk committed</span>
+            </div>
+            <div className="mt-1">
+              Started{" "}
+              <span className="num text-ink-2">
+                {formatDate(eng.start_date)}
+              </span>
+              {" · ends "}
+              <EndDateInput
+                engagementSlug={eng.id}
+                current={eng.expected_end_date}
+              />
+            </div>
+            <div className="mt-3">
+              Press{" "}
+              <kbd className="rounded-sm border border-line bg-surface px-1 num text-[10px]">
+                u
+              </kbd>{" "}
+              to mark touched.
+            </div>
+          </div>
+          <div className="px-3 py-3">
+            <NotesEditor
               engagementSlug={eng.id}
-              current={eng.weekly_hours}
-            />{" "}
-            / wk committed
-            <br />
-            Started{" "}
-            <span className="num">{formatDate(eng.start_date)}</span> · ends{" "}
-            <EndDateInput
-              engagementSlug={eng.id}
-              current={eng.expected_end_date}
+              initialBody={eng.notes}
+              initialVersion={1}
             />
           </div>
-          <div className="mt-3 t-caption text-ink-3">
-            Tip: hit{" "}
-            <kbd className="rounded-sm border border-line bg-surface px-1 num text-[10px]">
-              u
-            </kbd>{" "}
-            to mark touched.
-          </div>
         </div>
-        <NotesEditor
-          engagementSlug={eng.id}
-          initialBody={eng.notes}
-          initialVersion={1}
-        />
-      </section>
+      </Panel>
 
-      <section className="mb-16">
-        <div className="flex items-end justify-between gap-6 mb-6 border-b border-line pb-4">
-          <div>
-            <div className="t-eyebrow mb-2">— Agents on this engagement</div>
-            <h2 className="t-h2 text-ink">Deployments.</h2>
-          </div>
+      <Panel
+        title="Deployments"
+        count={deps.length}
+        right={
           <div className="flex items-center gap-2">
             <ReassignButton engagementSlug={eng.id} />
             <NewDeploymentButton
@@ -158,122 +154,129 @@ export default async function EngagementDetail({
               customerId={customer.id}
             />
           </div>
-        </div>
+        }
+      >
         {deps.length === 0 ? (
-          <div className="text-ink-3 text-sm">None deployed yet.</div>
+          <div className="px-3 py-3 text-ink-3 text-[12px]">
+            None deployed yet.
+          </div>
         ) : (
-          <div className="border-t border-b border-line">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-line text-ink-3 uppercase tracking-[0.06em] text-[10px]">
-                  <th className="text-left h-9 px-3 font-medium">Agent</th>
-                  <th className="text-left h-9 px-3 font-medium">Template</th>
-                  <th className="text-right h-9 px-3 font-medium">Custom %</th>
-                  <th className="text-right h-9 px-3 font-medium">Hrs/wk replaced</th>
-                  <th className="text-right h-9 px-3 font-medium">Deployed</th>
-                  <th className="text-right h-9 px-3 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {deps.map((d) => {
-                  const tpl = d.template_id ? tplById.get(d.template_id) : null;
-                  return (
-                    <tr key={d.id} className="border-b border-line last:border-b-0">
-                      <td className="px-3 py-3 text-ink">{d.agent_name}</td>
-                      <td className="px-3 py-3 text-ink-2">
-                        {tpl ? (
-                          <Link
-                            href={`/templates/${tpl.id}`}
-                            className="hover:underline"
-                          >
-                            {tpl.name}
-                          </Link>
-                        ) : (
-                          <span className="t-caption text-ink-3">— fully custom</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 num text-right text-ink-2">
-                        {formatPct(d.customization_pct / 100)}
-                      </td>
-                      <td className="px-3 py-3 num text-right text-ink-2">
-                        {formatHours(d.hours_replaced_per_week)}
-                      </td>
-                      <td className="px-3 py-3 num text-right text-ink-3">
-                        {formatDate(d.deployed_at)}
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <EditDeploymentButton
-                          deploymentId={d.id}
-                          initial={{
-                            agent_name: d.agent_name,
-                            template_id: d.template_id,
-                            hours_replaced_per_week: d.hours_replaced_per_week,
-                            customization_pct: d.customization_pct,
-                            deployed_at: d.deployed_at,
-                          }}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-line text-ink-3 uppercase tracking-[0.06em] text-[10px]">
+                <th className="text-left h-8 px-3 font-medium">Agent</th>
+                <th className="text-left h-8 px-3 font-medium">Template</th>
+                <th className="text-right h-8 px-3 font-medium">Custom %</th>
+                <th className="text-right h-8 px-3 font-medium">Hrs/wk</th>
+                <th className="text-right h-8 px-3 font-medium">Deployed</th>
+                <th className="h-8 px-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {deps.map((d) => {
+                const tpl = d.template_id ? tplById.get(d.template_id) : null;
+                return (
+                  <tr
+                    key={d.id}
+                    className="border-b border-line last:border-b-0"
+                  >
+                    <td className="px-3 py-2 text-ink text-[13.5px]">
+                      {d.agent_name}
+                    </td>
+                    <td className="px-3 py-2 text-ink-2 text-[13px]">
+                      {tpl ? (
+                        <Link
+                          href={`/templates/${tpl.id}`}
+                          className="hover:underline underline-offset-2 decoration-line"
+                        >
+                          {tpl.name}
+                        </Link>
+                      ) : (
+                        <span className="text-ink-3">— custom</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 num text-right text-ink-2 text-[12.5px]">
+                      {formatPct(d.customization_pct / 100)}
+                    </td>
+                    <td className="px-3 py-2 num text-right text-ink-2 text-[12.5px]">
+                      {formatHours(d.hours_replaced_per_week)}
+                    </td>
+                    <td className="px-3 py-2 num text-right text-ink-3 text-[12px]">
+                      {formatDate(d.deployed_at)}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <EditDeploymentButton
+                        deploymentId={d.id}
+                        initial={{
+                          agent_name: d.agent_name,
+                          template_id: d.template_id,
+                          hours_replaced_per_week: d.hours_replaced_per_week,
+                          customization_pct: d.customization_pct,
+                          deployed_at: d.deployed_at,
+                        }}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         )}
-      </section>
+      </Panel>
 
-      <section className="mb-16">
-        <div className="flex items-end justify-between gap-6 mb-6 border-b border-line pb-4">
-          <div>
-            <div className="t-eyebrow mb-2">— Patterns extracted from this engagement</div>
-            <h2 className="t-h2 text-ink">What we kept.</h2>
-          </div>
-          <ExtractPatternButton sourceEngagementSlug={eng.id} />
-        </div>
+      <Panel
+        title="Patterns extracted"
+        count={relatedExtractions.length}
+        right={<ExtractPatternButton sourceEngagementSlug={eng.id} />}
+      >
         {relatedExtractions.length === 0 ? (
-          <p className="text-ink-3 text-sm">
-            Nothing extracted yet. When this engagement teaches us a pattern
-            worth reusing, capture it with{" "}
+          <p className="px-3 py-3 text-ink-3 text-[12px]">
+            Nothing extracted yet. Capture a pattern with{" "}
             <span className="t-mono">+ Extract pattern</span>.
           </p>
         ) : (
-          <ul className="border-t border-line">
+          <ul className="ledger">
             {relatedExtractions.map((p) => {
               const tpl = tplById.get(p.extracted_into_template_id);
               return (
-                <li key={p.id} className="border-b border-line py-5">
-                  <Link
-                    href={`/templates/${tpl?.id ?? ""}`}
-                    className="t-h3 hover:underline"
-                  >
-                    {tpl?.name ?? "—"}
-                  </Link>
-                  <p className="mt-1 text-ink-2 text-[13.5px]">
+                <li key={p.id} className="px-3 py-2">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <Link
+                      href={`/templates/${tpl?.id ?? ""}`}
+                      className="text-ink text-[13.5px] hover:underline underline-offset-2 decoration-line"
+                    >
+                      {tpl?.name ?? "—"}
+                    </Link>
+                    <span className="t-caption">
+                      reused at{" "}
+                      <span className="num text-ink-2">
+                        {p.reused_at_customer_ids.length}
+                      </span>{" "}
+                      customer
+                      {p.reused_at_customer_ids.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-ink-2 text-[12.5px] leading-snug">
                     {p.source_engagement_summary}
                   </p>
-                  <div className="mt-2 t-caption text-ink-3">
-                    Reused at{" "}
-                    <span className="num text-ink">
-                      {p.reused_at_customer_ids.length}
-                    </span>{" "}
-                    customer{p.reused_at_customer_ids.length === 1 ? "" : "s"}
-                  </div>
                 </li>
               );
             })}
           </ul>
         )}
-      </section>
+      </Panel>
 
-      <section className="mb-16">
-        <SectionHeader eyebrow="— Notes journal" title="Versioned history." />
-        <NotesJournal engagementSlug={eng.id} />
-      </section>
+      <Panel title="Versioned history">
+        <div className="px-3 py-3">
+          <NotesJournal engagementSlug={eng.id} />
+        </div>
+      </Panel>
 
-      <section className="mb-16">
-        <SectionHeader eyebrow="— Activity" title="Touch log." />
-        <EngagementTimeline engagementSlug={eng.id} />
-      </section>
+      <Panel title="Touch log">
+        <div className="px-3 py-3">
+          <EngagementTimeline engagementSlug={eng.id} />
+        </div>
+      </Panel>
 
       <DeleteEngagementZone
         engagementSlug={eng.id}
@@ -285,15 +288,44 @@ export default async function EngagementDetail({
 
 function Field({
   label,
-  value,
+  children,
 }: {
   label: string;
-  value: React.ReactNode;
+  children: React.ReactNode;
 }) {
   return (
     <div>
-      <div className="t-caption mb-2">{label}</div>
-      <div className="text-ink">{value}</div>
+      <div className="text-[10px] tracking-[0.06em] text-ink-3 uppercase mb-1">
+        {label}
+      </div>
+      <div className="text-ink text-[13px]">{children}</div>
     </div>
+  );
+}
+
+function Panel({
+  title,
+  count,
+  right,
+  children,
+}: {
+  title: string;
+  count?: number;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="panel mb-4">
+      <header className="panel-header">
+        <div className="flex items-baseline gap-2">
+          <h2 className="t-h2 text-ink">{title}</h2>
+          {typeof count === "number" && (
+            <span className="t-caption">{count}</span>
+          )}
+        </div>
+        {right}
+      </header>
+      <div className="panel-body no-pad">{children}</div>
+    </section>
   );
 }

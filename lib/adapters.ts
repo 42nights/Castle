@@ -80,6 +80,7 @@ type ConvexTemplate = ConvexDoc<{
   authored_by_fde_id: string;
   slug: string;
   created_at: string;
+  github_repo?: string;
 }>;
 
 type ConvexCapability = ConvexDoc<{
@@ -212,12 +213,10 @@ export function adaptOverview(snapshot: ConvexOverview): AdaptedOverview {
       name: t.name,
       category: t.category,
       capabilities: capsByTemplate.get(t._id) ?? [],
-      // Seed preserves the authored date; prefer it over Convex's auto
-      // _creationTime which reflects when the row was *inserted*, not when
-      // the template was authored.
       created_at: t.created_at,
       origin_customer_id: slugById[t.origin_customer_id] ?? t.origin_customer_id,
       authored_by_fde_id: slugById[t.authored_by_fde_id] ?? t.authored_by_fde_id,
+      github_repo: t.github_repo,
     })),
     deployments: snapshot.deployments.map((d) => ({
       id: d._id,

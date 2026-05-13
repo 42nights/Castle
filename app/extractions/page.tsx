@@ -10,9 +10,8 @@ export default async function ExtractionsPage() {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="— Pattern extractions"
-        title="From custom work to shared infrastructure."
-        description="Every time a customer&rsquo;s problem becomes a template we can ship to the next one, it lands here. This log is the productization story."
+        title="Extractions"
+        description="Custom work → shared template, in time order."
         actions={<ExtractPatternButton />}
       />
       <ExtractionsView

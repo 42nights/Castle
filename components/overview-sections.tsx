@@ -65,6 +65,7 @@ export function OverviewSections({
   const attention = attentionItems(engagements, customers, fdes, today);
   const workloads = allFdeWorkloads(fdes, engagements, customers);
   const imbalance = loadImbalance(workloads);
+  void hours; // formerly surfaced in stats; removed per design system
   const utilAvg =
     workloads.length === 0
       ? 0
@@ -79,15 +80,8 @@ export function OverviewSections({
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Castle · operator console"
-        title="What needs us today."
-        description={
-          <>
-            Castle is the surface 42nights runs on. The same view we&rsquo;d
-            show an investor asking how we productize a services business — no
-            slide, no demo, just the system in use.
-          </>
-        }
+        title="Overview"
+        description="Engagements, FDE load, templates, and founder hours — current state."
       />
 
       {liveAttention ? <AttentionListLive /> : <AttentionList items={attention} />}
@@ -97,7 +91,6 @@ export function OverviewSections({
         contractedArr={arr}
         atRisk={risk}
         templateCount={templates.length}
-        hoursReplaced={hours}
         utilizationAvg={utilAvg}
       />
 

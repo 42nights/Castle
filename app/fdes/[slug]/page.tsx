@@ -42,7 +42,7 @@ export default async function FdeDetail({
   return (
     <PageShell>
       <PageHeader
-        eyebrow={
+        kicker={
           <Link href="/fdes" className="hover:text-ink">
             ← FDEs
           </Link>
@@ -101,7 +101,7 @@ export default async function FdeDetail({
       </section>
 
       <section className="mb-16">
-        <SectionHeader eyebrow="— Current load" title="Active engagements." />
+        <SectionHeader title="Active engagements." />
         {active.length === 0 ? (
           <p className="text-ink-3 text-sm">Bench, no active engagements.</p>
         ) : (
@@ -134,7 +134,7 @@ export default async function FdeDetail({
 
       {past.length > 0 && (
         <section className="mb-16">
-          <SectionHeader eyebrow="— History" title="Past engagements." />
+          <SectionHeader title="Past engagements." />
           <ul className="border-t border-line">
             {past.map((e) => {
               const c = cById.get(e.customer_id);
@@ -160,7 +160,7 @@ export default async function FdeDetail({
 
       {myDeployments.length > 0 && (
         <section className="mb-16">
-          <SectionHeader eyebrow="— Agents shipped" title="Built on engagements." />
+          <SectionHeader title="Built on engagements." />
           <div className="border-t border-b border-line">
             <table className="w-full">
               <thead>
@@ -202,7 +202,7 @@ export default async function FdeDetail({
 
       {myTemplates.length > 0 && (
         <section className="mb-16">
-          <SectionHeader eyebrow="— Templates" title="Patterns this FDE extracted." />
+          <SectionHeader title="Patterns this FDE extracted." />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-line border border-line rounded-sm overflow-hidden">
             {myTemplates.map((t) => (
               <Link
@@ -229,7 +229,7 @@ export default async function FdeDetail({
       )}
 
       <section>
-        <SectionHeader eyebrow="— Recent activity" title="What this FDE has touched." />
+        <SectionHeader title="What this FDE has touched." />
         <FdeActivity fdeSlug={fde.id} />
       </section>
     </PageShell>

@@ -128,6 +128,9 @@ export default defineSchema({
     origin_customer_id: v.id("customers"),
     authored_by_fde_id: v.id("fdes"),
     slug: v.string(),
+    /** GitHub repo under the 42nights org, e.g. "42nights/deal-flow-scout".
+     *  Stored as "<org>/<repo>". Used to deep-link to the actual source. */
+    github_repo: v.optional(v.string()),
     created_at: v.string(),
     updated_at: v.string(),
     updated_by_fde_id: v.union(v.id("fdes"), v.null()),
@@ -228,4 +231,47 @@ export default defineSchema({
   })
     .index("by_open", ["resolved_at"])
     .index("by_owner_open", ["owner_fde_id", "resolved_at"]),
+
+  /** Per-actor chat conversation. Hermes session name is derived from
+   *  the doc id, so each conversation has its own independent memory in
+   *  Hermes' session store. */
+  agent_conversations: defineTable({
+    actor_slug: v.string(),
+    title: v.string(),
+    /** Hermes session name passed to `--continue`. Computed once on
+     *  create and never changed (so the session keeps accumulating). */
+    hermes_session: v.string(),
+    created_at: v.string(),
+    updated_at: v.string(),
+  })
+    .index("by_actor_updated", ["actor_slug", "updated_at"])
+    .index("by_hermes_session", ["hermes_session"]),
+
+  /** Castle chat transcript. Hermes itself owns the agent's memory in
+   *  its FTS5 session store; this table is purely so the UI can render
+   *  what's been said when the page reloads. */
+  /** Proposed actions surfaced by the agent — currently just Composio
+   *  connection prompts. Each row becomes an inline button in chat. */
+  agent_actions: defineTable({
+    actor_slug: v.string(),
+    kind: v.union(v.literal("composio_connect")),
+    /** Toolkit slug for `composio_connect` (e.g. "github"). */
+    toolkit: v.string(),
+    /** Composio-generated OAuth redirect URL. */
+    url: v.string(),
+    created_at: v.string(),
+    dismissed_at: v.union(v.string(), v.null()),
+  })
+    .index("by_actor_open", ["actor_slug", "dismissed_at"])
+    .index("by_actor_toolkit", ["actor_slug", "toolkit"]),
+
+  agent_messages: defineTable({
+    conversation_id: v.id("agent_conversations"),
+    actor_slug: v.string(),
+    role: v.union(v.literal("user"), v.literal("assistant")),
+    text: v.string(),
+    created_at: v.string(),
+  })
+    .index("by_conversation_time", ["conversation_id", "created_at"])
+    .index("by_actor_time", ["actor_slug", "created_at"]),
 });

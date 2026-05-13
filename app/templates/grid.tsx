@@ -107,9 +107,24 @@ export function TemplateGrid({
                   {origin?.name ?? "—"}, {author?.name.split(" ")[0] ?? "—"}
                 </span>
               </div>
-              <div className="mt-2 t-caption text-ink-3">
-                Authored{" "}
-                <span className="num">{formatDate(u.template.created_at)}</span>
+              <div className="mt-2 flex items-center justify-between t-caption text-ink-3">
+                <span>
+                  Authored{" "}
+                  <span className="num">
+                    {formatDate(u.template.created_at)}
+                  </span>
+                </span>
+                {u.template.github_repo && (
+                  <a
+                    href={`https://github.com/${u.template.github_repo}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="num text-ink-2 hover:text-ink underline underline-offset-2 decoration-line"
+                  >
+                    {u.template.github_repo}
+                  </a>
+                )}
               </div>
             </Link>
           );
