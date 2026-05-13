@@ -2,14 +2,25 @@
 
 import { Castle as CastleIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 
 /**
  * GitHub-only sign-in. Castle is an internal tool for the 42nights org;
  * everyone who needs access has a GitHub account already.
+ *
+ * `useSearchParams` must sit under a Suspense boundary for Next 16's
+ * prerender step — the page export wraps it.
  */
 export default function SignInPage() {
+  return (
+    <Suspense fallback={<Shell />}>
+      <SignInForm />
+    </Suspense>
+  );
+}
+
+function SignInForm() {
   const router = useRouter();
   const params = useSearchParams();
   const callback = params.get("callbackUrl") || "/";
@@ -29,6 +40,26 @@ export default function SignInPage() {
   };
 
   return (
+    <Shell>
+      <button
+        onClick={signIn}
+        disabled={busy}
+        className="w-full h-10 rounded-md bg-ink text-page text-[14px] inline-flex items-center justify-center gap-2 disabled:opacity-60"
+      >
+        {busy ? "Redirecting…" : "Continue with GitHub"}
+      </button>
+      <button
+        onClick={() => router.back()}
+        className="text-[11.5px] text-ink-3 hover:text-ink"
+      >
+        back
+      </button>
+    </Shell>
+  );
+}
+
+function Shell({ children }: { children?: React.ReactNode }) {
+  return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <div className="w-full max-w-sm flex flex-col items-center gap-6 -mt-16">
         <div className="flex items-baseline gap-2 text-ink">
@@ -43,19 +74,7 @@ export default function SignInPage() {
             42nights operator console. Only members of the org can sign in.
           </p>
         </div>
-        <button
-          onClick={signIn}
-          disabled={busy}
-          className="w-full h-10 rounded-md bg-ink text-page text-[14px] inline-flex items-center justify-center gap-2 disabled:opacity-60"
-        >
-          {busy ? "Redirecting…" : "Continue with GitHub"}
-        </button>
-        <button
-          onClick={() => router.back()}
-          className="text-[11.5px] text-ink-3 hover:text-ink"
-        >
-          back
-        </button>
+        {children}
       </div>
     </main>
   );
