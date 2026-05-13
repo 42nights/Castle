@@ -1,5 +1,6 @@
 "use client";
 
+import { Castle as CastleIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ActorBar } from "@/components/actor-bar";
@@ -35,7 +36,8 @@ export function TopNav() {
           className="group flex items-baseline gap-2"
           aria-label="Castle"
         >
-          <span className="relative inline-block h-[7px] w-[7px] translate-y-[-2px] rounded-full bg-accent">
+          <span className="relative inline-flex translate-y-[1px] text-ink">
+            <CastleIcon size={16} strokeWidth={1.75} aria-hidden />
             <span className="absolute -top-1.5 -right-1.5">
               <InFlightDot />
             </span>
