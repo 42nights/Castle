@@ -3,7 +3,6 @@
 import { Castle as CastleIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ActorBar } from "@/components/actor-bar";
 import { InFlightDot } from "@/components/in-flight-dot";
 
 const links = [
@@ -75,7 +74,6 @@ export function TopNav() {
         </nav>
 
         <div className="ml-auto flex items-center gap-5">
-          <ActorBar />
           <span className="hidden lg:inline text-[11px] text-ink-3">
             <kbd className="num text-[10px] text-ink-2">⌘K</kbd>
           </span>

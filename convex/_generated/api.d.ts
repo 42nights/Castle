@@ -11,6 +11,7 @@
 import type * as agentActions from "../agentActions.js";
 import type * as agentMessages from "../agentMessages.js";
 import type * as attention from "../attention.js";
+import type * as auth from "../auth.js";
 import type * as clearAll from "../clearAll.js";
 import type * as customers from "../customers.js";
 import type * as dashboard from "../dashboard.js";
@@ -18,6 +19,7 @@ import type * as deployments from "../deployments.js";
 import type * as engagements from "../engagements.js";
 import type * as fdes from "../fdes.js";
 import type * as founderHours from "../founderHours.js";
+import type * as http from "../http.js";
 import type * as lib_audit from "../lib/audit.js";
 import type * as lib_bounds from "../lib/bounds.js";
 import type * as lib_util from "../lib/util.js";
@@ -35,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   agentActions: typeof agentActions;
   agentMessages: typeof agentMessages;
   attention: typeof attention;
+  auth: typeof auth;
   clearAll: typeof clearAll;
   customers: typeof customers;
   dashboard: typeof dashboard;
@@ -42,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   engagements: typeof engagements;
   fdes: typeof fdes;
   founderHours: typeof founderHours;
+  http: typeof http;
   "lib/audit": typeof lib_audit;
   "lib/bounds": typeof lib_bounds;
   "lib/util": typeof lib_util;
@@ -76,4 +80,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+};

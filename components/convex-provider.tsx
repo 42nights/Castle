@@ -1,21 +1,36 @@
 "use client";
 
-import { ConvexReactClient, ConvexProvider } from "convex/react";
+import { ConvexReactClient } from "convex/react";
+import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import { ReactNode, useMemo } from "react";
+import { authClient } from "@/lib/auth-client";
 
 /**
- * Provides a Convex client to the tree.
+ * Provides a Convex client + Better Auth-aware session to the tree.
  *
- * If NEXT_PUBLIC_CONVEX_URL is set: real, reactive client.
- * If not: a placeholder client that never connects, so useQuery returns
- *   undefined indefinitely. This keeps the v0 read-only path functional
- *   while making sure components that call useQuery don't crash.
+ * `initialToken` is preloaded server-side in `app/layout.tsx` via
+ * `getToken()` from lib/auth-server, so the first render of any
+ * `useQuery` already has the right identity attached.
  */
-export function ConvexClientProvider({ children }: { children: ReactNode }) {
+export function ConvexClientProvider({
+  children,
+  initialToken,
+}: {
+  children: ReactNode;
+  initialToken?: string | null;
+}) {
   const client = useMemo(() => {
     const url = process.env.NEXT_PUBLIC_CONVEX_URL;
     return new ConvexReactClient(url || "https://placeholder.convex.cloud");
   }, []);
 
-  return <ConvexProvider client={client}>{children}</ConvexProvider>;
+  return (
+    <ConvexBetterAuthProvider
+      client={client}
+      authClient={authClient}
+      initialToken={initialToken ?? undefined}
+    >
+      {children}
+    </ConvexBetterAuthProvider>
+  );
 }
