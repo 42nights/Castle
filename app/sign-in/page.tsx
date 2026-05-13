@@ -4,13 +4,14 @@ import { Castle as CastleIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { ALLOWLIST_DESCRIPTION } from "@/lib/auth-allowlist";
 
 /**
- * GitHub-only sign-in. Castle is an internal tool for the 42nights org;
- * everyone who needs access has a GitHub account already.
- *
- * `useSearchParams` must sit under a Suspense boundary for Next 16's
- * prerender step — the page export wraps it.
+ * GitHub-only sign-in. Castle is restricted to 42nights operators —
+ * the allowlist lives in `lib/auth-allowlist.ts`. Server-side rejection
+ * happens in `convex/auth.ts`'s `databaseHooks.user.create.before`; if
+ * a non-allowlisted email signs in, Better Auth bounces back to this
+ * page with `?error=access_denied`.
  */
 export default function SignInPage() {
   return (
@@ -24,6 +25,8 @@ function SignInForm() {
   const router = useRouter();
   const params = useSearchParams();
   const callback = params.get("callbackUrl") || "/";
+  const error = params.get("error");
+  const denied = error === "access_denied" || error?.includes("access_denied");
   const [busy, setBusy] = useState(false);
 
   const signIn = async () => {
@@ -32,6 +35,7 @@ function SignInForm() {
       await authClient.signIn.social({
         provider: "github",
         callbackURL: callback,
+        errorCallbackURL: "/sign-in?error=access_denied",
       });
     } catch (err) {
       console.error("[sign-in] github failed:", err);
@@ -41,6 +45,12 @@ function SignInForm() {
 
   return (
     <Shell>
+      {denied && (
+        <div className="w-full rounded-sm border border-accent/40 bg-accent/10 px-3 py-2 text-[12.5px] text-accent leading-snug">
+          <div className="font-medium text-ink">Access denied</div>
+          <div className="mt-0.5 text-ink-2">{ALLOWLIST_DESCRIPTION}</div>
+        </div>
+      )}
       <button
         onClick={signIn}
         disabled={busy}
@@ -71,7 +81,7 @@ function Shell({ children }: { children?: React.ReactNode }) {
         <div className="text-center">
           <h1 className="t-h2 text-ink">Sign in</h1>
           <p className="mt-1 text-[12.5px] text-ink-3 leading-snug">
-            42nights operator console. Only members of the org can sign in.
+            42nights operator console. Sign in with GitHub.
           </p>
         </div>
         {children}

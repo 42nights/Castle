@@ -5,6 +5,7 @@ import { components } from "./_generated/api";
 import { internalAction, query } from "./_generated/server";
 import { DataModel } from "./_generated/dataModel";
 import authConfig from "./auth.config";
+import { isEmailAllowed } from "../lib/auth-allowlist";
 
 /**
  * Castle auth — Better Auth with the Convex component backing it.
@@ -31,6 +32,24 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
       github: {
         clientId: process.env.GITHUB_CLIENT_ID as string,
         clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
+      },
+    },
+    // Server-side allowlist. Better Auth invokes `user.create.before`
+    // after the OAuth callback but before persisting a row — throwing
+    // here cancels the sign-in and the client sees an error.
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (user) => {
+            const email = (user as { email?: string }).email;
+            if (!isEmailAllowed(email)) {
+              throw new Error(
+                "access_denied: this email is not on the Castle allowlist",
+              );
+            }
+            return { data: user };
+          },
+        },
       },
     },
     plugins: [convex({ authConfig })],
