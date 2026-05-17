@@ -1,35 +1,31 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback } from "react";
+import { authClient } from "@/lib/auth-client";
 
-const KEY = "castle.actor_fde_slug";
-
-function subscribe(callback: () => void): () => void {
-  if (typeof window === "undefined") return () => {};
-  window.addEventListener("storage", callback);
-  return () => window.removeEventListener("storage", callback);
-}
-
-function getSnapshot(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(KEY);
-}
-
-function getServerSnapshot(): string | null {
-  return null;
-}
-
+/**
+ * Current operator identity. Used to be a localStorage picker; now the
+ * actor is derived from the signed-in Better Auth user.
+ *
+ * Slug shape: the email's local-part, lowercased.
+ *   `jerry.x0930@gmail.com` → `jerry.x0930`
+ *   `ayaan@xiao.sh`         → `ayaan`
+ *
+ * Returns `[null, noop]` while the session is loading or signed out.
+ * The tuple shape matches the old API so every existing call site
+ * keeps working without changes.
+ */
 export function useActorSlug(): [string | null, (slug: string | null) => void] {
-  const slug = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const { data: session } = authClient.useSession();
+  const email = (session as { user?: { email?: string } } | null)?.user?.email;
+  const slug = email
+    ? email.split("@")[0]?.toLowerCase().replace(/[^a-z0-9._-]/g, "-") ?? null
+    : null;
 
-  const set = useCallback((next: string | null) => {
-    if (typeof window === "undefined") return;
-    if (next === null) localStorage.removeItem(KEY);
-    else localStorage.setItem(KEY, next);
-    // useSyncExternalStore subscribes to "storage" events which only fire
-    // for cross-tab changes. Same-tab writes need a manual nudge.
-    window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
+  // Picker removed — actor is derived from the session. Setter is a
+  // no-op so call sites that still destructure it don't crash.
+  const set = useCallback((_next: string | null) => {
+    /* no-op */
   }, []);
-
   return [slug, set];
 }
