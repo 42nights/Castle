@@ -219,16 +219,29 @@ export function useHermesChat({
   // real one, so we can safely clear streamingText + pendingUser. We
   // also schedule a fallback timeout so a dropped persist never strands
   // the UI in a "permanent streaming" state.
-  const lastHistoryRole = historyRaw?.[historyRaw.length - 1]?.role;
   useEffect(() => {
     if (status !== "idle") return;
     if (!streamingText && pendingUser === null) return;
-    // History caught up — schedule the clear on a microtask so React
-    // doesn't see a cascading setState during the effect. The useMemo
-    // dedupe already hides the now-redundant ghosts, so the brief gap
-    // between this effect firing and the state actually clearing is
-    // not visible.
-    if (lastHistoryRole === "assistant") {
+    // History caught up = THIS turn's user message landed in the tail
+    // AND the last entry is an assistant message (i.e. our streamed
+    // turn was persisted). Matching only on "last role is assistant"
+    // is wrong — a prior turn's assistant tail satisfies it before
+    // Convex propagates the new pair, which would re-introduce the
+    // flash-then-empty gap the patch exists to fix. Same shape as the
+    // useMemo dedupe so the two stay consistent.
+    const hist = historyRaw ?? [];
+    const userLanded =
+      pendingUser !== null &&
+      hist.some(
+        (m, i) =>
+          i >= hist.length - 2 && m.role === "user" && m.text === pendingUser,
+      );
+    const assistantLanded =
+      userLanded && hist[hist.length - 1]?.role === "assistant";
+    if (assistantLanded) {
+      // Schedule on a microtask so React doesn't see a cascading
+      // setState during the effect body — the useMemo dedupe already
+      // hides the redundant ghosts, so the one-tick delay is invisible.
       const t = setTimeout(() => {
         setStreamingText("");
         setPendingUser(null);
@@ -237,11 +250,12 @@ export function useHermesChat({
     }
     // Hermes didn't persist (e.g. tool-only turn, server crash) — keep
     // whatever we streamed as the canonical record in the UI but stop
-    // pretending it'll be replaced. pendingUser stays so the user sees
-    // their own turn until they send another.
+    // pretending it'll be replaced. pendingUser stays as a fallback so
+    // the user always sees their own message; after 4s we drop it so
+    // re-renders don't keep matching against stale optimistic state.
     const t = setTimeout(() => setPendingUser(null), 4000);
     return () => clearTimeout(t);
-  }, [status, streamingText, pendingUser, lastHistoryRole]);
+  }, [status, streamingText, pendingUser, historyRaw]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
