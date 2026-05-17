@@ -211,10 +211,31 @@ export function DataTable<TData, TValue>({
                           }
                         : undefined
                     }
-                    onClick={href ? () => router.push(href) : undefined}
+                    onClick={
+                      href
+                        ? (e) => {
+                            // Don't navigate when the click came from an
+                            // interactive descendant — inline editors,
+                            // links, menus inside cells should handle
+                            // their own clicks. Same idea as a clickable
+                            // row that contains an inner <button>.
+                            if (
+                              (e.target as HTMLElement).closest(
+                                "button, a, input, select, textarea, label, [role='button'], [role='menuitem']",
+                              )
+                            )
+                              return;
+                            router.push(href);
+                          }
+                        : undefined
+                    }
                     onKeyDown={
                       href
                         ? (e) => {
+                            // Only fire when the row itself has focus —
+                            // Enter inside an input would otherwise
+                            // navigate away mid-edit.
+                            if (e.target !== e.currentTarget) return;
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
                               router.push(href);
