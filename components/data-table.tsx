@@ -196,14 +196,29 @@ export function DataTable<TData, TValue>({
                 return (
                   <tr
                     key={row.id}
+                    role={href ? "link" : undefined}
+                    tabIndex={href ? 0 : undefined}
                     className={[
-                      "border-b border-line last:border-b-0 transition-colors",
+                      "border-b border-line last:border-b-0 transition-colors outline-none focus-visible:bg-surface",
                       href ? "cursor-pointer hover:bg-surface" : "",
                     ].join(" ")}
-                    onClick={
+                    onMouseEnter={
                       href
                         ? () => {
-                            window.location.assign(href);
+                            // Warm the destination's static shell (its
+                            // `loading.tsx`) so the click feels instant.
+                            router.prefetch(href);
+                          }
+                        : undefined
+                    }
+                    onClick={href ? () => router.push(href) : undefined}
+                    onKeyDown={
+                      href
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              router.push(href);
+                            }
                           }
                         : undefined
                     }
