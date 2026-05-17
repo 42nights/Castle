@@ -109,36 +109,27 @@ export function ChatLanding() {
             ) : (
               <div className="flex flex-col gap-4">
                 {(() => {
-                  // Render messages. Attach pending CTAs only to the
-                  // assistant message that *referenced* their toolkit,
-                  // so an old "connect github" prompt doesn't dangle
-                  // under an unrelated reply.
+                  // Render messages. Attach any pending CTAs to the
+                  // most recent assistant message — the agent doesn't
+                  // always echo the toolkit slug verbatim (e.g. "Connect
+                  // button is live in your chat" → no "github" string),
+                  // so the old "text must mention the slug" heuristic
+                  // hid valid CTAs. CTAs dangle until the user clicks
+                  // connect or dismiss.
                   const visible = messages.filter(
                     (m) => !(m.streaming && m.text === ""),
                   );
                   const open = proposed ?? [];
-                  return visible.map((m, i) => {
-                    let attached: typeof open = [];
-                    if (m.role === "assistant" && open.length > 0) {
-                      const text = m.text.toLowerCase();
-                      // Look at any later assistant message that mentions
-                      // this toolkit — only the *most recent* assistant
-                      // message that mentions it gets the CTA.
-                      attached = open.filter((a) => {
-                        if (!text.includes(a.toolkit.toLowerCase())) return false;
-                        // Make sure no LATER assistant message also
-                        // mentions this toolkit (so we attach to the
-                        // freshest reference).
-                        return !visible.some(
-                          (later, j) =>
-                            j > i &&
-                            later.role === "assistant" &&
-                            later.text
-                              .toLowerCase()
-                              .includes(a.toolkit.toLowerCase()),
-                        );
-                      });
+                  let lastAssistantIdx = -1;
+                  for (let i = visible.length - 1; i >= 0; i--) {
+                    if (visible[i].role === "assistant") {
+                      lastAssistantIdx = i;
+                      break;
                     }
+                  }
+                  return visible.map((m, i) => {
+                    const attached =
+                      i === lastAssistantIdx && open.length > 0 ? open : [];
                     return (
                       <Turn
                         key={m.id}
