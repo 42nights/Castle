@@ -14,13 +14,14 @@ import { isEmailAllowed } from "../lib/auth-allowlist";
  * rows in our own schema get linked by Better Auth user id.
  */
 
-const siteUrl = process.env.SITE_URL;
-
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
 export const createAuth = (ctx: GenericCtx<DataModel>) =>
   betterAuth({
-    baseURL: siteUrl,
+    // Read env at function-call time, not module-top, so Convex
+    // reliably has the value populated before Better Auth looks it up.
+    baseURL: process.env.SITE_URL,
+    secret: process.env.BETTER_AUTH_SECRET,
     database: authComponent.adapter(ctx),
     account: {
       accountLinking: {
