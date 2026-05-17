@@ -1,4 +1,7 @@
-# Hermes config — templated at boot from CASTLE_MCP_URL.
+# Hermes config — templated at boot from CASTLE_MCP_URL and
+# (optionally) COMPOSIO_MCP_URL. The composio block is appended by
+# entrypoint.sh when COMPOSIO_MCP_URL is set, so the URL doesn't have
+# to live in the image. See docker/hermes/entrypoint.sh.
 model:
   default: claude-opus-4-7
   provider: anthropic

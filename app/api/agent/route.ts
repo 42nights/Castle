@@ -16,6 +16,17 @@ function convex(): ConvexHttpClient | null {
   return url ? new ConvexHttpClient(url) : null;
 }
 
+// Hermes runs in a real terminal context and sometimes leaks ANSI escape
+// sequences (color codes, cursor moves, line clears) into stdout. Browsers
+// pass these through as raw control chars — invisible at best, garbling the
+// markdown render at worst. Strip them server-side before they hit the wire.
+// Pattern covers CSI sequences (ESC [ ... letter) and OSC sequences
+// (ESC ] ... BEL or ESC ] ... ESC \).
+const ANSI_RE = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
+function stripAnsi(s: string): string {
+  return s.replace(ANSI_RE, "");
+}
+
 /**
  * Castle chat → Hermes.
  *
@@ -151,7 +162,13 @@ function remoteHermesStream(
               continue;
             }
             if (parsed?.type === "text" && parsed.delta) {
-              assistantText += parsed.delta;
+              const clean = stripAnsi(parsed.delta);
+              assistantText += clean;
+              // Re-serialize so the wire frame matches what we accumulated.
+              controller.enqueue(
+                enc.encode(JSON.stringify({ ...parsed, delta: clean }) + "\n"),
+              );
+              continue;
             }
             controller.enqueue(enc.encode(t + "\n"));
           }
@@ -200,8 +217,10 @@ function localOrbStream(
       let assistantText = "";
       child.stdout.setEncoding("utf8");
       child.stdout.on("data", (chunk: string) => {
-        assistantText += chunk;
-        emit({ type: "text", delta: chunk });
+        const clean = stripAnsi(chunk);
+        if (!clean) return;
+        assistantText += clean;
+        emit({ type: "text", delta: clean });
       });
 
       let stderr = "";

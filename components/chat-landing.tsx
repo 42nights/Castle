@@ -142,7 +142,9 @@ export function ChatLanding() {
                   });
                 })()}
                 {status === "streaming" &&
-                  messages[messages.length - 1]?.text === "" && <Thinking />}
+                  messages[messages.length - 1]?.text === "" && (
+                    <Thinking key={messages.length} />
+                  )}
                 {error && (
                   <div className="text-accent text-[12.5px]">{error}</div>
                 )}
@@ -366,17 +368,35 @@ function ConnectCta({
 }
 
 function Thinking() {
+  // Tick once a second so the operator can tell the agent is alive
+  // through long tool calls (Composio MCP roundtrips, especially the
+  // first call against a new connection, can take 5–15s before any
+  // text streams). Counter resets via `key=` whenever a new turn
+  // starts.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const start = Date.now();
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - start) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
   return (
-    <div className="flex items-center gap-1 px-0.5 py-1">
-      <span className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse" />
-      <span
-        className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse"
-        style={{ animationDelay: "150ms" }}
-      />
-      <span
-        className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse"
-        style={{ animationDelay: "300ms" }}
-      />
+    <div className="flex items-center gap-2 px-0.5 py-1 text-[12px] text-ink-3">
+      <span className="inline-flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse" />
+        <span
+          className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse"
+          style={{ animationDelay: "150ms" }}
+        />
+        <span
+          className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse"
+          style={{ animationDelay: "300ms" }}
+        />
+      </span>
+      <span className="num">
+        thinking{elapsed > 0 ? ` · ${elapsed}s` : "…"}
+      </span>
     </div>
   );
 }

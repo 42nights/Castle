@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -59,16 +59,25 @@ export function useHermesChat({
       role: m.role,
       text: m.text,
     }));
-    if (pendingUser !== null) {
-      const alreadyInHistory =
-        out.length > 0 &&
-        out[out.length - 1].role === "user" &&
-        out[out.length - 1].text === pendingUser;
-      if (!alreadyInHistory) {
-        out.push({ id: "u-pending", role: "user", text: pendingUser });
-      }
+    // History "caught up" = this send's user text is somewhere in the
+    // tail of history (so the optimistic user ghost is redundant) AND
+    // the last entry is an assistant message (so the streaming ghost is
+    // redundant). We check both before the handoff effect clears the
+    // optimistic state to avoid a one-frame double-render.
+    const userLanded =
+      pendingUser !== null &&
+      out.some(
+        (m, i) =>
+          i >= out.length - 2 && m.role === "user" && m.text === pendingUser,
+      );
+    const assistantLanded =
+      userLanded && out[out.length - 1]?.role === "assistant";
+    if (pendingUser !== null && !userLanded) {
+      out.push({ id: "u-pending", role: "user", text: pendingUser });
     }
-    if (status === "streaming" || streamingText) {
+    const showStreaming =
+      !assistantLanded && (status === "streaming" || streamingText);
+    if (showStreaming) {
       out.push({
         id: "a-streaming",
         role: "assistant",
@@ -107,12 +116,17 @@ export function useHermesChat({
       tickerRef.current = setInterval(() => {
         if (bufferRef.current.length === 0) {
           if (streamDoneRef.current) {
+            // Buffer drained. Flip status to idle so the input unlocks
+            // immediately, but DON'T clear streamingText / pendingUser
+            // yet — Convex's reactive `historyRaw` query takes a beat to
+            // reflect the just-persisted assistant turn, and clearing
+            // here causes a "flash then empty" gap. The handoff effect
+            // below clears them once history catches up (with a short
+            // fallback so we never strand the UI on a dropped persist).
             if (tickerRef.current) {
               clearInterval(tickerRef.current);
               tickerRef.current = null;
             }
-            setStreamingText("");
-            setPendingUser(null);
             setStatus("idle");
           }
           return;
@@ -199,6 +213,35 @@ export function useHermesChat({
     },
     [actorSlug, conversationId, status],
   );
+
+  // Handoff: once the persisted history contains an assistant turn at
+  // the tail, the optimistic streaming entry has been replaced by the
+  // real one, so we can safely clear streamingText + pendingUser. We
+  // also schedule a fallback timeout so a dropped persist never strands
+  // the UI in a "permanent streaming" state.
+  const lastHistoryRole = historyRaw?.[historyRaw.length - 1]?.role;
+  useEffect(() => {
+    if (status !== "idle") return;
+    if (!streamingText && pendingUser === null) return;
+    // History caught up — schedule the clear on a microtask so React
+    // doesn't see a cascading setState during the effect. The useMemo
+    // dedupe already hides the now-redundant ghosts, so the brief gap
+    // between this effect firing and the state actually clearing is
+    // not visible.
+    if (lastHistoryRole === "assistant") {
+      const t = setTimeout(() => {
+        setStreamingText("");
+        setPendingUser(null);
+      }, 0);
+      return () => clearTimeout(t);
+    }
+    // Hermes didn't persist (e.g. tool-only turn, server crash) — keep
+    // whatever we streamed as the canonical record in the UI but stop
+    // pretending it'll be replaced. pendingUser stays so the user sees
+    // their own turn until they send another.
+    const t = setTimeout(() => setPendingUser(null), 4000);
+    return () => clearTimeout(t);
+  }, [status, streamingText, pendingUser, lastHistoryRole]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
