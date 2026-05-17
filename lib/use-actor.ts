@@ -4,17 +4,24 @@ import { useCallback } from "react";
 import { authClient } from "@/lib/auth-client";
 
 /**
- * Current operator identity. Used to be a localStorage picker; now the
- * actor is derived from the signed-in Better Auth user.
+ * Current operator identity. Used to be a localStorage picker; now
+ * the actor is derived from the signed-in Better Auth user.
  *
  * Slug shape: the email's local-part, lowercased.
  *   `jerry.x0930@gmail.com` → `jerry.x0930`
  *   `ayaan@xiao.sh`         → `ayaan`
  *
- * Returns `[null, noop]` while the session is loading or signed out.
- * The tuple shape matches the old API so every existing call site
- * keeps working without changes.
+ * Castle MCP on Railway is still pinned to a single actor via
+ * `CASTLE_ACTOR_SLUG` (single-tenant Phase-A state). Anything the
+ * chat agent writes via MCP — `agent_actions`, mutation `actor_fde_id`
+ * lookups — uses that pinned slug. Until per-user threading lands
+ * (Phase B), keep a fallback that matches the MCP's env so the chat
+ * UI stays in sync when the session is loading OR the email's local
+ * part doesn't match.
  */
+const MCP_FALLBACK_SLUG =
+  process.env.NEXT_PUBLIC_CASTLE_ACTOR_FALLBACK || "jerry";
+
 export function useActorSlug(): [string | null, (slug: string | null) => void] {
   const { data: session } = authClient.useSession();
   const email = (session as { user?: { email?: string } } | null)?.user?.email;
@@ -22,10 +29,8 @@ export function useActorSlug(): [string | null, (slug: string | null) => void] {
     ? email.split("@")[0]?.toLowerCase().replace(/[^a-z0-9._-]/g, "-") ?? null
     : null;
 
-  // Picker removed — actor is derived from the session. Setter is a
-  // no-op so call sites that still destructure it don't crash.
   const set = useCallback((_next: string | null) => {
-    /* no-op */
+    /* picker removed — setter is a no-op for back-compat */
   }, []);
-  return [slug, set];
+  return [slug ?? MCP_FALLBACK_SLUG, set];
 }
