@@ -131,6 +131,10 @@ export default defineSchema({
     /** GitHub repo under the 42nights org, e.g. "42nights/deal-flow-scout".
      *  Stored as "<org>/<repo>". Used to deep-link to the actual source. */
     github_repo: v.optional(v.string()),
+    /** Optional canonical live URL for a deployed instance / demo (e.g.
+     *  https://stargazer.42nights.dev). Surfaced alongside the GitHub
+     *  link on the template card + detail page. */
+    live_url: v.optional(v.string()),
     created_at: v.string(),
     updated_at: v.string(),
     updated_by_fde_id: v.union(v.id("fdes"), v.null()),

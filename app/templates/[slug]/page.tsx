@@ -4,6 +4,7 @@ import { CategoryBadge } from "@/components/atoms";
 import { CapabilityEditor } from "@/components/controls/capability-editor";
 import { GithubRepoInput } from "@/components/controls/github-repo-input";
 import { InlineName } from "@/components/controls/inline-name";
+import { LiveUrlInput } from "@/components/controls/live-url-input";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { loadOverview } from "@/lib/load-overview";
 import { formatDate, formatHours } from "@/lib/format";
@@ -71,6 +72,7 @@ export default async function TemplateDetail({
         }
         actions={
           <div className="flex items-center gap-3">
+            <LiveUrlInput templateSlug={tpl.id} current={tpl.live_url} />
             <GithubRepoInput
               templateSlug={tpl.id}
               current={tpl.github_repo}

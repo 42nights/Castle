@@ -47,6 +47,8 @@ export type Template = {
   authored_by_fde_id: string;
   /** GitHub repo path "<org>/<repo>", e.g. "42nights/deal-flow-scout". */
   github_repo?: string;
+  /** Optional canonical live URL (deployment / demo). */
+  live_url?: string;
 };
 
 export type CustomerStatus = "active" | "churned" | "paused";

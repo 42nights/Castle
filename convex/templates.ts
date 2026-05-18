@@ -121,6 +121,39 @@ export const setGithubRepo = mutation({
   },
 });
 
+/** Set the live URL for a template. Pass null/empty to clear.
+ *  Normalises to include https:// if a bare domain was pasted. */
+export const setLiveUrl = mutation({
+  args: {
+    id: v.id("templates"),
+    url: v.union(v.string(), v.null()),
+    actor_fde_id: v.union(v.id("fdes"), v.null()),
+  },
+  handler: async (ctx, { id, url, actor_fde_id }) => {
+    let normalized: string | null = null;
+    if (url) {
+      const trimmed = url.trim();
+      if (trimmed) {
+        const withScheme = /^https?:\/\//i.test(trimmed)
+          ? trimmed
+          : `https://${trimmed}`;
+        try {
+          // Validate via URL parser — throws on garbage.
+          new URL(withScheme);
+        } catch {
+          throw new Error("Expected a valid URL (e.g. https://example.com)");
+        }
+        normalized = withScheme;
+      }
+    }
+    await ctx.db.patch(id, {
+      live_url: normalized ?? undefined,
+      updated_at: nowIso(),
+      updated_by_fde_id: actor_fde_id,
+    });
+  },
+});
+
 export const addCapability = mutation({
   args: {
     template_id: v.id("templates"),

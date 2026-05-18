@@ -107,24 +107,39 @@ export function TemplateGrid({
                   {origin?.name ?? "—"}, {author?.name.split(" ")[0] ?? "—"}
                 </span>
               </div>
-              <div className="mt-2 flex items-center justify-between t-caption text-ink-3">
-                <span>
+              <div className="mt-2 flex items-center justify-between t-caption text-ink-3 gap-3">
+                <span className="shrink-0">
                   Authored{" "}
                   <span className="num">
                     {formatDate(u.template.created_at)}
                   </span>
                 </span>
-                {u.template.github_repo && (
-                  <a
-                    href={`https://github.com/${u.template.github_repo}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="num text-ink-2 hover:text-ink underline underline-offset-2 decoration-line"
-                  >
-                    {u.template.github_repo}
-                  </a>
-                )}
+                <span className="flex items-center gap-2 min-w-0 justify-end">
+                  {u.template.live_url && (
+                    <a
+                      href={u.template.live_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="num text-ink-2 hover:text-ink underline underline-offset-2 decoration-line truncate max-w-[140px]"
+                      title={u.template.live_url}
+                    >
+                      ↗ {u.template.live_url.replace(/^https?:\/\//, "")}
+                    </a>
+                  )}
+                  {u.template.github_repo && (
+                    <a
+                      href={`https://github.com/${u.template.github_repo}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="num text-ink-2 hover:text-ink underline underline-offset-2 decoration-line truncate max-w-[160px]"
+                      title={u.template.github_repo}
+                    >
+                      {u.template.github_repo}
+                    </a>
+                  )}
+                </span>
               </div>
             </Link>
           );
