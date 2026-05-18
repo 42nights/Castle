@@ -337,7 +337,14 @@ class HermesACP:
                     "mcpServers": _mcp_servers(),
                 },
             )
-            return result is not None
+            # Hermes ACP returns `{"result": {}}` (empty dict, not null)
+            # when the session id is unknown — the upstream handler hits
+            # `if state is None: return None` and the JSON-RPC layer
+            # encodes that as `{}`. So `result is not None` is true even
+            # when the session doesn't exist; check for the presence of
+            # `models` (which a real LoadSessionResponse always carries)
+            # to distinguish a real load from a phantom "OK".
+            return isinstance(result, dict) and "models" in result
         except Exception as e:  # noqa: BLE001
             logger.info("session/load(%s) failed: %s", session_id, e)
             return False
