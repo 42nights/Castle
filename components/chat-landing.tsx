@@ -3,7 +3,10 @@
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { initiateConnection } from "@/app/connections/actions";
+import {
+  cancelPendingConnections,
+  initiateConnection,
+} from "@/app/connections/actions";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useActorSlug } from "@/lib/use-actor";
@@ -329,6 +332,7 @@ function ConnectCta({
   onDismiss: () => void;
 }) {
   const [regenerating, setRegenerating] = useState(false);
+  const [dismissing, setDismissing] = useState(false);
 
   const regenerate = async () => {
     if (!actorSlug || regenerating) return;
@@ -349,6 +353,31 @@ function ConnectCta({
     }
   };
 
+  const dismiss = async () => {
+    if (dismissing) return;
+    setDismissing(true);
+    // Cancel the INITIATED Composio connection alongside marking the
+    // agent_action dismissed — otherwise the right rail keeps the
+    // toolkit pinned as `pending` until Composio sweeps it. Best-effort:
+    // we still call onDismiss() even if the server cancel fails, so the
+    // chat CTA reliably disappears.
+    if (actorSlug) {
+      try {
+        await cancelPendingConnections(toolkit, actorSlug);
+      } catch {
+        /* non-fatal — see comment above */
+      }
+    }
+    onDismiss();
+    // Nudge the ConnectionsRail to re-fetch — listConnections lives in
+    // its own client-side useEffect that only re-runs on actor change,
+    // so without an event the `pending` row sticks around even though
+    // Composio just dropped it.
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("castle:connections-changed"));
+    }
+  };
+
   return (
     <div className="flex items-center justify-between gap-3 text-[12.5px]">
       <div className="inline-flex items-center gap-2 min-w-0 text-ink-3">
@@ -366,10 +395,11 @@ function ConnectCta({
           {regenerating ? "regenerating…" : "regenerate"}
         </button>
         <button
-          onClick={onDismiss}
-          className="text-ink-3 hover:text-ink"
+          onClick={dismiss}
+          disabled={dismissing}
+          className="text-ink-3 hover:text-ink disabled:opacity-50"
         >
-          dismiss
+          {dismissing ? "dismissing…" : "dismiss"}
         </button>
       </div>
     </div>

@@ -26,9 +26,7 @@ export function ChatMarkdown({
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          p: ({ children }) => (
-            <p className="whitespace-pre-wrap">{children}</p>
-          ),
+          p: ({ children }) => <p>{children}</p>,
           a: ({ href, children }) => (
             <a
               href={href}
@@ -79,9 +77,16 @@ export function ChatMarkdown({
               {children}
             </blockquote>
           ),
-          code: (props: { inline?: boolean; children?: ReactNode }) => {
-            const { inline, children } = props;
-            if (inline) {
+          code: (props: { className?: string; children?: ReactNode }) => {
+            // react-markdown v10 removed the `inline` prop — discriminate
+            // by className (fenced blocks get `language-*`, inline code
+            // gets nothing). Treating everything as block forces inline
+            // `like-this` to render as a block element with surrounding
+            // line breaks, which is what was making chat replies look
+            // shattered.
+            const { className, children } = props;
+            const isBlock = !!className && /^language-/.test(className);
+            if (!isBlock) {
               return (
                 <code className="num text-[12.5px] bg-surface text-ink px-1 py-px rounded-sm">
                   {children}

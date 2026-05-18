@@ -182,6 +182,49 @@ export async function initiateConnection(
   }
 }
 
+/**
+ * Cancel any non-ACTIVE Composio connections for (toolkit, actor). Used
+ * by the chat-CTA "dismiss" button so dismissing a connect prompt also
+ * clears the matching `pending` row in the right rail — otherwise the
+ * INITIATED row Composio created when the CTA was minted sticks around
+ * until it expires on Composio's side.
+ */
+export async function cancelPendingConnections(
+  toolkit: ToolkitSlug,
+  userId: string,
+): Promise<{ ok: boolean; cancelled: number }> {
+  const c = composio();
+  if (!c || !userId) return { ok: false, cancelled: 0 };
+  try {
+    const pending = await c.connectedAccounts.list({
+      userIds: [userId],
+      toolkitSlugs: [toolkit],
+      statuses: [
+        "INITIALIZING",
+        "INITIATED",
+        "EXPIRED",
+        "FAILED",
+        "INACTIVE",
+      ],
+      limit: 25,
+    });
+    let cancelled = 0;
+    for (const p of pending.items ?? []) {
+      try {
+        await c.connectedAccounts.delete(p.id);
+        cancelled++;
+      } catch {
+        /* non-fatal — Composio may have already swept it */
+      }
+    }
+    revalidatePath("/connections");
+    return { ok: true, cancelled };
+  } catch (err) {
+    console.error("[connections] cancelPending failed:", err);
+    return { ok: false, cancelled: 0 };
+  }
+}
+
 export async function disconnect(
   connectedAccountId: string,
 ): Promise<{ ok: boolean; error?: string }> {

@@ -18,6 +18,8 @@ export function ConnectionsRail() {
   const [rows, setRows] = useState<ConnectionRow[]>([]);
   const [loaded, setLoaded] = useState(false);
 
+  const [refreshKey, setRefreshKey] = useState(0);
+
   useEffect(() => {
     if (!actorSlug) {
       setLoaded(true);
@@ -34,7 +36,18 @@ export function ConnectionsRail() {
     return () => {
       cancelled = true;
     };
-  }, [actorSlug]);
+  }, [actorSlug, refreshKey]);
+
+  useEffect(() => {
+    // Re-fetch when other parts of the UI mutate connection state
+    // (e.g. dismissing a chat CTA cancels the INITIATED Composio
+    // connection). Otherwise the `pending` row would linger until the
+    // next actor change or full page reload.
+    const bump = () => setRefreshKey((k) => k + 1);
+    window.addEventListener("castle:connections-changed", bump);
+    return () =>
+      window.removeEventListener("castle:connections-changed", bump);
+  }, []);
 
   const connected = rows.filter((r) => r.status === "connected");
   const pending = rows.filter((r) => r.status === "pending");
