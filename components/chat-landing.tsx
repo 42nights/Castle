@@ -7,7 +7,11 @@ import { initiateConnection } from "@/app/connections/actions";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useActorSlug } from "@/lib/use-actor";
-import { useHermesChat, type ChatMessage } from "@/lib/use-hermes-chat";
+import {
+  useHermesChat,
+  type ChatMessage,
+  type ToolActivity,
+} from "@/lib/use-hermes-chat";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { ChatSidebar } from "@/components/chat-sidebar";
 import { ConnectionsRail } from "@/components/connections-rail";
@@ -35,10 +39,11 @@ export function ChatLanding() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const tailRef = useRef<HTMLDivElement>(null);
 
-  const { messages, status, error, sendMessage, stop } = useHermesChat({
-    actorSlug,
-    conversationId,
-  });
+  const { messages, status, error, sendMessage, stop, thought, tools } =
+    useHermesChat({
+      actorSlug,
+      conversationId,
+    });
   const clearTranscript = useMutation(api.agentMessages.clear);
   const proposed = useQuery(
     api.agentActions.listOpen,
@@ -143,7 +148,11 @@ export function ChatLanding() {
                 })()}
                 {status === "streaming" &&
                   messages[messages.length - 1]?.text === "" && (
-                    <Thinking key={messages.length} />
+                    <Thinking
+                      key={messages.length}
+                      tools={tools}
+                      thought={thought}
+                    />
                   )}
                 {error && (
                   <div className="text-accent text-[12.5px]">{error}</div>
@@ -367,7 +376,13 @@ function ConnectCta({
   );
 }
 
-function Thinking() {
+function Thinking({
+  tools = [],
+  thought = "",
+}: {
+  tools?: ToolActivity[];
+  thought?: string;
+}) {
   // Tick once a second so the operator can tell the agent is alive
   // through long tool calls (Composio MCP roundtrips, especially the
   // first call against a new connection, can take 5–15s before any
@@ -381,22 +396,56 @@ function Thinking() {
     }, 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Show the latest 3 tools — older ones collapse silently. Running
+  // tools stay until they get a tool_end event.
+  const recent = tools.slice(-3);
+  const lastThoughtLine = thought
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .slice(-1)[0];
+
   return (
-    <div className="flex items-center gap-2 px-0.5 py-1 text-[12px] text-ink-3">
-      <span className="inline-flex items-center gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse" />
-        <span
-          className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse"
-          style={{ animationDelay: "150ms" }}
-        />
-        <span
-          className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse"
-          style={{ animationDelay: "300ms" }}
-        />
-      </span>
-      <span className="num">
-        thinking{elapsed > 0 ? ` · ${elapsed}s` : "…"}
-      </span>
+    <div className="flex flex-col gap-1 px-0.5 py-1 text-[12px] text-ink-3">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse" />
+          <span
+            className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse"
+            style={{ animationDelay: "150ms" }}
+          />
+          <span
+            className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse"
+            style={{ animationDelay: "300ms" }}
+          />
+        </span>
+        <span className="num">
+          thinking{elapsed > 0 ? ` · ${elapsed}s` : "…"}
+        </span>
+      </div>
+      {recent.length > 0 && (
+        <div className="flex flex-col gap-0.5 pl-4">
+          {recent.map((t) => (
+            <span key={t.id} className="num text-[11.5px]">
+              <span className="text-ink-2">⚡</span>{" "}
+              <span className={t.status === "error" ? "text-accent" : ""}>
+                {t.name}
+              </span>
+              {t.status === "running" ? (
+                <span className="text-ink-3">…</span>
+              ) : t.durationMs ? (
+                <span className="text-ink-3"> · {(t.durationMs / 1000).toFixed(1)}s</span>
+              ) : null}
+            </span>
+          ))}
+        </div>
+      )}
+      {lastThoughtLine && (
+        <div className="pl-4 italic text-ink-3/80 line-clamp-1">
+          {lastThoughtLine}
+        </div>
+      )}
     </div>
   );
 }

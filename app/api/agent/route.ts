@@ -84,6 +84,21 @@ export async function POST(req: Request) {
     );
   };
 
+  // If the wrapper mints a new ACP session (because the legacy
+  // `castle-<slug>-<rand>` string doesn't resolve via session/load, or
+  // this is a brand-new conversation), it emits a `{type:"session",
+  // session_id}` frame. Bind that id back to Convex so subsequent turns
+  // reuse it. Field stays opaque to the rest of the system.
+  const onSessionBound = (newSessionId: string) => {
+    if (newSessionId === sessionName) return;
+    cx.mutation(api.agentMessages.bindSession, {
+      id: body.conversationId as never,
+      hermes_session: newSessionId,
+    }).catch((err) =>
+      console.error("[agent] failed to bind ACP session id:", err),
+    );
+  };
+
   const hermesUrl = process.env.HERMES_URL;
   const stream = hermesUrl
     ? remoteHermesStream(
@@ -93,6 +108,7 @@ export async function POST(req: Request) {
         body.text,
         req.signal,
         persistAssistant,
+        onSessionBound,
       )
     : localOrbStream(sessionName, body.text, req.signal, persistAssistant);
 
@@ -113,6 +129,7 @@ function remoteHermesStream(
   text: string,
   abort: AbortSignal,
   onComplete: (assistantText: string) => void,
+  onSessionBound?: (sessionId: string) => void,
 ): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -167,6 +184,21 @@ function remoteHermesStream(
               // Re-serialize so the wire frame matches what we accumulated.
               controller.enqueue(
                 enc.encode(JSON.stringify({ ...parsed, delta: clean }) + "\n"),
+              );
+              continue;
+            }
+            // ACP-era: wrapper announces a freshly-minted session id once
+            // per turn. Bind it back to Convex so the next turn reuses
+            // it via `session/load`. Don't forward to the client — it's
+            // an internal-routing concern, not a UI event.
+            if (
+              parsed?.type === "session" &&
+              typeof (parsed as { session_id?: unknown }).session_id ===
+                "string" &&
+              onSessionBound
+            ) {
+              onSessionBound(
+                (parsed as { session_id: string }).session_id,
               );
               continue;
             }

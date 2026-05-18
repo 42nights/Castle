@@ -14,6 +14,15 @@ export type ChatMessage = {
 
 export type ChatStatus = "idle" | "streaming" | "error";
 
+export type ToolActivity = {
+  id: string;
+  name: string;
+  kind?: string;
+  status: "running" | "done" | "error";
+  startedAt: number;
+  durationMs?: number;
+};
+
 type ConvexMessage = {
   _id: string;
   role: "user" | "assistant";
@@ -43,6 +52,8 @@ export function useHermesChat({
 
   const [pendingUser, setPendingUser] = useState<string | null>(null);
   const [streamingText, setStreamingText] = useState<string>("");
+  const [streamingThought, setStreamingThought] = useState<string>("");
+  const [tools, setTools] = useState<ToolActivity[]>([]);
   const [status, setStatus] = useState<ChatStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -101,6 +112,8 @@ export function useHermesChat({
 
       setPendingUser(trimmed);
       setStreamingText("");
+      setStreamingThought("");
+      setTools([]);
       setStatus("streaming");
       setError(null);
       bufferRef.current = "";
@@ -173,7 +186,15 @@ export function useHermesChat({
           for (const line of lines) {
             const t = line.trim();
             if (!t) continue;
-            let ev: { type: string; delta?: string; message?: string };
+            let ev: {
+              type: string;
+              delta?: string;
+              message?: string;
+              id?: string;
+              name?: string;
+              kind?: string;
+              ok?: boolean;
+            };
             try {
               ev = JSON.parse(t);
             } catch {
@@ -181,6 +202,42 @@ export function useHermesChat({
             }
             if (ev.type === "text" && ev.delta) {
               bufferRef.current += ev.delta;
+            } else if (ev.type === "thought" && ev.delta) {
+              // Reasoning stream — accumulate verbatim (no typewriter),
+              // since thoughts are background context rather than the
+              // user-facing answer.
+              setStreamingThought((prev) => prev + ev.delta);
+            } else if (ev.type === "tool_start" && ev.id) {
+              const id = ev.id;
+              const name = ev.name ?? "tool";
+              const kind = ev.kind;
+              setTools((prev) => {
+                if (prev.some((t) => t.id === id)) return prev;
+                return [
+                  ...prev,
+                  {
+                    id,
+                    name,
+                    kind,
+                    status: "running",
+                    startedAt: Date.now(),
+                  },
+                ];
+              });
+            } else if (ev.type === "tool_end" && ev.id) {
+              const id = ev.id;
+              const ok = ev.ok !== false;
+              setTools((prev) =>
+                prev.map((t) =>
+                  t.id === id
+                    ? {
+                        ...t,
+                        status: ok ? "done" : "error",
+                        durationMs: Date.now() - t.startedAt,
+                      }
+                    : t,
+                ),
+              );
             } else if (ev.type === "error") {
               setError(ev.message ?? "Unknown error.");
             } else if (ev.type === "done") {
@@ -200,6 +257,8 @@ export function useHermesChat({
           bufferRef.current = "";
           setStatus("idle");
           setStreamingText("");
+          setStreamingThought("");
+          setTools([]);
           setPendingUser(null);
           return;
         }
@@ -242,8 +301,12 @@ export function useHermesChat({
       // Schedule on a microtask so React doesn't see a cascading
       // setState during the effect body — the useMemo dedupe already
       // hides the redundant ghosts, so the one-tick delay is invisible.
+      // Also clear the per-turn thought/tool buffers — they're scratch
+      // state for the in-flight indicator only; we don't persist them.
       const t = setTimeout(() => {
         setStreamingText("");
+        setStreamingThought("");
+        setTools([]);
         setPendingUser(null);
       }, 0);
       return () => clearTimeout(t);
@@ -261,5 +324,13 @@ export function useHermesChat({
     abortRef.current?.abort();
   }, []);
 
-  return { messages, status, error, sendMessage, stop };
+  return {
+    messages,
+    status,
+    error,
+    sendMessage,
+    stop,
+    thought: streamingThought,
+    tools,
+  };
 }

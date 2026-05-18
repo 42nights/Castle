@@ -51,6 +51,23 @@ export const createConversation = mutation({
   },
 });
 
+/**
+ * Bind an ACP-minted session id back to a Castle conversation. Called by
+ * `/api/agent` the first time Hermes mints a fresh session for an existing
+ * conversation (e.g. after the wrapper switched from `hermes -z` to
+ * `hermes acp` and the legacy `castle-<slug>-<rand>` string didn't resolve
+ * via `session/load`). Subsequent turns reuse the bound id.
+ */
+export const bindSession = mutation({
+  args: {
+    id: v.id("agent_conversations"),
+    hermes_session: v.string(),
+  },
+  handler: async (ctx, { id, hermes_session }) => {
+    await ctx.db.patch(id, { hermes_session, updated_at: nowIso() });
+  },
+});
+
 export const renameConversation = mutation({
   args: { id: v.id("agent_conversations"), title: v.string() },
   handler: async (ctx, { id, title }) => {
