@@ -59,7 +59,7 @@ describe("engagement lifecycle (create → edit → extract → delete)", () => 
     const { jerry, ayaan } = await bootstrap(t);
 
     // 1. Operator creates a customer.
-    const customer = await t.mutation(api.customers.create, {
+    const { id: customer } = await t.mutation(api.customers.create, {
       name: "Acme Inc",
       backed_by: ["a16z"],
       start_date: "2026-05-11",
@@ -71,7 +71,7 @@ describe("engagement lifecycle (create → edit → extract → delete)", () => 
     });
 
     // 2. Spins up an engagement, assigns Jerry.
-    const eng = await t.mutation(api.engagements.create, {
+    const { id: eng } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [jerry],
       start_date: "2026-05-11",
@@ -124,7 +124,7 @@ describe("engagement lifecycle (create → edit → extract → delete)", () => 
     });
 
     // 6. Extract a pattern → creates new template inline.
-    const extraction = await t.mutation(api.patternExtractions.extract, {
+    const { extraction_id: extraction } = await t.mutation(api.patternExtractions.extract, {
       source_engagement_id: eng,
       source_engagement_summary: "What we built for Acme",
       target_template_id: null,
@@ -196,7 +196,7 @@ describe("engagement lifecycle (create → edit → extract → delete)", () => 
   it("multi-tab notes editing: client A saves, client B's stale write rejects", async () => {
     const t = setup();
     const { jerry, ayaan } = await bootstrap(t);
-    const customer = await t.mutation(api.customers.create, {
+    const { id: customer } = await t.mutation(api.customers.create, {
       name: "C",
       backed_by: [],
       start_date: "2026-05-11",
@@ -206,7 +206,7 @@ describe("engagement lifecycle (create → edit → extract → delete)", () => 
       health: "green",
       actor_fde_id: jerry,
     });
-    const eng = await t.mutation(api.engagements.create, {
+    const { id: eng } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [jerry],
       start_date: "2026-05-11",
@@ -250,7 +250,7 @@ describe("engagement lifecycle (create → edit → extract → delete)", () => 
   it("FDE workload reflects assignments accurately end-to-end", async () => {
     const t = setup();
     const { jerry, ayaan } = await bootstrap(t);
-    const customer = await t.mutation(api.customers.create, {
+    const { id: customer } = await t.mutation(api.customers.create, {
       name: "C",
       backed_by: [],
       start_date: "2026-05-11",
@@ -262,7 +262,7 @@ describe("engagement lifecycle (create → edit → extract → delete)", () => 
     });
 
     // Two engagements, both 40h/wk total, jerry on both, ayaan on one.
-    const eng1 = await t.mutation(api.engagements.create, {
+    const { id: eng1 } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [jerry, ayaan],
       start_date: "2026-05-11",
@@ -274,7 +274,7 @@ describe("engagement lifecycle (create → edit → extract → delete)", () => 
       notes: "",
       actor_fde_id: jerry,
     });
-    const eng2 = await t.mutation(api.engagements.create, {
+    const { id: eng2 } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [jerry],
       start_date: "2026-05-11",

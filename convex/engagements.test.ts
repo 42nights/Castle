@@ -108,7 +108,7 @@ describe("bounds enforcement", () => {
   it("rejects negative weekly_hours in engagements.update", async () => {
     const t = setup();
     const { fde, customer } = await seedBaseEntities(t);
-    const eng = await t.mutation(api.engagements.create, {
+    const { id: eng } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [fde],
       start_date: "2026-05-11",
@@ -148,7 +148,7 @@ describe("support phase progress invariant", () => {
   it("create with phase=support pins progress to 100 regardless of input", async () => {
     const t = setup();
     const { fde, customer } = await seedBaseEntities(t);
-    const eng = await t.mutation(api.engagements.create, {
+    const { id: eng } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [fde],
       start_date: "2026-05-11",
@@ -167,7 +167,7 @@ describe("support phase progress invariant", () => {
   it("movePhase to support pins progress to 100", async () => {
     const t = setup();
     const { fde, customer } = await seedBaseEntities(t);
-    const eng = await t.mutation(api.engagements.create, {
+    const { id: eng } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [fde],
       start_date: "2026-05-11",
@@ -192,7 +192,7 @@ describe("support phase progress invariant", () => {
   it("setProgress rejects on support-phase engagements", async () => {
     const t = setup();
     const { fde, customer } = await seedBaseEntities(t);
-    const eng = await t.mutation(api.engagements.create, {
+    const { id: eng } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [fde],
       start_date: "2026-05-11",
@@ -220,7 +220,7 @@ describe("reassign", () => {
   it("dedupes a duplicate input — won't create two active rows for same FDE", async () => {
     const t = setup();
     const { fde, customer } = await seedBaseEntities(t);
-    const eng = await t.mutation(api.engagements.create, {
+    const { id: eng } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [],
       start_date: "2026-05-11",
@@ -247,7 +247,7 @@ describe("reassign", () => {
   it("resurrects a ghost row when re-adding a previously-removed FDE", async () => {
     const t = setup();
     const { fde, ayaan, customer } = await seedBaseEntities(t);
-    const eng = await t.mutation(api.engagements.create, {
+    const { id: eng } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [fde],
       start_date: "2026-05-11",
@@ -289,7 +289,7 @@ describe("reassign", () => {
 describe("saveNotes", () => {
   async function makeEngagement(t: ReturnType<typeof setup>) {
     const { fde, customer } = await seedBaseEntities(t);
-    const eng = await t.mutation(api.engagements.create, {
+    const { id: eng } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [fde],
       start_date: "2026-05-11",
@@ -373,7 +373,7 @@ describe("engagement delete cascade", () => {
   it("removes assignments + deployments + extractions + reuses", async () => {
     const t = setup();
     const { fde, customer } = await seedBaseEntities(t);
-    const eng = await t.mutation(api.engagements.create, {
+    const { id: eng } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [fde],
       start_date: "2026-05-11",
@@ -385,7 +385,7 @@ describe("engagement delete cascade", () => {
       notes: "",
       actor_fde_id: fde,
     });
-    const tpl = await t.mutation(api.templates.create, {
+    const { id: tpl } = await t.mutation(api.templates.create, {
       name: "Test Template",
       category: "Ops",
       capabilities: ["a"],
@@ -454,7 +454,7 @@ describe("engagement delete cascade", () => {
 describe("slug uniqueness", () => {
   it("appends -2 on collision in customers.create", async () => {
     const t = setup();
-    const a = await t.mutation(api.customers.create, {
+    const { id: a } = await t.mutation(api.customers.create, {
       name: "Test Customer",
       backed_by: [],
       start_date: "2026-05-11",
@@ -464,7 +464,7 @@ describe("slug uniqueness", () => {
       health: "green",
       actor_fde_id: null,
     });
-    const b = await t.mutation(api.customers.create, {
+    const { id: b } = await t.mutation(api.customers.create, {
       name: "Test Customer",
       backed_by: [],
       start_date: "2026-05-11",
@@ -489,7 +489,7 @@ describe("capability swap is atomic", () => {
   it("swaps positions of two capabilities on the same template", async () => {
     const t = setup();
     const { fde, customer } = await seedBaseEntities(t);
-    const tpl = await t.mutation(api.templates.create, {
+    const { id: tpl } = await t.mutation(api.templates.create, {
       name: "T",
       category: "Ops",
       capabilities: ["first", "second", "third"],
@@ -517,7 +517,7 @@ describe("capability swap is atomic", () => {
   it("rejects swap across templates", async () => {
     const t = setup();
     const { fde, customer } = await seedBaseEntities(t);
-    const t1 = await t.mutation(api.templates.create, {
+    const { id: t1 } = await t.mutation(api.templates.create, {
       name: "T1",
       category: "Ops",
       capabilities: ["a"],
@@ -525,7 +525,7 @@ describe("capability swap is atomic", () => {
       authored_by_fde_id: fde,
       actor_fde_id: fde,
     });
-    const t2 = await t.mutation(api.templates.create, {
+    const { id: t2 } = await t.mutation(api.templates.create, {
       name: "T2",
       category: "Ops",
       capabilities: ["b"],

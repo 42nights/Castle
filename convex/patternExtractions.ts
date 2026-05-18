@@ -63,6 +63,9 @@ export const extract = mutation({
     const now = nowIso();
 
     let template_id = args.target_template_id;
+    // Track whether we minted a fresh template so the caller (esp. MCP
+    // wrappers) can chain post-mint setup on the new template.
+    let minted_template_slug: string | null = null;
     if (!template_id) {
       if (!args.new_template) throw new Error("provide target or new template");
       const slug = await uniqueSlug(
@@ -80,6 +83,7 @@ export const extract = mutation({
         updated_at: now,
         updated_by_fde_id: args.actor_fde_id,
       });
+      minted_template_slug = slug;
       for (let i = 0; i < args.new_template.capabilities.length; i++) {
         await ctx.db.insert("template_capabilities", {
           template_id,
@@ -110,7 +114,7 @@ export const extract = mutation({
       });
     }
 
-    return extraction_id;
+    return { extraction_id, template_id, template_slug: minted_template_slug };
   },
 });
 

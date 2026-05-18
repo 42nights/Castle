@@ -35,7 +35,7 @@ export const create = mutation({
     checkNonNegative("capacity_hours_per_week", args.capacity_hours_per_week);
     const slug = await uniqueSlug(ctx, "fdes", slugify(args.name));
     const now = nowIso();
-    return ctx.db.insert("fdes", {
+    const id = await ctx.db.insert("fdes", {
       name: args.name,
       role: args.role,
       is_founder: args.is_founder,
@@ -49,6 +49,7 @@ export const create = mutation({
       updated_at: now,
       updated_by_fde_id: args.actor_fde_id,
     });
+    return { id, slug };
   },
 });
 

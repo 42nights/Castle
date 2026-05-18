@@ -43,7 +43,7 @@ export const create = mutation({
     checkNonNegative("current_mrr", args.current_mrr);
     const slug = await uniqueSlug(ctx, "customers", slugify(args.name));
     const now = nowIso();
-    return ctx.db.insert("customers", {
+    const id = await ctx.db.insert("customers", {
       name: args.name,
       backed_by: args.backed_by,
       start_date: args.start_date,
@@ -56,6 +56,10 @@ export const create = mutation({
       updated_at: now,
       updated_by_fde_id: args.actor_fde_id,
     });
+    // Return the minted slug too — uniqueSlug may have appended "-2"
+    // etc. on collision, so callers (especially MCP wrappers) can't
+    // safely reconstruct the slug from `name` alone.
+    return { id, slug };
   },
 });
 

@@ -67,7 +67,7 @@ export const create = mutation({
         updated_by_fde_id: args.actor_fde_id,
       });
     }
-    return id;
+    return { id, slug };
   },
 });
 

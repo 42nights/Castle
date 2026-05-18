@@ -91,7 +91,7 @@ describe("customers", () => {
 
   it("create generates a slug derived from name", async () => {
     const t = setup();
-    const id = await t.mutation(api.customers.create, {
+    const { id: id } = await t.mutation(api.customers.create, {
       name: "Customer With Spaces!",
       backed_by: [],
       start_date: "2026-05-11",
@@ -148,7 +148,7 @@ describe("templates", () => {
   it("create writes ordered capabilities (position 1..N)", async () => {
     const t = setup();
     const { jerry, customer } = await seed(t);
-    const tpl = await t.mutation(api.templates.create, {
+    const { id: tpl } = await t.mutation(api.templates.create, {
       name: "Test",
       category: "Ops",
       capabilities: ["first", "second", "third"],
@@ -167,7 +167,7 @@ describe("templates", () => {
   it("addCapability appends with position = max + 1", async () => {
     const t = setup();
     const { jerry, customer } = await seed(t);
-    const tpl = await t.mutation(api.templates.create, {
+    const { id: tpl } = await t.mutation(api.templates.create, {
       name: "T",
       category: "Ops",
       capabilities: ["one", "two"],
@@ -191,7 +191,7 @@ describe("templates", () => {
   it("remove cascades capabilities", async () => {
     const t = setup();
     const { jerry, customer } = await seed(t);
-    const tpl = await t.mutation(api.templates.create, {
+    const { id: tpl } = await t.mutation(api.templates.create, {
       name: "Will Delete",
       category: "Ops",
       capabilities: ["a", "b"],
@@ -218,7 +218,7 @@ describe("deployments", () => {
   it("create rejects negative hours_replaced_per_week (P16 bounds)", async () => {
     const t = setup();
     const { jerry, customer } = await seed(t);
-    const eng = await t.mutation(api.engagements.create, {
+    const { id: eng } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [jerry],
       start_date: "2026-05-11",
@@ -246,7 +246,7 @@ describe("deployments", () => {
   it("update rejects customization_pct > 100 (P16 bounds)", async () => {
     const t = setup();
     const { jerry, customer } = await seed(t);
-    const eng = await t.mutation(api.engagements.create, {
+    const { id: eng } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [jerry],
       start_date: "2026-05-11",
@@ -281,7 +281,7 @@ describe("deployments", () => {
 describe("patternExtractions.extract", () => {
   async function makeEngagementAndTpl(t: ReturnType<typeof setup>) {
     const { jerry, customer } = await seed(t);
-    const eng = await t.mutation(api.engagements.create, {
+    const { id: eng } = await t.mutation(api.engagements.create, {
       customer_id: customer,
       fde_ids: [jerry],
       start_date: "2026-05-11",
@@ -299,7 +299,7 @@ describe("patternExtractions.extract", () => {
   it("extracts to an existing template", async () => {
     const t = setup();
     const { jerry, customer, eng } = await makeEngagementAndTpl(t);
-    const tpl = await t.mutation(api.templates.create, {
+    const { id: tpl } = await t.mutation(api.templates.create, {
       name: "Reusable",
       category: "Ops",
       capabilities: [],
@@ -307,7 +307,7 @@ describe("patternExtractions.extract", () => {
       authored_by_fde_id: jerry,
       actor_fde_id: jerry,
     });
-    const id = await t.mutation(api.patternExtractions.extract, {
+    const { extraction_id: id } = await t.mutation(api.patternExtractions.extract, {
       source_engagement_id: eng,
       source_engagement_summary: "summary",
       target_template_id: tpl,
@@ -323,7 +323,7 @@ describe("patternExtractions.extract", () => {
   it("extracts via creating a NEW template inline (with capabilities)", async () => {
     const t = setup();
     const { jerry, eng } = await makeEngagementAndTpl(t);
-    const id = await t.mutation(api.patternExtractions.extract, {
+    const { extraction_id: id } = await t.mutation(api.patternExtractions.extract, {
       source_engagement_id: eng,
       source_engagement_summary: "summary",
       target_template_id: null,
@@ -350,7 +350,7 @@ describe("patternExtractions.extract", () => {
   it("addReusedCustomer dedupes via by_extraction_customer", async () => {
     const t = setup();
     const { jerry, customer, eng } = await makeEngagementAndTpl(t);
-    const tpl = await t.mutation(api.templates.create, {
+    const { id: tpl } = await t.mutation(api.templates.create, {
       name: "T",
       category: "Ops",
       capabilities: [],
@@ -358,7 +358,7 @@ describe("patternExtractions.extract", () => {
       authored_by_fde_id: jerry,
       actor_fde_id: jerry,
     });
-    const extraction = await t.mutation(api.patternExtractions.extract, {
+    const { extraction_id: extraction } = await t.mutation(api.patternExtractions.extract, {
       source_engagement_id: eng,
       source_engagement_summary: "summary",
       target_template_id: tpl,
@@ -366,7 +366,7 @@ describe("patternExtractions.extract", () => {
       reused_customer_ids: [],
       actor_fde_id: jerry,
     });
-    const other = await t.mutation(api.customers.create, {
+    const { id: other } = await t.mutation(api.customers.create, {
       name: "Other Customer",
       backed_by: [],
       start_date: "2026-05-11",

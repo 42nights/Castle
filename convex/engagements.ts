@@ -140,7 +140,7 @@ export const create = mutation({
         payload: { fde_ids: args.fde_ids },
       });
     }
-    return id;
+    return { id, slug };
   },
 });
 
