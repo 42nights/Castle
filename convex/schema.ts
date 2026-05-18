@@ -52,6 +52,11 @@ export default defineSchema({
     agents_shipped_total: v.number(),
     templates_authored: v.number(),
     slug: v.string(),
+    /** Free-form skill labels (e.g. "Full Stack", "ML", "Infra").
+     *  Multi-tag axis orthogonal to `role` — operators use these for
+     *  staffing decisions. Optional so existing rows pre-date the
+     *  column; readers default to `[]` at the boundary. */
+    tags: v.optional(v.array(v.string())),
     created_at: v.string(),
     updated_at: v.string(),
     updated_by_fde_id: v.union(v.id("fdes"), v.null()),

@@ -27,6 +27,7 @@ type ConvexFde = ConvexDoc<{
   capacity_hours_per_week: number;
   agents_shipped_total: number;
   templates_authored: number;
+  tags?: string[];
   slug: string;
 }>;
 
@@ -184,6 +185,7 @@ export function adaptOverview(snapshot: ConvexOverview): AdaptedOverview {
       capacity_hours_per_week: f.capacity_hours_per_week,
       agents_shipped_total: f.agents_shipped_total,
       templates_authored: f.templates_authored,
+      tags: f.tags ?? [],
     })),
     customers: snapshot.customers.map((c) => ({
       id: c.slug,

@@ -7,6 +7,7 @@ import {
   PhaseBadge,
 } from "@/components/atoms";
 import { CapacityInput } from "@/components/controls/capacity-input";
+import { FdeTagsInput } from "@/components/controls/fde-tags-input";
 import { InlineName } from "@/components/controls/inline-name";
 import { LogHoursButton } from "@/components/controls/log-hours-button";
 import { FdeActivity } from "@/components/sections/fde-activity";
@@ -64,6 +65,11 @@ export default async function FdeDetail({
         }
         actions={<Avatar name={fde.name} size={56} />}
       />
+
+      <section className="border-y border-line py-4 mb-4 flex items-start gap-4">
+        <span className="t-caption text-ink-3 pt-1.5 shrink-0">Tags</span>
+        <FdeTagsInput fdeSlug={fde.id} current={fde.tags} mode="block" />
+      </section>
 
       <section className="grid grid-cols-2 md:grid-cols-5 gap-x-8 gap-y-6 border-y border-line py-6 mb-14">
         <Field

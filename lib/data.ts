@@ -29,7 +29,13 @@ function read<T>(file: string, fallback: T): T {
 }
 
 export function loadFdes(): FDE[] {
-  return read<FDE[]>("fdes.json", []);
+  // tags column is newer than the JSON fixture; default to [] so the
+  // shape is uniform downstream (FDE.tags is required after this read).
+  const raw = read<Array<Omit<FDE, "tags"> & { tags?: string[] }>>(
+    "fdes.json",
+    [],
+  );
+  return raw.map((f) => ({ ...f, tags: f.tags ?? [] }));
 }
 export function loadCustomers(): Customer[] {
   return read<Customer[]>("customers.json", []);

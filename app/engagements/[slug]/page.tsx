@@ -10,6 +10,7 @@ import { DeleteEngagementZone } from "@/components/controls/danger-zone";
 import { EditDeploymentButton } from "@/components/controls/deployment-row-button";
 import { EndDateInput } from "@/components/controls/end-date-input";
 import { EngagementKeys } from "@/components/controls/engagement-keys";
+import { FdeTagsChips } from "@/components/controls/fde-tags-input";
 import { HealthMenu } from "@/components/controls/health-menu";
 import { NotesEditor } from "@/components/controls/notes-editor";
 import { PhaseMenu } from "@/components/controls/phase-menu";
@@ -93,7 +94,24 @@ export default async function EngagementDetail({
             <HealthMenu engagementSlug={eng.id} current={eng.health} />
           </Field>
           <Field label="Team">
-            <AvatarGroup names={team.map((f) => f!.name)} />
+            <div className="flex flex-col gap-1.5">
+              <AvatarGroup names={team.map((f) => f!.name)} />
+              {team.some((f) => f && f.tags.length > 0) && (
+                <div className="flex flex-col gap-0.5 text-[11.5px]">
+                  {team
+                    .filter((f) => f && f.tags.length > 0)
+                    .map((f) => (
+                      <div
+                        key={f!.id}
+                        className="inline-flex items-center gap-1.5 text-ink-3"
+                      >
+                        <span className="text-ink-2">{f!.name}</span>
+                        <FdeTagsChips tags={f!.tags} max={4} size="xs" />
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
           </Field>
           <Field label="Activity">
             <TouchedButton engagementSlug={eng.id} />

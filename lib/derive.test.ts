@@ -60,6 +60,7 @@ const fde = (overrides: Partial<FDE> = {}): FDE => ({
   capacity_hours_per_week: 45,
   agents_shipped_total: 0,
   templates_authored: 0,
+  tags: [],
   ...overrides,
 });
 

@@ -2,6 +2,7 @@
 
 import { ColumnDef } from "@tanstack/react-table";
 import { Avatar, HealthPip } from "@/components/atoms";
+import { FdeTagsChips } from "@/components/controls/fde-tags-input";
 import { DataTable } from "@/components/data-table";
 import type { FdeRow } from "@/lib/derive";
 import { formatHours, formatPct } from "@/lib/format";
@@ -31,6 +32,18 @@ export function FdesTable({ rows }: { rows: FdeRow[] }) {
         if (value === "hire") return !row.original.fde.is_founder;
         return row.original.fde.role === value;
       },
+    },
+    {
+      id: "tags",
+      header: "Tags",
+      accessorFn: (r) => r.fde.tags.join(" "),
+      enableSorting: false,
+      cell: ({ row }) =>
+        row.original.fde.tags.length === 0 ? (
+          <span className="text-ink-3">—</span>
+        ) : (
+          <FdeTagsChips tags={row.original.fde.tags} max={3} />
+        ),
     },
     {
       id: "active",

@@ -16,6 +16,9 @@ export type FDE = {
   capacity_hours_per_week: number;
   agents_shipped_total: number;
   templates_authored: number;
+  /** Free-form skill labels (e.g. "Full Stack", "ML", "Infra"). Always
+   *  present once adapted — adapters default missing values to []. */
+  tags: string[];
 };
 
 export type EngagementPhase = "discovery" | "build" | "deployed" | "support";

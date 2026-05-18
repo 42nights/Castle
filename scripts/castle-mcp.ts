@@ -798,7 +798,9 @@ server.registerTool(
 server.registerTool(
   "fde_update",
   {
-    description: "Patch name / role / is_founder / capacity on an FDE.",
+    description:
+      "Patch name / role / is_founder / capacity / tags on an FDE. " +
+      "For tag-only edits prefer fde_add_tag / fde_remove_tag / fde_set_tags.",
     inputSchema: {
       fde_slug: z.string(),
       patch: z.object({
@@ -806,6 +808,7 @@ server.registerTool(
         role: z.enum(fde_roles).optional(),
         is_founder: z.boolean().optional(),
         capacity_hours_per_week: z.number().min(0).max(80).optional(),
+        tags: z.array(z.string()).optional(),
       }),
     },
   },
@@ -821,6 +824,88 @@ server.registerTool(
       actor_fde_id: (actor ?? null) as never,
     });
     return text({ ok: true, fde: fde_slug });
+  },
+);
+
+// ─────────────── fde tags ───────────────
+
+server.registerTool(
+  "fde_set_tags",
+  {
+    description:
+      "Replace an FDE's full tag list. Tags are trimmed + deduped server-side.",
+    inputSchema: { fde_slug: z.string(), tags: z.array(z.string()) },
+  },
+  async ({ fde_slug, tags }) => {
+    const actor = await actorId();
+    const f = (await convex.query(api.fdes.getBySlug, {
+      slug: fde_slug,
+    })) as { _id: string } | null;
+    if (!f) return text({ error: "fde not found" });
+    await convex.mutation(api.fdes.setTags, {
+      id: f._id as never,
+      tags: tags as never,
+      actor_fde_id: (actor ?? null) as never,
+    });
+    return text({ ok: true, fde: fde_slug, tags });
+  },
+);
+
+server.registerTool(
+  "fde_add_tag",
+  {
+    description:
+      "Atomically add a tag to an FDE. No-op if the tag is already set.",
+    inputSchema: { fde_slug: z.string(), tag: z.string() },
+  },
+  async ({ fde_slug, tag }) => {
+    const actor = await actorId();
+    const f = (await convex.query(api.fdes.getBySlug, {
+      slug: fde_slug,
+    })) as { _id: string } | null;
+    if (!f) return text({ error: "fde not found" });
+    await convex.mutation(api.fdes.addTag, {
+      id: f._id as never,
+      tag,
+      actor_fde_id: (actor ?? null) as never,
+    });
+    return text({ ok: true, fde: fde_slug, added: tag });
+  },
+);
+
+server.registerTool(
+  "fde_remove_tag",
+  {
+    description:
+      "Atomically remove a tag from an FDE. Case-insensitive match.",
+    inputSchema: { fde_slug: z.string(), tag: z.string() },
+  },
+  async ({ fde_slug, tag }) => {
+    const actor = await actorId();
+    const f = (await convex.query(api.fdes.getBySlug, {
+      slug: fde_slug,
+    })) as { _id: string } | null;
+    if (!f) return text({ error: "fde not found" });
+    await convex.mutation(api.fdes.removeTag, {
+      id: f._id as never,
+      tag,
+      actor_fde_id: (actor ?? null) as never,
+    });
+    return text({ ok: true, fde: fde_slug, removed: tag });
+  },
+);
+
+server.registerTool(
+  "list_fde_tags",
+  {
+    description:
+      "List every distinct tag in use across all FDEs (alphabetical). " +
+      "The autocomplete pool for the tag editor.",
+    inputSchema: {},
+  },
+  async () => {
+    const tags = (await convex.query(api.fdes.listTags, {})) as string[];
+    return text({ tags });
   },
 );
 

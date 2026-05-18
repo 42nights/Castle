@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CapacityInput } from "@/components/controls/capacity-input";
+import { FdeTagsChips } from "@/components/controls/fde-tags-input";
 import { LogHoursButton } from "@/components/controls/log-hours-button";
 import type { FdeWorkload } from "@/lib/derive";
 import { formatHours, formatPct } from "@/lib/format";
@@ -84,6 +85,9 @@ function FdeRow({
             {w.fde.is_founder && " · co-founder"}
           </span>
           <span className={`text-[13px] ${utilTone}`}>{utilLabel}</span>
+          {w.fde.tags.length > 0 && (
+            <FdeTagsChips tags={w.fde.tags} max={4} size="xs" />
+          )}
         </div>
 
         <p className="mt-2 text-[14px] text-ink-2 leading-relaxed">

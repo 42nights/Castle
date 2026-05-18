@@ -95,6 +95,7 @@ export function ReassignEngagementDialog({
         <div className="flex flex-wrap gap-2">
           {(fdes ?? []).map((f) => {
             const checked = selected.includes(f._id);
+            const tags = (f as { tags?: string[] }).tags ?? [];
             return (
               <button
                 type="button"
@@ -106,13 +107,24 @@ export function ReassignEngagementDialog({
                       : [...prev, f._id],
                   )
                 }
-                className={`h-7 px-2 rounded-sm text-[12px] border ${
+                title={tags.length > 0 ? tags.join(" · ") : undefined}
+                className={`min-h-7 px-2 py-1 rounded-sm text-[12px] border flex flex-col items-start leading-tight ${
                   checked
                     ? "bg-ink text-page border-ink"
                     : "border-line bg-page text-ink-2 hover:bg-surface"
                 }`}
               >
-                {f.name}
+                <span>{f.name}</span>
+                {tags.length > 0 && (
+                  <span
+                    className={`text-[10.5px] mt-0.5 ${
+                      checked ? "text-page/60" : "text-ink-3"
+                    }`}
+                  >
+                    {tags.slice(0, 4).join(" · ")}
+                    {tags.length > 4 && ` · +${tags.length - 4}`}
+                  </span>
+                )}
               </button>
             );
           })}
