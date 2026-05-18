@@ -291,9 +291,7 @@ function Turn({
   }
   return (
     <div>
-      <ChatMarkdown tail={message.streaming ? <StreamingCaret /> : null}>
-        {message.text}
-      </ChatMarkdown>
+      <ChatMarkdown streaming={message.streaming}>{message.text}</ChatMarkdown>
       {actions && actions.length > 0 && (
         <div className="mt-2 flex flex-col gap-1.5">
           {actions.map((a) => (
@@ -308,15 +306,6 @@ function Turn({
         </div>
       )}
     </div>
-  );
-}
-
-function StreamingCaret() {
-  return (
-    <span
-      className="inline-block ml-0.5 w-[2px] h-[14px] -mb-[2px] bg-ink animate-pulse"
-      aria-hidden
-    />
   );
 }
 

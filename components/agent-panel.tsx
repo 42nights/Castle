@@ -207,15 +207,7 @@ function Bubble({ message }: { message: ChatMessage }) {
   }
   return (
     <div className="max-w-full">
-      <ChatMarkdown
-        tail={
-          message.streaming ? (
-            <span className="inline-block ml-0.5 w-[2px] h-[12px] -mb-[2px] bg-ink animate-pulse" />
-          ) : null
-        }
-      >
-        {message.text}
-      </ChatMarkdown>
+      <ChatMarkdown streaming={message.streaming}>{message.text}</ChatMarkdown>
     </div>
   );
 }
