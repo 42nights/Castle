@@ -36,12 +36,42 @@ logging.basicConfig(
 BEARER = os.environ.get("CASTLE_HERMES_TOKEN") or None
 PROTOCOL_VERSION = int(os.environ.get("ACP_PROTOCOL_VERSION", "1"))
 HERMES_CWD = os.environ.get("HERMES_CWD") or "/tmp"
-HERMES_VENV_PY = os.environ.get(
-    "HERMES_VENV_PY", "/root/.hermes/hermes-agent/venv/bin/python3"
-)
-HERMES_PROJECT_DIR = os.environ.get(
-    "HERMES_PROJECT_DIR", "/root/.hermes/hermes-agent"
-)
+# ACP's _register_session_mcp_servers does NOT auto-attach config.yaml MCPs
+# to sessions — it only honors what we pass in session/new mcpServers. The
+# global config.yaml block governs discover_mcp_tools() (toolset loading),
+# but the per-session enabled-toolsets list still has to mention each MCP
+# explicitly, which session/new does via mcpServers. So we pass both Castle
+# + Composio URLs here for every session we mint.
+def _mcp_servers() -> list[dict]:
+    """ACP's NewSessionRequest expects HttpMcpServer entries with an explicit
+    `type: "http"` discriminator — the bare {name, url, headers} shape fails
+    pydantic validation with "Invalid params". Same for SSE; we use HTTP."""
+    servers: list[dict] = []
+    castle = os.environ.get("CASTLE_MCP_URL")
+    if castle:
+        servers.append(
+            {"type": "http", "name": "castle", "url": castle, "headers": []}
+        )
+    composio = os.environ.get("COMPOSIO_MCP_URL")
+    if composio:
+        # Composio's hosted MCP endpoint refuses requests without an API
+        # key in the headers — 401 with "API key or valid JWT Bearer
+        # token is required in headers for security reasons". Without
+        # this header the connection fails at handshake and the agent
+        # has no Composio tools.
+        composio_headers: list[dict] = []
+        api_key = os.environ.get("COMPOSIO_API_KEY")
+        if api_key:
+            composio_headers.append({"name": "x-api-key", "value": api_key})
+        servers.append(
+            {
+                "type": "http",
+                "name": "composio",
+                "url": composio,
+                "headers": composio_headers,
+            }
+        )
+    return servers
 
 
 # ──────────────────────────── ACP client ────────────────────────────
@@ -100,13 +130,25 @@ class HermesACP:
         self._initialized = False
 
     async def _spawn(self) -> None:
-        py = HERMES_VENV_PY if os.path.exists(HERMES_VENV_PY) else (
-            sys.executable or "python3"
+        # `hermes acp` resolves to the venv-installed hermes-acp entrypoint
+        # via the wrapper at /root/.local/bin/hermes. The wrapper unsets
+        # PYTHONPATH/PYTHONHOME and execs the venv python, which has
+        # acp_adapter on its sys.path. If hermes isn't on PATH for some
+        # reason, fall back to the venv binary directly.
+        hermes_acp_bin = os.environ.get(
+            "HERMES_ACP_BIN", "/root/.hermes/hermes-agent/venv/bin/hermes-acp"
         )
-        cmd = [py, "-m", "acp_adapter.entry"]
+        if os.path.exists(hermes_acp_bin):
+            cmd = [hermes_acp_bin]
+        else:
+            cmd = ["hermes", "acp"]
         env = dict(os.environ)
-        env["PYTHONPATH"] = f"{HERMES_PROJECT_DIR}:{env.get('PYTHONPATH', '')}"
         env["PYTHONUNBUFFERED"] = "1"
+        # The hermes wrapper script clears PYTHONPATH/PYTHONHOME — if we're
+        # using `hermes-acp` directly we should too, so the venv's site-
+        # packages stays on top of any host-imposed path.
+        env.pop("PYTHONPATH", None)
+        env.pop("PYTHONHOME", None)
         logger.info("Spawning ACP subprocess: %s", " ".join(cmd))
         self._proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -230,10 +272,25 @@ class HermesACP:
         loop = asyncio.get_running_loop()
         fut: asyncio.Future = loop.create_future()
         self._pending[req_id] = fut
-        await self._write(
-            {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}
-        )
-        return await fut
+        try:
+            await self._write(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "method": method,
+                    "params": params,
+                }
+            )
+            return await fut
+        except Exception as e:
+            # Make errors easier to chase — log the request that failed.
+            logger.warning(
+                "ACP request %s(%s) failed: %s",
+                method,
+                json.dumps(params)[:300],
+                e,
+            )
+            raise
 
     async def request(self, method: str, params: dict) -> Any:
         await self.ensure_alive()
@@ -253,21 +310,20 @@ class HermesACP:
             ((init or {}).get("agentInfo") or {}).get("name"),
             ((init or {}).get("agentInfo") or {}).get("version"),
         )
-        auth_methods = (init or {}).get("authMethods") or []
-        if auth_methods:
-            try:
-                await self._request(
-                    "authenticate", {"methodId": auth_methods[0]["id"]}
-                )
-                logger.info("ACP authenticated via %s", auth_methods[0]["id"])
-            except Exception:  # noqa: BLE001
-                logger.exception("ACP authenticate failed — continuing anyway")
+        # Hermes' ACP server advertises auth methods (e.g. "anthropic"
+        # runtime credentials) but the runtime creds are already loaded
+        # from ~/.hermes/.env by the time the agent starts. Calling
+        # authenticate here is optional — session/new works without it
+        # (verified by direct stdio probe). Skip unless we ever ship a
+        # provider that requires an explicit auth handshake.
+        _ = (init or {}).get("authMethods") or []
 
     # ── public API used by the /agent stream ──
 
     async def new_session(self) -> str:
         result = await self.request(
-            "session/new", {"cwd": HERMES_CWD, "mcpServers": []}
+            "session/new",
+            {"cwd": HERMES_CWD, "mcpServers": _mcp_servers()},
         )
         return result["sessionId"]
 
@@ -275,7 +331,11 @@ class HermesACP:
         try:
             result = await self.request(
                 "session/load",
-                {"cwd": HERMES_CWD, "sessionId": session_id, "mcpServers": []},
+                {
+                    "cwd": HERMES_CWD,
+                    "sessionId": session_id,
+                    "mcpServers": _mcp_servers(),
+                },
             )
             return result is not None
         except Exception as e:  # noqa: BLE001
