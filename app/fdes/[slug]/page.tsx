@@ -7,6 +7,7 @@ import {
   PhaseBadge,
 } from "@/components/atoms";
 import { CapacityInput } from "@/components/controls/capacity-input";
+import { DeleteFdeZone } from "@/components/controls/danger-zone";
 import { FdeTagsInput } from "@/components/controls/fde-tags-input";
 import { InlineName } from "@/components/controls/inline-name";
 import { LogHoursButton } from "@/components/controls/log-hours-button";
@@ -238,6 +239,12 @@ export default async function FdeDetail({
         <SectionHeader title="What this FDE has touched." />
         <FdeActivity fdeSlug={fde.id} />
       </section>
+
+      <DeleteFdeZone
+        fdeSlug={fde.id}
+        fdeName={fde.name}
+        activeEngagementCount={active.length}
+      />
     </PageShell>
   );
 }
