@@ -45,8 +45,13 @@ export function BackedByInput({
   const [open, setOpen] = useState(mode === "block");
   const [draft, setDraft] = useState("");
   const [hi, setHi] = useState(0);
+  // Suggestion-panel visibility. Separate from `open` (which gates the
+  // whole editor in row mode) — `panelOpen` only controls the dropdown
+  // list and closes on blur so it doesn't linger over neighboring rows.
+  const [panelOpen, setPanelOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selected = current.filter((b) => b && b !== "—");
   const selectedSet = new Set(selected.map((s) => s.toLowerCase()));
@@ -153,6 +158,16 @@ export function BackedByInput({
           ref={inputRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          onFocus={() => {
+            if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+            setPanelOpen(true);
+          }}
+          onBlur={() => {
+            // Defer close so option-click handlers (mousedown happens
+            // before blur, but click fires after) still land before we
+            // unmount the panel.
+            blurTimerRef.current = setTimeout(() => setPanelOpen(false), 150);
+          }}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") {
               e.preventDefault();
@@ -176,7 +191,7 @@ export function BackedByInput({
         />
       </div>
 
-      {options.length > 0 && (
+      {panelOpen && options.length > 0 && (
         <ul className="absolute left-0 top-full z-30 mt-1 w-full max-w-[280px] rounded-sm border border-line bg-page py-1 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.45)]">
           {options.map((opt, i) => {
             const isCreate = opt.startsWith("__create__:");

@@ -31,7 +31,9 @@ export function PageHeader({
     <header className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between border-b border-line pb-3 mb-5">
       <div className="min-w-0">
         {kicker && (
-          <div className="mb-0.5 text-[11px] text-ink-3">{kicker}</div>
+          <div className="mb-1 text-[13px] text-ink-2 [&_a]:text-ink-2 [&_a:hover]:text-ink [&_a]:transition-colors">
+            {kicker}
+          </div>
         )}
         <h1 className="t-h1 text-ink">{title}</h1>
         {description && (

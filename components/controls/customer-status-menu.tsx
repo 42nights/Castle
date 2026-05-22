@@ -56,7 +56,7 @@ export function CustomerStatusMenu({
       onChange={onChange}
       onClick={(e) => e.stopPropagation()}
       disabled={pending}
-      className="h-5 rounded-sm border border-line bg-page text-[10px] px-1 text-ink-2 focus:outline-none focus:ring-1 focus:ring-ink disabled:opacity-50"
+      className="h-7 rounded-sm border border-line bg-page text-[12.5px] px-2 text-ink hover:border-line-strong focus:outline-none focus:ring-1 focus:ring-ink disabled:opacity-50"
       aria-label="Set customer status"
     >
       {STATUSES.map((s) => (

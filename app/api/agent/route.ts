@@ -63,13 +63,27 @@ export async function POST(req: Request) {
   }
   const sessionName = target.hermes_session;
 
-  // Persist the user turn immediately.
-  cx.mutation(api.agentMessages.append, {
-    conversation_id: body.conversationId as never,
-    actor_slug: actor,
-    role: "user",
-    text: body.text,
-  }).catch((err) => console.error("[agent] failed to log user turn:", err));
+  // Persist the user turn BEFORE starting the upstream stream. The
+  // previous fire-and-forget left a race where reloading the page
+  // mid-stream (or within the first ~200ms after send) lost the user
+  // turn entirely — the Convex mutation hadn't transited yet, the
+  // optimistic client state died with the page, and the reload's
+  // reactive query came back without it. Awaiting adds ~100-300ms to
+  // the first-token time; trivially worth the durability guarantee.
+  try {
+    await cx.mutation(api.agentMessages.append, {
+      conversation_id: body.conversationId as never,
+      actor_slug: actor,
+      role: "user",
+      text: body.text,
+    });
+  } catch (err) {
+    console.error("[agent] failed to log user turn:", err);
+    return Response.json(
+      { error: "could not persist message" },
+      { status: 500 },
+    );
+  }
 
   // Common end-of-stream: persist the accumulated assistant text.
   const persistAssistant = (text: string) => {
