@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ExtractionRowDelete } from "@/components/controls/extraction-row-delete";
 import { TemplateCategoryMenu } from "@/components/controls/template-category-menu";
 import { CapabilityEditor } from "@/components/controls/capability-editor";
 import { GithubRepoInput } from "@/components/controls/github-repo-input";
@@ -16,7 +17,7 @@ export default async function TemplateDetail({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const { templates, customers, deployments, fdes, patternExtractions } =
+  const { templates, customers, deployments, fdes, engagements, patternExtractions } =
     await loadOverview();
   const tpl = templates.find((t) => t.id === slug);
   if (!tpl) notFound();
@@ -178,18 +179,40 @@ export default async function TemplateDetail({
       {relatedExtractions.length > 0 && (
         <Panel title="Origin extractions" count={relatedExtractions.length}>
           <ul className="ledger">
-            {relatedExtractions.map((p) => (
-              <li key={p.id} className="px-3 py-2">
-                <div className="flex items-baseline gap-3">
-                  <span className="num text-[11px] text-ink-3">
-                    {formatDate(p.extracted_at)}
-                  </span>
-                  <p className="text-[13px] text-ink leading-snug min-w-0 flex-1">
-                    {p.source_engagement_summary}
-                  </p>
-                </div>
-              </li>
-            ))}
+            {relatedExtractions.map((p) => {
+              const sourceEng = engagements.find(
+                (e) => e.id === p.source_engagement_id,
+              );
+              const sourceCust = sourceEng
+                ? customers.find((c) => c.id === sourceEng.customer_id)
+                : null;
+              return (
+                <li key={p.id} className="px-3 py-2">
+                  <div className="flex items-baseline gap-3">
+                    <span className="num text-[11px] text-ink-3 shrink-0">
+                      {formatDate(p.extracted_at)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] text-ink leading-snug">
+                        {p.source_engagement_summary}
+                      </p>
+                      {sourceEng && (
+                        <div className="mt-0.5 text-[11px] text-ink-3">
+                          source:{" "}
+                          <Link
+                            href={`/engagements/${sourceEng.id}`}
+                            className="text-ink-2 hover:text-ink underline underline-offset-2 decoration-line"
+                          >
+                            {sourceCust?.name ?? "—"} · {sourceEng.phase}
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                    <ExtractionRowDelete extractionId={p.id} />
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </Panel>
       )}

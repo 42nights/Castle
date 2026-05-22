@@ -96,17 +96,52 @@ export const extract = mutation({
       }
     }
 
-    const extraction_id = await ctx.db.insert("pattern_extractions", {
-      source_customer_id: eng.customer_id,
-      source_engagement_id: args.source_engagement_id,
-      source_engagement_summary: args.source_engagement_summary,
-      extracted_into_template_id: template_id,
-      extracted_at: now,
-      created_at: now,
-      updated_at: now,
-    });
+    // Dedupe: an extraction is uniquely identified by
+    // (source_engagement_id, extracted_into_template_id). If one
+    // already exists for this pair, update its summary instead of
+    // inserting a second row. Previously the agent calling `extract`
+    // twice (different summary phrasings, same engagement+template)
+    // produced duplicates that showed up side-by-side on the template
+    // detail page as "ORIGIN EXTRACTIONS 2".
+    const existing = await ctx.db
+      .query("pattern_extractions")
+      .withIndex("by_source_engagement", (q) =>
+        q.eq("source_engagement_id", args.source_engagement_id),
+      )
+      .collect();
+    const dupe = existing.find(
+      (r) => r.extracted_into_template_id === template_id,
+    );
+    let extraction_id;
+    if (dupe) {
+      await ctx.db.patch(dupe._id, {
+        source_engagement_summary: args.source_engagement_summary,
+        updated_at: now,
+      });
+      extraction_id = dupe._id;
+    } else {
+      extraction_id = await ctx.db.insert("pattern_extractions", {
+        source_customer_id: eng.customer_id,
+        source_engagement_id: args.source_engagement_id,
+        source_engagement_summary: args.source_engagement_summary,
+        extracted_into_template_id: template_id,
+        extracted_at: now,
+        created_at: now,
+        updated_at: now,
+      });
+    }
 
+    // Add only reuse rows that aren't already present for this
+    // extraction. Same dedupe rationale.
+    const existingReuses = await ctx.db
+      .query("pattern_extraction_reuses")
+      .withIndex("by_extraction_customer", (q) =>
+        q.eq("extraction_id", extraction_id),
+      )
+      .collect();
+    const reusedSet = new Set(existingReuses.map((r) => r.customer_id));
     for (const customer_id of args.reused_customer_ids) {
+      if (reusedSet.has(customer_id)) continue;
       await ctx.db.insert("pattern_extraction_reuses", {
         extraction_id,
         customer_id,
