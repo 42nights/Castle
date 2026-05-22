@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CategoryBadge } from "@/components/atoms";
+import { TemplateCategoryMenu } from "@/components/controls/template-category-menu";
 import { CapabilityEditor } from "@/components/controls/capability-editor";
 import { GithubRepoInput } from "@/components/controls/github-repo-input";
 import { InlineName } from "@/components/controls/inline-name";
@@ -78,7 +78,10 @@ export default async function TemplateDetail({
               templateSlug={tpl.id}
               current={tpl.github_repo}
             />
-            <CategoryBadge category={tpl.category} />
+            <TemplateCategoryMenu
+              templateSlug={tpl.id}
+              current={tpl.category}
+            />
           </div>
         }
       />
