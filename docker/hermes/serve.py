@@ -424,6 +424,18 @@ class HermesACP:
                 _safe_release()
             else:
                 fut.add_done_callback(lambda _: _safe_release())
+                # Belt-and-braces: if Hermes is wedged on a tool call and
+                # never resolves the prompt future (the cancel
+                # notification can't pre-empt an in-flight tool
+                # execution), force-release the lock after 6 minutes so
+                # the next prompt on this session isn't blocked
+                # forever. Double-release is benign — _safe_release
+                # swallows the RuntimeError.
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.call_later(360.0, _safe_release)
+                except RuntimeError:
+                    pass  # no running loop (process tearing down)
 
     async def cancel(self, session_id: str) -> None:
         try:
