@@ -283,8 +283,74 @@ export default defineSchema({
     actor_slug: v.string(),
     role: v.union(v.literal("user"), v.literal("assistant")),
     text: v.string(),
+    /** Status of an assistant turn while streaming. Absent on user rows
+     *  and on pre-migration assistant rows — readers treat absent as
+     *  "complete" for backward compat. */
+    status: v.optional(
+      v.union(
+        v.literal("streaming"),
+        v.literal("complete"),
+        v.literal("failed"),
+        v.literal("canceled"),
+      ),
+    ),
+    /** Back-pointer to the agent_turns row that produced this message.
+     *  Absent on user rows and pre-migration assistant rows. */
+    turn_id: v.optional(v.id("agent_turns")),
     created_at: v.string(),
+    updated_at: v.optional(v.string()),
   })
     .index("by_conversation_time", ["conversation_id", "created_at"])
     .index("by_actor_time", ["actor_slug", "created_at"]),
+
+  /** One row per assistant turn — tracks lifecycle (queued → running →
+   *  complete/failed/canceled), heartbeat for stuck-detection, and
+   *  back-links to the user + assistant agent_messages rows. */
+  agent_turns: defineTable({
+    conversation_id: v.id("agent_conversations"),
+    actor_slug: v.string(),
+    user_message_id: v.id("agent_messages"),
+    assistant_message_id: v.id("agent_messages"),
+    hermes_session: v.string(),
+    status: v.union(
+      v.literal("queued"),
+      v.literal("running"),
+      v.literal("complete"),
+      v.literal("failed"),
+      v.literal("canceled"),
+    ),
+    started_at: v.string(),
+    last_heartbeat_at: v.string(),
+    completed_at: v.optional(v.string()),
+    stop_reason: v.optional(v.string()),
+    error: v.optional(v.string()),
+  })
+    .index("by_conversation", ["conversation_id"])
+    .index("by_status_heartbeat", ["status", "last_heartbeat_at"]),
+
+  /** Append-only text deltas during streaming. Coalesced at ~500ms in
+   *  the wrapper. Final text is snapshotted into agent_messages.text on
+   *  turn complete; the chunks can be reaped later. */
+  agent_message_chunks: defineTable({
+    turn_id: v.id("agent_turns"),
+    seq: v.number(),
+    delta: v.string(),
+    created_at: v.string(),
+  }).index("by_turn_seq", ["turn_id", "seq"]),
+
+  /** Append-only tool / thought events during streaming. */
+  agent_tool_events: defineTable({
+    turn_id: v.id("agent_turns"),
+    seq: v.number(),
+    kind: v.union(
+      v.literal("thought"),
+      v.literal("tool_start"),
+      v.literal("tool_end"),
+    ),
+    tool_call_id: v.optional(v.string()),
+    name: v.optional(v.string()),
+    ok: v.optional(v.boolean()),
+    delta: v.optional(v.string()),
+    created_at: v.string(),
+  }).index("by_turn_seq", ["turn_id", "seq"]),
 });

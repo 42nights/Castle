@@ -9,10 +9,14 @@
  */
 
 import type * as agentActions from "../agentActions.js";
+import type * as agentMessageChunks from "../agentMessageChunks.js";
 import type * as agentMessages from "../agentMessages.js";
+import type * as agentToolEvents from "../agentToolEvents.js";
+import type * as agentTurns from "../agentTurns.js";
 import type * as attention from "../attention.js";
 import type * as auth from "../auth.js";
 import type * as clearAll from "../clearAll.js";
+import type * as crons from "../crons.js";
 import type * as customers from "../customers.js";
 import type * as dashboard from "../dashboard.js";
 import type * as deployments from "../deployments.js";
@@ -23,6 +27,7 @@ import type * as http from "../http.js";
 import type * as lib_audit from "../lib/audit.js";
 import type * as lib_bounds from "../lib/bounds.js";
 import type * as lib_util from "../lib/util.js";
+import type * as lib_writeToken from "../lib/writeToken.js";
 import type * as patternExtractions from "../patternExtractions.js";
 import type * as seed from "../seed.js";
 import type * as suggestions from "../suggestions.js";
@@ -36,10 +41,14 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   agentActions: typeof agentActions;
+  agentMessageChunks: typeof agentMessageChunks;
   agentMessages: typeof agentMessages;
+  agentToolEvents: typeof agentToolEvents;
+  agentTurns: typeof agentTurns;
   attention: typeof attention;
   auth: typeof auth;
   clearAll: typeof clearAll;
+  crons: typeof crons;
   customers: typeof customers;
   dashboard: typeof dashboard;
   deployments: typeof deployments;
@@ -50,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   "lib/audit": typeof lib_audit;
   "lib/bounds": typeof lib_bounds;
   "lib/util": typeof lib_util;
+  "lib/writeToken": typeof lib_writeToken;
   patternExtractions: typeof patternExtractions;
   seed: typeof seed;
   suggestions: typeof suggestions;

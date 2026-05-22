@@ -18,8 +18,9 @@ ENV PATH="/root/.local/bin:${PATH}" \
 # is NOT under the mount — survives.
 RUN curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
 
-# FastAPI wrapper deps.
-RUN pip install --no-cache-dir fastapi==0.115.0 "uvicorn[standard]==0.30.0"
+# FastAPI wrapper deps. httpx is for outbound calls to Convex from the
+# new long-running streaming path (agentTurns / agentMessageChunks).
+RUN pip install --no-cache-dir fastapi==0.115.0 "uvicorn[standard]==0.30.0" httpx==0.28.1
 
 # Templates live OUTSIDE the volume mount path so they survive when
 # Railway overlays /root/.hermes with the persistent volume. Entrypoint
@@ -27,6 +28,8 @@ RUN pip install --no-cache-dir fastapi==0.115.0 "uvicorn[standard]==0.30.0"
 COPY docker/hermes/SOUL.md /opt/castle/SOUL.md
 COPY docker/hermes/config.yaml.tpl /opt/castle/config.yaml.tpl
 COPY docker/hermes/serve.py /root/serve.py
+COPY docker/hermes/turn_token.py /root/turn_token.py
+COPY docker/hermes/convex_client.py /root/convex_client.py
 COPY docker/hermes/entrypoint.sh /root/entrypoint.sh
 RUN chmod +x /root/entrypoint.sh
 

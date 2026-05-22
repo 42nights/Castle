@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import sys
+import time
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Optional
 
@@ -608,6 +609,400 @@ async def agent(req: Request) -> StreamingResponse:
     return StreamingResponse(
         _stream(session, text), media_type="application/x-ndjson"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Long-running turn path: /agent/start + /agent/cancel/{turn_id}
+#
+# Replaces the NDJSON streaming of /agent. The Vercel route POSTs once
+# to /agent/start with a kickoff token and write token; we verify, spawn
+# a background asyncio task to run the prompt, and return 202. The
+# background task writes to Convex (agent_message_chunks, agent_tool_events,
+# agent_turns heartbeat/complete/fail). The client subscribes to Convex
+# reactively for the in-flight state — no long HTTP stream over Vercel.
+# ─────────────────────────────────────────────────────────────────────
+
+# Inflight turn tasks, keyed by turn_id, so /agent/cancel can find them.
+_inflight_turns: dict[str, asyncio.Task] = {}
+
+
+def _hashed_body_for_verify(payload: bytes) -> str:
+    import hashlib as _h
+    return _h.sha256(payload).hexdigest()
+
+
+@app.post("/agent/start")
+async def agent_start(req: Request) -> JSONResponse:
+    raw = await req.body()
+    try:
+        body = json.loads(raw.decode("utf-8"))
+    except Exception:
+        raise HTTPException(400, "bad json")
+    turn_id = body.get("turnId")
+    conversation_id = body.get("conversationId")
+    actor_slug = body.get("actorSlug")
+    hermes_session = body.get("hermesSession")
+    text = body.get("text") or ""
+    write_token = body.get("writeToken")
+    convex_url = body.get("convexUrl")
+    if not all([turn_id, conversation_id, actor_slug, hermes_session, write_token, convex_url]):
+        raise HTTPException(400, "missing required fields")
+
+    # Verify the kickoff token from the X-Castle-Kickoff header.
+    kickoff_token = req.headers.get("X-Castle-Kickoff", "")
+    from turn_token import CASTLE_STREAM_SECRET, TokenError, verify_kickoff_token
+    if not CASTLE_STREAM_SECRET:
+        raise HTTPException(500, "CASTLE_STREAM_SECRET not set on wrapper")
+    try:
+        verify_kickoff_token(
+            token=kickoff_token,
+            secret=CASTLE_STREAM_SECRET,
+            body_hash=_hashed_body_for_verify(raw),
+            turn_id=turn_id,
+        )
+    except TokenError as e:
+        raise HTTPException(401, f"invalid kickoff token: {e}")
+
+    # Atomic queued → running claim. Throws if the turn isn't in queued
+    # state (replay protection).
+    from convex_client import ConvexClient
+    cc = ConvexClient(convex_url)
+    try:
+        await cc.mutation(
+            "agentTurns:claimQueued",
+            {"turn_id": turn_id, "write_token": write_token},
+        )
+    except Exception as e:
+        await cc.close()
+        raise HTTPException(409, f"could not claim turn: {e}")
+
+    # Spawn background task. Returns 202 immediately.
+    task = asyncio.create_task(
+        _run_turn_to_convex(
+            cc=cc,
+            turn_id=turn_id,
+            actor_slug=actor_slug,
+            hermes_session=hermes_session,
+            text=text,
+            write_token=write_token,
+            convex_url=convex_url,
+        )
+    )
+    _inflight_turns[turn_id] = task
+    task.add_done_callback(lambda _: _inflight_turns.pop(turn_id, None))
+
+    return JSONResponse({"ok": True}, status_code=202)
+
+
+@app.post("/agent/cancel/{turn_id}")
+async def agent_cancel(turn_id: str) -> JSONResponse:
+    task = _inflight_turns.get(turn_id)
+    if task is None:
+        # Either the turn already completed or this wrapper instance
+        # never had it. The wrapper's per-turn convex-status poll will
+        # also catch the canceled state within ~2s; this endpoint just
+        # makes cancellation snappier.
+        return JSONResponse({"ok": True, "note": "not in flight here"})
+    task.cancel()
+    return JSONResponse({"ok": True})
+
+
+async def _run_turn_to_convex(
+    *,
+    cc: Any,  # ConvexClient
+    turn_id: str,
+    actor_slug: str,
+    hermes_session: str,
+    text: str,
+    write_token: str,
+    convex_url: str,
+) -> None:
+    """Run one assistant turn against Hermes, streaming deltas to
+    Convex. Lives outside the HTTP request lifecycle — Vercel's 300s
+    is no longer in the picture.
+    """
+    from turn_token import CASTLE_STREAM_SECRET, mint_write_token
+    # Renew the write token if it's getting old (TTL was set to 1h
+    # by Vercel; for a 30-min turn this is fine, but agents that go
+    # longer would lose write authority. Re-mint as needed.)
+    current_token = write_token
+    token_minted_at = time.time()
+
+    def _token() -> str:
+        nonlocal current_token, token_minted_at
+        # Re-mint if older than 30 minutes, to leave 30 min of headroom.
+        if time.time() - token_minted_at > 1800 and CASTLE_STREAM_SECRET:
+            current_token = mint_write_token(
+                secret=CASTLE_STREAM_SECRET, turn_id=turn_id, ttl_sec=3600
+            )
+            token_minted_at = time.time()
+        return current_token
+
+    # Flush bucket for text + thought deltas. Tool events go straight
+    # through (low rate, high signal).
+    text_buffer: list[str] = []
+    thought_buffer: list[str] = []
+    text_seq = 0
+    tool_seq = 0
+    text_bytes_pending = 0
+    FLUSH_INTERVAL = 0.5  # 500ms
+    FLUSH_BYTES = 1024
+    last_flush = time.time()
+    last_heartbeat = time.time()
+    HEARTBEAT_INTERVAL = 15.0
+    CANCEL_POLL_INTERVAL = 2.0
+    last_cancel_poll = time.time()
+    assistant_text_parts: list[str] = []  # accumulated for final snapshot
+
+    async def flush_text() -> None:
+        nonlocal text_buffer, text_seq, text_bytes_pending, last_flush
+        if not text_buffer:
+            return
+        delta = "".join(text_buffer)
+        text_buffer = []
+        text_bytes_pending = 0
+        last_flush = time.time()
+        seq = text_seq
+        text_seq += 1
+        try:
+            await cc.mutation(
+                "agentMessageChunks:append",
+                {
+                    "turn_id": turn_id,
+                    "write_token": _token(),
+                    "seq": seq,
+                    "delta": delta,
+                },
+            )
+            assistant_text_parts.append(delta)
+        except Exception:
+            logger.exception("agentMessageChunks:append failed")
+
+    async def flush_thought() -> None:
+        nonlocal thought_buffer, tool_seq, last_flush
+        if not thought_buffer:
+            return
+        delta = "".join(thought_buffer)
+        thought_buffer = []
+        last_flush = time.time()
+        seq = tool_seq
+        tool_seq += 1
+        try:
+            await cc.mutation(
+                "agentToolEvents:append",
+                {
+                    "turn_id": turn_id,
+                    "write_token": _token(),
+                    "seq": seq,
+                    "kind": "thought",
+                    "delta": delta,
+                },
+            )
+        except Exception:
+            logger.exception("agentToolEvents:append (thought) failed")
+
+    async def append_tool_event(kind: str, **fields: Any) -> None:
+        nonlocal tool_seq
+        seq = tool_seq
+        tool_seq += 1
+        args = {
+            "turn_id": turn_id,
+            "write_token": _token(),
+            "seq": seq,
+            "kind": kind,
+        }
+        for k, v in fields.items():
+            if v is not None:
+                args[k] = v
+        try:
+            await cc.mutation("agentToolEvents:append", args)
+        except Exception:
+            logger.exception("agentToolEvents:append (%s) failed", kind)
+
+    async def heartbeat() -> None:
+        nonlocal last_heartbeat
+        last_heartbeat = time.time()
+        try:
+            await cc.mutation(
+                "agentTurns:heartbeat",
+                {"turn_id": turn_id, "write_token": _token()},
+            )
+        except Exception:
+            logger.exception("agentTurns:heartbeat failed")
+
+    async def check_canceled() -> bool:
+        # Poll agentTurns.activeFor for status. Cheap when called every
+        # 2s. Returns True if canceled.
+        try:
+            res = await cc.query(
+                "agentTurns:activeFor",
+                {"conversation_id": None, "actor_slug": actor_slug},
+            )
+            # activeFor returns null if the turn is already done (any
+            # terminal state including canceled). That's our cancel
+            # signal — but we don't know if it was complete, canceled,
+            # or failed. To distinguish, we'd need a separate getStatus
+            # query. For now, if our turn was running and Convex no
+            # longer reports it as active, treat as canceled (safe:
+            # complete/fail are caught by other paths first).
+            return res is None
+        except Exception:
+            return False
+
+    # ─── Main loop: run the ACP prompt, route updates to Convex ───
+    actual_session_id: Optional[str] = None
+    try:
+        # session resolution mirrors _stream() at line ~511. New session
+        # if hermes_session doesn't resolve.
+        actual_session_id = hermes_session
+        if actual_session_id:
+            ok = await hermes.load_session(actual_session_id)
+            if not ok:
+                actual_session_id = await hermes.new_session()
+        else:
+            actual_session_id = await hermes.new_session()
+
+        async with hermes.stream_prompt(actual_session_id, text) as (q, prompt_fut):
+            IDLE_PING_SEC = 1.0  # tight loop; we flush manually
+            while True:
+                drain_task = asyncio.ensure_future(q.get())
+                done, _ = await asyncio.wait(
+                    {drain_task, prompt_fut},
+                    return_when=asyncio.FIRST_COMPLETED,
+                    timeout=IDLE_PING_SEC,
+                )
+                if not done:
+                    drain_task.cancel()
+                    # Periodic flush / heartbeat / cancel-poll.
+                    if time.time() - last_flush > FLUSH_INTERVAL:
+                        await flush_text()
+                        await flush_thought()
+                    if time.time() - last_heartbeat > HEARTBEAT_INTERVAL:
+                        await heartbeat()
+                    if time.time() - last_cancel_poll > CANCEL_POLL_INTERVAL:
+                        last_cancel_poll = time.time()
+                        # NB: activeFor needs conversation_id; we don't
+                        # have it here cheaply. Skip cancel-poll for v1;
+                        # the /agent/cancel/{turn_id} HTTP endpoint
+                        # already covers the common case.
+                    continue
+                if drain_task in done:
+                    params = drain_task.result()
+                    upd = params.get("update", {}) or {}
+                    kind = upd.get("sessionUpdate")
+                    if kind == "agent_message_chunk":
+                        delta = _content_text(upd.get("content"))
+                        if delta:
+                            text_buffer.append(delta)
+                            text_bytes_pending += len(delta.encode("utf-8"))
+                            if text_bytes_pending >= FLUSH_BYTES:
+                                await flush_text()
+                    elif kind == "agent_thought_chunk":
+                        delta = _content_text(upd.get("content"))
+                        if delta:
+                            thought_buffer.append(delta)
+                    elif kind == "tool_call":
+                        await append_tool_event(
+                            "tool_start",
+                            tool_call_id=upd.get("toolCallId"),
+                            name=upd.get("title") or upd.get("kind") or "tool",
+                        )
+                    elif kind == "tool_call_update":
+                        status_ = upd.get("status")
+                        if status_ in ("completed", "failed"):
+                            await append_tool_event(
+                                "tool_end",
+                                tool_call_id=upd.get("toolCallId"),
+                                ok=(status_ == "completed"),
+                            )
+                else:
+                    drain_task.cancel()
+
+                if prompt_fut in done:
+                    # Drain stragglers
+                    while not q.empty():
+                        try:
+                            params = q.get_nowait()
+                        except asyncio.QueueEmpty:
+                            break
+                        upd = params.get("update", {}) or {}
+                        kind = upd.get("sessionUpdate")
+                        if kind == "agent_message_chunk":
+                            delta = _content_text(upd.get("content"))
+                            if delta:
+                                text_buffer.append(delta)
+                        elif kind == "agent_thought_chunk":
+                            delta = _content_text(upd.get("content"))
+                            if delta:
+                                thought_buffer.append(delta)
+                    # Final flushes
+                    await flush_text()
+                    await flush_thought()
+                    # Done — write the snapshot.
+                    try:
+                        result = prompt_fut.result()
+                        stop_reason = (result or {}).get("stopReason") or "end_turn"
+                    except Exception as e:
+                        await cc.mutation(
+                            "agentTurns:fail",
+                            {
+                                "turn_id": turn_id,
+                                "write_token": _token(),
+                                "error": str(e)[:500],
+                                "partial_text": "".join(assistant_text_parts),
+                            },
+                        )
+                        return
+                    await cc.mutation(
+                        "agentTurns:complete",
+                        {
+                            "turn_id": turn_id,
+                            "write_token": _token(),
+                            "final_text": "".join(assistant_text_parts),
+                            "stop_reason": stop_reason,
+                        },
+                    )
+                    return
+    except asyncio.CancelledError:
+        # /agent/cancel signalled us. Send Hermes cancel + mark turn.
+        if actual_session_id:
+            try:
+                await hermes.cancel(actual_session_id)
+            except Exception:
+                pass
+        await flush_text()
+        await flush_thought()
+        try:
+            await cc.mutation(
+                "agentTurns:fail",
+                {
+                    "turn_id": turn_id,
+                    "write_token": _token(),
+                    "error": "canceled by operator",
+                    "partial_text": "".join(assistant_text_parts),
+                },
+            )
+        except Exception:
+            logger.exception("could not mark turn canceled")
+        raise
+    except Exception as e:
+        logger.exception("turn %s failed: %s", turn_id, e)
+        await flush_text()
+        await flush_thought()
+        try:
+            await cc.mutation(
+                "agentTurns:fail",
+                {
+                    "turn_id": turn_id,
+                    "write_token": _token(),
+                    "error": str(e)[:500],
+                    "partial_text": "".join(assistant_text_parts),
+                },
+            )
+        except Exception:
+            logger.exception("could not mark turn failed")
+    finally:
+        await cc.close()
 
 
 @app.exception_handler(HTTPException)

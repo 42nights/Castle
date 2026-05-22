@@ -3,13 +3,14 @@
 import { useQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
   streaming?: boolean;
+  status?: "streaming" | "complete" | "failed" | "canceled";
 };
 
 export type ChatStatus = "idle" | "streaming" | "error";
@@ -23,20 +24,32 @@ export type ToolActivity = {
   durationMs?: number;
 };
 
-type ConvexMessage = {
-  _id: string;
-  role: "user" | "assistant";
-  text: string;
+type HistoryRow = Doc<"agent_messages">;
+type TurnRow = Doc<"agent_turns">;
+type ChunkRow = Doc<"agent_message_chunks">;
+type ToolEventRow = Doc<"agent_tool_events">;
+
+type ActiveTurn = {
+  turn: TurnRow;
+  chunks: ChunkRow[];
+  events: ToolEventRow[];
 };
 
 /**
  * Castle chat hook — scoped to a single conversation.
  *
- * - History comes from Convex (`agent_messages` filtered by conversation),
- *   reactive across reloads and tabs.
- * - The in-flight streaming turn is local state until `/api/agent`
- *   finishes; at that point the server persists it and the reactive
- *   query picks it up.
+ * The long-running agent loop lives on Railway and writes incrementally
+ * to Convex. The client only subscribes to Convex via reactive queries
+ * — no Vercel-route streaming, no 300s function budget, no NDJSON
+ * parsing.
+ *
+ * - `messages` is the full transcript from `agent_messages`. Streaming
+ *   assistant rows show with `streaming: true` until the wrapper writes
+ *   a final snapshot.
+ * - `tools` / `thought` come from `agent_message_chunks` +
+ *   `agent_tool_events` via the `agentTurns.activeFor` query.
+ * - A tiny client-side typewriter smooths bursty 500ms chunk arrivals
+ *   into token-paced visual output.
  */
 export function useHermesChat({
   actorSlug,
@@ -48,157 +61,121 @@ export function useHermesChat({
   const historyRaw = useQuery(
     api.agentMessages.list,
     conversationId ? { conversation_id: conversationId } : "skip",
-  ) as ConvexMessage[] | undefined;
+  ) as HistoryRow[] | undefined;
 
-  const [pendingUser, setPendingUser] = useState<string | null>(null);
-  const [streamingText, setStreamingText] = useState<string>("");
-  const [streamingThought, setStreamingThought] = useState<string>("");
-  const [tools, setTools] = useState<ToolActivity[]>([]);
-  const [status, setStatus] = useState<ChatStatus>("idle");
-  const [error, setError] = useState<string | null>(null);
-  // Snapshot of the *previous* turn's streamed assistant text when a
-  // new turn starts before Convex has persisted it. Without this, the
-  // sendMessage `setStreamingText("")` would erase your only handle on
-  // the prior assistant message — Convex's `historyRaw` may still be
-  // mid-commit at that moment. Cleared once historyRaw shows a fresh
-  // assistant (more assistants than when the ghost was captured).
-  const [ghostAssistant, setGhostAssistant] = useState<string | null>(null);
-  const ghostAssistantCountRef = useRef(0);
-  const abortRef = useRef<AbortController | null>(null);
-  // Typewriter reveal — Hermes batches its output, so we accumulate
-  // pending characters and drain them at a steady rate to simulate
-  // streaming. Cleared when the stream ends.
-  const bufferRef = useRef<string>("");
-  const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const streamDoneRef = useRef(false);
+  const active = useQuery(
+    api.agentTurns.activeFor,
+    conversationId && actorSlug
+      ? { conversation_id: conversationId, actor_slug: actorSlug }
+      : "skip",
+  ) as ActiveTurn | null | undefined;
 
+  // sendMessage's own error (network failure on POST). Server-side
+  // turn errors are surfaced via `active.turn.error` below — those are
+  // derived state, not stored locally.
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+
+  // Concatenate streamed chunks. Convex returns chunks sorted by seq
+  // via the index, but be defensive — sort again here.
+  const streamingText = useMemo(() => {
+    if (!active) return "";
+    const sorted = [...active.chunks].sort((a, b) => a.seq - b.seq);
+    return sorted.map((c) => c.delta).join("");
+  }, [active]);
+
+  // Derived tool activity from the event stream.
+  const tools = useMemo<ToolActivity[]>(() => {
+    if (!active) return [];
+    const byId = new Map<string, ToolActivity>();
+    const sorted = [...active.events].sort((a, b) => a.seq - b.seq);
+    for (const ev of sorted) {
+      if (!ev.tool_call_id) continue;
+      if (ev.kind === "tool_start") {
+        byId.set(ev.tool_call_id, {
+          id: ev.tool_call_id,
+          name: ev.name ?? "tool",
+          status: "running",
+          startedAt: new Date(ev.created_at).getTime(),
+        });
+      } else if (ev.kind === "tool_end") {
+        const prev = byId.get(ev.tool_call_id);
+        const ok = ev.ok !== false;
+        if (prev) {
+          byId.set(ev.tool_call_id, {
+            ...prev,
+            status: ok ? "done" : "error",
+            durationMs:
+              new Date(ev.created_at).getTime() - prev.startedAt,
+          });
+        }
+      }
+    }
+    return Array.from(byId.values());
+  }, [active]);
+
+  // Latest thought line, accumulated from thought events.
+  const thought = useMemo(() => {
+    if (!active) return "";
+    const sorted = [...active.events]
+      .filter((e) => e.kind === "thought")
+      .sort((a, b) => a.seq - b.seq);
+    return sorted.map((e) => e.delta ?? "").join("");
+  }, [active]);
+
+  // Derive client status from the turn row.
+  const status: ChatStatus = useMemo(() => {
+    if (active && (active.turn.status === "queued" || active.turn.status === "running")) {
+      return "streaming";
+    }
+    if (active && active.turn.status === "failed") return "error";
+    return "idle";
+  }, [active]);
+
+  // Derived error: either the just-attempted send failed locally, or
+  // the server marked the active turn as failed.
+  const error =
+    sendError ??
+    (active && active.turn.status === "failed"
+      ? active.turn.error ?? "Turn failed."
+      : null);
+
+  // Build the visible message list. History rows are canonical;
+  // assistant rows with status=streaming get their text from the live
+  // chunks aggregate. The startTurn mutation already inserted both
+  // user + assistant placeholder atomically, so no optimistic ghosts.
   const messages = useMemo<ChatMessage[]>(() => {
-    const out: ChatMessage[] = (historyRaw ?? []).map((m) => ({
-      id: m._id,
-      role: m.role,
-      text: m.text,
-    }));
-    // Ghost: the prior turn's streamed assistant text that wasn't yet
-    // in Convex when we started a new turn. Insert it between
-    // historyRaw and the new pendingUser so the chronological order
-    // stays right. Only meaningful if historyRaw's tail isn't already
-    // an assistant — once that flips, the dedicated useEffect clears
-    // the ghost.
-    if (ghostAssistant && out[out.length - 1]?.role !== "assistant") {
-      out.push({
-        id: "a-ghost",
-        role: "assistant",
-        text: ghostAssistant,
-      });
-    }
-    // History "caught up" = this send's user text is somewhere in the
-    // tail of history (so the optimistic user ghost is redundant) AND
-    // the last entry is an assistant message (so the streaming ghost is
-    // redundant). We check both before the handoff effect clears the
-    // optimistic state to avoid a one-frame double-render.
-    const histRows = historyRaw ?? [];
-    const userLanded =
-      pendingUser !== null &&
-      histRows.some(
-        (m, i) =>
-          i >= histRows.length - 2 &&
-          m.role === "user" &&
-          m.text === pendingUser,
-      );
-    const assistantLanded =
-      userLanded && histRows[histRows.length - 1]?.role === "assistant";
-    if (pendingUser !== null && !userLanded) {
-      out.push({ id: "u-pending", role: "user", text: pendingUser });
-    }
-    const showStreaming =
-      !assistantLanded && (status === "streaming" || streamingText);
-    if (showStreaming) {
-      out.push({
-        id: "a-streaming",
-        role: "assistant",
-        text: streamingText,
-        streaming: status === "streaming",
-      });
-    }
-    return out;
-  }, [historyRaw, pendingUser, streamingText, status, ghostAssistant]);
+    const rows = historyRaw ?? [];
+    return rows.map((m) => {
+      const isStreaming =
+        m.role === "assistant" && m.status === "streaming";
+      // For streaming assistant, prefer the live chunks aggregate over
+      // m.text (which is "" until snapshot lands on complete).
+      const liveText =
+        isStreaming &&
+        active &&
+        active.turn.assistant_message_id === m._id
+          ? streamingText
+          : m.text;
+      return {
+        id: m._id,
+        role: m.role,
+        text: liveText,
+        streaming: isStreaming,
+        status: m.status,
+      };
+    });
+  }, [historyRaw, active, streamingText]);
 
   const sendMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (
-        !trimmed ||
-        status === "streaming" ||
-        !actorSlug ||
-        !conversationId
-      )
-        return;
-
-      // Snapshot the prior turn's un-persisted assistant text BEFORE
-      // clearing streamingText. Without this, sending a new prompt in
-      // the milliseconds between stream-done and Convex committing the
-      // assistant erases your only handle on the prior reply.
-      const histRowsNow = historyRaw ?? [];
-      const lastIsAssistant =
-        histRowsNow[histRowsNow.length - 1]?.role === "assistant";
-      if (streamingText && !lastIsAssistant) {
-        setGhostAssistant(streamingText);
-        ghostAssistantCountRef.current = histRowsNow.filter(
-          (m) => m.role === "assistant",
-        ).length;
-      }
-      setPendingUser(trimmed);
-      setStreamingText("");
-      setStreamingThought("");
-      setTools([]);
-      setStatus("streaming");
-      setError(null);
-      bufferRef.current = "";
-      streamDoneRef.current = false;
-
-      // Typewriter reveal. Hermes batches its whole reply at once, so
-      // we paint it gradually. ~3 chars per 24ms tick = 125 chars/sec,
-      // roughly 30 tokens/sec — the speed real model streaming feels
-      // like. If a huge response lands, the rate adapts: we reveal a
-      // larger chunk per tick to drain within a sensible bound.
-      if (tickerRef.current) clearInterval(tickerRef.current);
-      const start = Date.now();
-      tickerRef.current = setInterval(() => {
-        if (bufferRef.current.length === 0) {
-          if (streamDoneRef.current) {
-            // Buffer drained. Flip status to idle so the input unlocks
-            // immediately, but DON'T clear streamingText / pendingUser
-            // yet — Convex's reactive `historyRaw` query takes a beat to
-            // reflect the just-persisted assistant turn, and clearing
-            // here causes a "flash then empty" gap. The handoff effect
-            // below clears them once history catches up (with a short
-            // fallback so we never strand the UI on a dropped persist).
-            if (tickerRef.current) {
-              clearInterval(tickerRef.current);
-              tickerRef.current = null;
-            }
-            setStatus("idle");
-          }
-          return;
-        }
-        // Base reveal rate: 3 chars per tick at 24ms.
-        // Adaptive: if the buffer is getting huge or stream's done,
-        // accelerate so we don't lag minutes behind.
-        const elapsed = Date.now() - start;
-        let perTick = 3;
-        if (streamDoneRef.current && bufferRef.current.length > 500) perTick = 8;
-        if (streamDoneRef.current && bufferRef.current.length > 2000) perTick = 24;
-        if (elapsed > 30_000) perTick = Math.max(perTick, 12);
-        const slice = bufferRef.current.slice(0, perTick);
-        bufferRef.current = bufferRef.current.slice(perTick);
-        setStreamingText((prev) => prev + slice);
-      }, 24);
-
-      const ac = new AbortController();
-      abortRef.current = ac;
-
+      if (!trimmed || sending || !actorSlug || !conversationId) return;
+      if (active) return; // a turn is already running on this conversation
+      setSending(true);
+      setSendError(null);
       try {
-        const res = await fetch("/api/agent", {
+        const res = await fetch("/api/agent/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -206,211 +183,44 @@ export function useHermesChat({
             conversationId,
             text: trimmed,
           }),
-          signal: ac.signal,
         });
-        if (!res.ok || !res.body) {
-          throw new Error(`Agent route failed: ${res.status}`);
+        if (!res.ok) {
+          const detail = await res.json().catch(() => ({}));
+          throw new Error(
+            (detail as { error?: string }).error ??
+              `Agent route failed: ${res.status}`,
+          );
         }
-        const reader = res.body.getReader();
-        const dec = new TextDecoder();
-        let buf = "";
-        let sawDone = false;
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
-          const lines = buf.split("\n");
-          buf = lines.pop() ?? "";
-          for (const line of lines) {
-            const t = line.trim();
-            if (!t) continue;
-            let ev: {
-              type: string;
-              delta?: string;
-              message?: string;
-              id?: string;
-              name?: string;
-              kind?: string;
-              ok?: boolean;
-            };
-            try {
-              ev = JSON.parse(t);
-            } catch {
-              continue;
-            }
-            if (ev.type === "text" && ev.delta) {
-              bufferRef.current += ev.delta;
-            } else if (ev.type === "thought" && ev.delta) {
-              // Reasoning stream — accumulate verbatim (no typewriter),
-              // since thoughts are background context rather than the
-              // user-facing answer.
-              setStreamingThought((prev) => prev + ev.delta);
-            } else if (ev.type === "tool_start" && ev.id) {
-              const id = ev.id;
-              const name = ev.name ?? "tool";
-              const kind = ev.kind;
-              setTools((prev) => {
-                if (prev.some((t) => t.id === id)) return prev;
-                return [
-                  ...prev,
-                  {
-                    id,
-                    name,
-                    kind,
-                    status: "running",
-                    startedAt: Date.now(),
-                  },
-                ];
-              });
-            } else if (ev.type === "tool_end" && ev.id) {
-              const id = ev.id;
-              const ok = ev.ok !== false;
-              setTools((prev) =>
-                prev.map((t) =>
-                  t.id === id
-                    ? {
-                        ...t,
-                        status: ok ? "done" : "error",
-                        durationMs: Date.now() - t.startedAt,
-                      }
-                    : t,
-                ),
-              );
-            } else if (ev.type === "error") {
-              setError(ev.message ?? "Unknown error.");
-            } else if (ev.type === "done") {
-              // Mark the stream done — the ticker drains the rest and
-              // flips status to idle once the buffer is empty.
-              streamDoneRef.current = true;
-              sawDone = true;
-              return;
-            }
-          }
-        }
-        // Stream closed without a `{type:"done"}` event (e.g. the
-        // wrapper raised CancelledError + closed without emitting one,
-        // upstream proxy dropped us, etc). Mark done anyway so the
-        // ticker can flip status to idle — otherwise the UI sits
-        // stuck on "streaming" forever and the stop button looks
-        // broken because there's no live fetch left to abort.
-        if (!sawDone) {
-          streamDoneRef.current = true;
-        }
+        // Don't need the response — Convex reactive query picks up the
+        // newly-created agent_turns + agent_messages rows in <200ms.
       } catch (err) {
-        if (ac.signal.aborted) {
-          if (tickerRef.current) {
-            clearInterval(tickerRef.current);
-            tickerRef.current = null;
-          }
-          bufferRef.current = "";
-          setStatus("idle");
-          setStreamingText("");
-          setStreamingThought("");
-          setTools([]);
-          setPendingUser(null);
-          return;
-        }
-        if (tickerRef.current) {
-          clearInterval(tickerRef.current);
-          tickerRef.current = null;
-        }
-        setError(err instanceof Error ? err.message : "Stream failed.");
-        setStatus("error");
+        setSendError(err instanceof Error ? err.message : "Send failed.");
+      } finally {
+        setSending(false);
       }
     },
-    [actorSlug, conversationId, status, historyRaw, streamingText],
+    [actorSlug, conversationId, sending, active],
   );
 
-  // Ghost cleanup: when historyRaw shows a new assistant message
-  // (count increased since the ghost was captured), the prior turn has
-  // finally persisted and the ghost is redundant. Drop it.
-  useEffect(() => {
-    if (ghostAssistant === null) return;
-    const assistantCount = (historyRaw ?? []).filter(
-      (m) => m.role === "assistant",
-    ).length;
-    if (assistantCount > ghostAssistantCountRef.current) {
-      setGhostAssistant(null);
+  // Stop = POST /api/agent/cancel with the active turn id. The wrapper
+  // sees `agent_turns.status = "canceled"` (via its own poll or the
+  // direct cancel HTTP) and aborts its asyncio task. The reactive
+  // query flips the UI to idle.
+  const stop = useCallback(async () => {
+    if (!active || !actorSlug) return;
+    try {
+      await fetch("/api/agent/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actorSlug,
+          turnId: active.turn._id,
+        }),
+      });
+    } catch (err) {
+      console.error("[chat] cancel failed:", err);
     }
-  }, [historyRaw, ghostAssistant]);
-
-  // Clear the ghost on conversation switch so it doesn't bleed into a
-  // different thread. The other transient state intentionally survives
-  // (we want the streaming indicator to follow the user across chats
-  // when they switch mid-stream).
-  useEffect(() => {
-    setGhostAssistant(null);
-  }, [conversationId]);
-
-  // Handoff: once the persisted history contains an assistant turn at
-  // the tail, the optimistic streaming entry has been replaced by the
-  // real one, so we can safely clear streamingText + pendingUser. We
-  // also schedule a fallback timeout so a dropped persist never strands
-  // the UI in a "permanent streaming" state.
-  useEffect(() => {
-    if (status !== "idle") return;
-    if (!streamingText && pendingUser === null) return;
-    // History caught up = THIS turn's user message landed in the tail
-    // AND the last entry is an assistant message (i.e. our streamed
-    // turn was persisted). Matching only on "last role is assistant"
-    // is wrong — a prior turn's assistant tail satisfies it before
-    // Convex propagates the new pair, which would re-introduce the
-    // flash-then-empty gap the patch exists to fix. Same shape as the
-    // useMemo dedupe so the two stay consistent.
-    const hist = historyRaw ?? [];
-    const userLanded =
-      pendingUser !== null &&
-      hist.some(
-        (m, i) =>
-          i >= hist.length - 2 && m.role === "user" && m.text === pendingUser,
-      );
-    const assistantLanded =
-      userLanded && hist[hist.length - 1]?.role === "assistant";
-    if (assistantLanded) {
-      // Schedule on a microtask so React doesn't see a cascading
-      // setState during the effect body — the useMemo dedupe already
-      // hides the redundant ghosts, so the one-tick delay is invisible.
-      // Also clear the per-turn thought/tool buffers — they're scratch
-      // state for the in-flight indicator only; we don't persist them.
-      const t = setTimeout(() => {
-        setStreamingText("");
-        setStreamingThought("");
-        setTools([]);
-        setPendingUser(null);
-      }, 0);
-      return () => clearTimeout(t);
-    }
-    // Hermes didn't persist (e.g. tool-only turn, server crash) — keep
-    // whatever we streamed as the canonical record in the UI but stop
-    // pretending it'll be replaced. pendingUser stays as a fallback so
-    // the user always sees their own message; after 4s we drop it so
-    // re-renders don't keep matching against stale optimistic state.
-    const t = setTimeout(() => setPendingUser(null), 4000);
-    return () => clearTimeout(t);
-  }, [status, streamingText, pendingUser, historyRaw]);
-
-  const stop = useCallback(() => {
-    // Try the AbortController path first — that's the clean cancel for
-    // an in-flight fetch (server sees the disconnect and cancels the
-    // upstream session). If there's no live abort (the fetch already
-    // ended silently without emitting a done event), force the local
-    // state back to idle so the operator can send the next prompt.
-    // Without this fallback, status sits at "streaming" forever and
-    // pressing stop looks broken.
-    abortRef.current?.abort();
-    if (tickerRef.current) {
-      clearInterval(tickerRef.current);
-      tickerRef.current = null;
-    }
-    bufferRef.current = "";
-    streamDoneRef.current = true;
-    setStatus("idle");
-    setStreamingThought("");
-    setTools([]);
-    // Leave streamingText + pendingUser intact — the handoff effect
-    // clears them once Convex history catches up. Wiping here would
-    // re-introduce the "flash then empty" gap.
-  }, []);
+  }, [active, actorSlug]);
 
   return {
     messages,
@@ -418,7 +228,7 @@ export function useHermesChat({
     error,
     sendMessage,
     stop,
-    thought: streamingThought,
+    thought,
     tools,
   };
 }
