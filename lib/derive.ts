@@ -475,6 +475,97 @@ export type FounderHoursPoint = {
   target: number;
 };
 
+/**
+ * Auto-derive the monthly founder-leverage series from current Castle state
+ * instead of relying on a hand-maintained `founder_hours_entries` table.
+ *
+ * Why: operators don't want to manually log this every month — the data
+ * is already implicit in engagement durations + customer start dates.
+ *
+ * How:
+ *   • founder_hours_total[m] = sum over engagements active in [m, m+1) of
+ *       (weekly_hours / fde_ids.length) × founder_fde_count_on_engagement
+ *       × weeks_of_overlap
+ *   • new_arr_dollars[m]     = sum of arr_dollars for customers whose
+ *       start_date falls in month m (status≠churned)
+ *   • hoursPerArrK[m]        = founder_hours_total / (new_arr / 1000)
+ *
+ * The trendline target (−50% by Q3 2026) is preserved: start = first real
+ * value, end = start × 0.5, linearly interpolated.
+ */
+export function deriveFounderHoursSeries(
+  fdes: FDE[],
+  customers: Customer[],
+  engagements: Engagement[],
+  monthsBack = 6,
+  asOf: Date = new Date(),
+): FounderHoursPoint[] {
+  const founderIds = new Set(
+    fdes.filter((f) => f.is_founder).map((f) => f.id),
+  );
+
+  const months: { key: string; start: Date; end: Date }[] = [];
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const start = new Date(
+      Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth() - i, 1),
+    );
+    const end = new Date(
+      Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth() - i + 1, 1),
+    );
+    const key = `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, "0")}`;
+    months.push({ key, start, end });
+  }
+
+  const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+  const base = months.map(({ key, start, end }) => {
+    const newArr = customers
+      .filter((c) => {
+        if (c.status === "churned") return false;
+        const s = new Date(c.start_date).getTime();
+        return s >= start.getTime() && s < end.getTime();
+      })
+      .reduce((sum, c) => sum + c.current_mrr * 12, 0);
+
+    let founderHours = 0;
+    for (const e of engagements) {
+      const founderCount = e.fde_ids.filter((id) => founderIds.has(id)).length;
+      if (founderCount === 0 || e.fde_ids.length === 0) continue;
+
+      const eStart = new Date(e.start_date).getTime();
+      const eEnd = new Date(e.expected_end_date).getTime();
+      const overlapStart = Math.max(eStart, start.getTime());
+      const overlapEnd = Math.min(eEnd, end.getTime());
+      if (overlapEnd <= overlapStart) continue;
+
+      const weeks = (overlapEnd - overlapStart) / MS_PER_WEEK;
+      const perFde = e.weekly_hours / e.fde_ids.length;
+      founderHours += perFde * founderCount * weeks;
+    }
+
+    const hours = Math.round(founderHours);
+    return {
+      month: key,
+      founder_hours_total: hours,
+      new_arr_dollars: newArr,
+      hoursPerArrK: newArr > 0 ? hours / (newArr / 1000) : null,
+    };
+  });
+
+  const real = base
+    .map((b) => b.hoursPerArrK)
+    .filter((v): v is number => v !== null);
+  if (real.length === 0) return base.map((b) => ({ ...b, target: 0 }));
+
+  const startVal = real[0]!;
+  const endVal = startVal * 0.5;
+  const n = base.length;
+  return base.map((b, i) => ({
+    ...b,
+    target: startVal + ((endVal - startVal) * i) / Math.max(1, n - 1),
+  }));
+}
+
 export function founderHoursSeries(
   entries: FounderHoursEntry[]
 ): FounderHoursPoint[] {

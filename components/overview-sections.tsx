@@ -14,8 +14,8 @@ import {
   contractedArr,
   engagementRows,
   engagementsByPhase,
+  deriveFounderHoursSeries,
   fdeAgentsShippedRecently,
-  founderHoursSeries,
   loadImbalance,
   payingCustomerCount,
   templateUsage,
@@ -27,7 +27,6 @@ import type {
   Deployment,
   Engagement,
   FDE,
-  FounderHoursEntry,
   PatternExtraction,
   Template,
 } from "@/lib/types";
@@ -41,7 +40,6 @@ type OverviewData =
       templates: Template[];
       deployments: Deployment[];
       patternExtractions: PatternExtraction[];
-      founderHours: FounderHoursEntry[];
     };
 
 export function OverviewSections({
@@ -51,7 +49,7 @@ export function OverviewSections({
   data: OverviewData;
   liveAttention?: boolean;
 }) {
-  const { fdes, customers, engagements, templates, deployments, patternExtractions, founderHours } = data;
+  const { fdes, customers, engagements, templates, deployments, patternExtractions } = data;
   const today = new Date("2026-05-11T12:00:00Z");
 
   const arr = contractedArr(customers);
@@ -59,7 +57,7 @@ export function OverviewSections({
   const risk = atRiskArr(customers);
   const hours = totalHoursReplaced(deployments);
   const usage = templateUsage(templates, deployments, patternExtractions);
-  const points = founderHoursSeries(founderHours);
+  const points = deriveFounderHoursSeries(fdes, customers, engagements, 6, today);
   const allRows = engagementRows(engagements, customers, fdes);
   const phaseGroups = engagementsByPhase(allRows);
   const attention = attentionItems(engagements, customers, fdes, today);

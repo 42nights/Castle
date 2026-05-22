@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import {
   CartesianGrid,
   Line,
@@ -11,24 +11,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { LogFounderMonthDialog } from "@/components/dialogs/log-founder-month-dialog";
 import type { FounderHoursPoint } from "@/lib/derive";
 import { formatMonth, formatUsdCompact } from "@/lib/format";
 
 export function FounderHoursChart({ points }: { points: FounderHoursPoint[] }) {
-  // Recharts measures parent dimensions on mount; in SSR they're -1.
-  // useSyncExternalStore with constant snapshots is the canonical "have we
-  // hydrated yet" check that lints cleanly.
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
     () => false,
   );
-  const [editing, setEditing] = useState<{
-    month: string;
-    hours: number;
-    arr: number;
-  } | null>(null);
   const chartData = points.map((p) => ({
     month: p.month,
     monthLabel: formatMonth(p.month),
@@ -53,20 +44,10 @@ export function FounderHoursChart({ points }: { points: FounderHoursPoint[] }) {
           <p className="text-ink-2 text-[12px] leading-snug">
             Lower is more leverage.
           </p>
-          <button
-            onClick={() => {
-              const month = new Date().toISOString().slice(0, 7);
-              const existing = points.find((p) => p.month === month);
-              setEditing({
-                month,
-                hours: existing?.founder_hours_total ?? 0,
-                arr: existing?.new_arr_dollars ?? 0,
-              });
-            }}
-            className="mt-3 text-[12px] text-ink-2 hover:text-ink underline underline-offset-4 decoration-line"
-          >
-            + log this month
-          </button>
+          <p className="mt-3 text-[11px] text-ink-3 leading-snug">
+            Auto-derived from engagement hours × founder share, divided by new
+            ARR from customers starting that month.
+          </p>
         </div>
 
         <div className="px-3 py-3">
@@ -139,13 +120,6 @@ export function FounderHoursChart({ points }: { points: FounderHoursPoint[] }) {
         </div>
       </div>
 
-      <LogFounderMonthDialog
-        open={!!editing}
-        onClose={() => setEditing(null)}
-        initialMonth={editing?.month}
-        initialHours={editing?.hours}
-        initialArr={editing?.arr}
-      />
     </section>
   );
 }
