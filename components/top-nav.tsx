@@ -30,7 +30,7 @@ export function TopNav() {
   const pathname = usePathname();
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-page/90 backdrop-blur supports-[backdrop-filter]:bg-page/75">
-      <div className="mx-auto flex h-14 max-w-screen-xl items-center gap-10 px-8 md:px-12">
+      <div className="flex h-14 items-center gap-10 px-6 md:px-8">
         <Link
           href="/"
           className="group flex items-baseline gap-2"
