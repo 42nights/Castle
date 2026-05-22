@@ -44,6 +44,11 @@ describe("loadOverview fallback (Convex unreachable)", () => {
     vi.doMock("convex/nextjs", () => ({
       fetchQuery: vi.fn(() => Promise.reject(new Error("fetch failed"))),
     }));
+    // Bypass the operator gate — this test is exercising the data-load
+    // path, not the auth path.
+    vi.doMock("./auth-server", () => ({
+      fetchAuthQuery: vi.fn(() => Promise.resolve({ _id: "stub" })),
+    }));
 
     const mod = await import("./load-overview");
     const result = await mod.loadOverview();
@@ -100,6 +105,9 @@ describe("loadOverview happy path (Convex returns data)", () => {
     };
     vi.doMock("convex/nextjs", () => ({
       fetchQuery: vi.fn(() => Promise.resolve(snapshot)),
+    }));
+    vi.doMock("./auth-server", () => ({
+      fetchAuthQuery: vi.fn(() => Promise.resolve({ _id: "stub" })),
     }));
 
     const mod = await import("./load-overview");

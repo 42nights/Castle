@@ -16,6 +16,25 @@ import { isEmailAllowedAgainst } from "../lib/auth-allowlist";
 
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
+/**
+ * Read dynamic allowlist patterns from Convex. The hardcoded rescue
+ * patterns in lib/auth-allowlist.ts are merged inside
+ * `isEmailAllowedAgainst`, so if this query fails we still let
+ * rescue-listed addresses through.
+ */
+async function readPatterns(
+  ctx: Parameters<typeof createAuth>[0],
+): Promise<string[]> {
+  try {
+    return (await ctx.runQuery(
+      internal.emailAllowlist.patternsForCheck,
+      {},
+    )) as string[];
+  } catch {
+    return [];
+  }
+}
+
 export const createAuth = (ctx: GenericCtx<DataModel>) =>
   betterAuth({
     // Read env at function-call time, not module-top, so Convex
@@ -43,19 +62,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
         create: {
           before: async (user) => {
             const email = (user as { email?: string }).email;
-            // Read patterns from Convex. Hardcoded rescue entries are
-            // merged inside isEmailAllowedAgainst, so even if this
-            // query returns [] (or throws), Jerry / Ayaan / @42nights.dev
-            // / @xiao.sh can still sign in.
-            let patterns: string[] = [];
-            try {
-              patterns = await ctx.runQuery(
-                internal.emailAllowlist.patternsForCheck,
-                {},
-              );
-            } catch {
-              patterns = [];
-            }
+            const patterns = await readPatterns(ctx);
             if (!isEmailAllowedAgainst(email, patterns)) {
               throw new Error(
                 "access_denied: this email is not on the Castle allowlist",
@@ -73,10 +80,25 @@ export const { getAuthUser } = authComponent.clientApi();
 
 /** Operator-facing user object — Castle UI reads this. Returns null
  *  when not signed in (instead of throwing) so the chat landing can
- *  render a sign-in CTA without redirecting. */
+ *  render a sign-in CTA without redirecting.
+ *
+ *  Also re-checks the allowlist on every read. The user.create.before
+ *  hook only fires on first sign-up; without this revalidation,
+ *  removing a pattern from /settings/access wouldn't kick out an
+ *  existing operator until their session cookie expired. The
+ *  middleware doesn't validate either, so the UI is the actual gate.
+ */
 export const getCurrentUser = query({
   args: {},
-  handler: async (ctx) => authComponent.safeGetAuthUser(ctx),
+  handler: async (ctx) => {
+    const user = await authComponent.safeGetAuthUser(ctx);
+    if (!user) return null;
+    const patterns = (await ctx.db
+      .query("email_allowlist")
+      .collect()).map((r) => r.pattern);
+    if (!isEmailAllowedAgainst(user.email, patterns)) return null;
+    return user;
+  },
 });
 
 /** Rotate Better Auth signing keys — call manually via `npx convex run

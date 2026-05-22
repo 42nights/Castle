@@ -1,9 +1,11 @@
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { requireOperator } from "@/lib/load-overview";
 import { AllowlistManager } from "./manager";
 
 export const dynamic = "force-dynamic";
 
-export default function AccessSettingsPage() {
+export default async function AccessSettingsPage() {
+  await requireOperator();
   return (
     <PageShell>
       <PageHeader

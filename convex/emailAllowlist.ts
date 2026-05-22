@@ -1,11 +1,33 @@
 import { v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { nowIso } from "./lib/util";
 import { authComponent } from "./auth";
 import {
+  isEmailAllowedAgainst,
   RESCUE_ALLOWLIST,
   validatePattern,
 } from "../lib/auth-allowlist";
+
+/**
+ * Convex public mutations can be called by anyone who knows the URL —
+ * not just our /settings/access page. Without this check, an
+ * unauthenticated caller could add their own pattern and then sign in.
+ * We require a signed-in Better Auth user whose email is itself on the
+ * (dynamic ∪ rescue) allowlist.
+ */
+async function assertOperator(ctx: MutationCtx): Promise<{ email: string }> {
+  const me = await authComponent.safeGetAuthUser(ctx);
+  const email = me?.email;
+  if (!email) throw new Error("unauthorized: sign in first");
+  const dynamic = (await ctx.db.query("email_allowlist").collect()).map(
+    (r) => r.pattern,
+  );
+  if (!isEmailAllowedAgainst(email, dynamic)) {
+    throw new Error("unauthorized: your email is not on the allowlist");
+  }
+  return { email };
+}
 
 /**
  * Email allowlist CRUD. Read-side is open to any signed-in operator
@@ -84,6 +106,7 @@ export const add = mutation({
     note: v.optional(v.string()),
   },
   handler: async (ctx, { pattern, note }) => {
+    const { email } = await assertOperator(ctx);
     const cleaned = validatePattern(pattern);
 
     const existing = await ctx.db
@@ -97,12 +120,11 @@ export const add = mutation({
       throw new Error(`"${cleaned}" is already a hardcoded rescue entry.`);
     }
 
-    const me = await authComponent.safeGetAuthUser(ctx);
     return ctx.db.insert("email_allowlist", {
       pattern: cleaned,
       note: note?.trim() || undefined,
       created_at: nowIso(),
-      created_by_email: me?.email ?? undefined,
+      created_by_email: email,
     });
   },
 });
@@ -110,6 +132,7 @@ export const add = mutation({
 export const remove = mutation({
   args: { id: v.id("email_allowlist") },
   handler: async (ctx, { id }) => {
+    await assertOperator(ctx);
     const row = await ctx.db.get(id);
     if (!row) throw new Error("Pattern already gone.");
     await ctx.db.delete(id);

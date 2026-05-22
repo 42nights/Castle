@@ -1,6 +1,7 @@
 import "server-only";
 
 import { fetchQuery } from "convex/nextjs";
+import { redirect } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { adaptOverview, type ConvexOverview } from "@/lib/adapters";
 import { loadAll as loadJson } from "@/lib/data";
@@ -31,7 +32,49 @@ export type LoadedOverview = {
  * set, otherwise falls back to v0 `data/*.json`. Both shapes adapt to the
  * same `LoadedOverview` so list + detail pages can stay shape-agnostic.
  */
+/**
+ * Server-side allowlist gate for operator pages. `getCurrentUser`
+ * already returns null when the session is invalid OR when the email
+ * has been removed from the allowlist after sign-in. Pages that show
+ * operator data (templates, customers, settings) call this first so a
+ * stale session cookie can't keep an ex-operator on the console.
+ *
+ * The chat landing at "/" does NOT call this — it's intentionally
+ * public.
+ *
+ * If Convex itself is unreachable we fall through (don't redirect) so
+ * `loadOverview`'s existing JSON-fixture fallback still renders. A
+ * complete platform outage shouldn't masquerade as an auth failure.
+ */
+export async function requireOperator(): Promise<void> {
+  // Pure JSON-fixture mode (no Convex env at all) — there's no auth
+  // backend to consult and no live data being served, so we let the
+  // page render. This matches the loadOverview fallback contract.
+  if (!process.env.NEXT_PUBLIC_CONVEX_URL) return;
+  // Convex is configured → the page is about to serve live operator
+  // data. The middleware only checks cookie presence, so this is the
+  // real gate. Fail closed on any error: auth misconfigured,
+  // unreachable, or session invalid all map to "redirect to sign-in".
+  //
+  // TRADE-OFF: loadOverview() has a documented JSON-fixture fallback
+  // for "Convex unreachable" scenarios. Since the same outage that
+  // breaks fetchQuery also breaks fetchAuthQuery, the fallback is
+  // unreachable in prod when this gate is active — we redirect to
+  // /sign-in instead of rendering stale fixture data to an
+  // unauthenticated viewer. Stale-and-anonymous is worse than "Castle
+  // is down, sign in to retry" for an operator console.
+  let user: unknown;
+  try {
+    const { fetchAuthQuery } = await import("@/lib/auth-server");
+    user = await fetchAuthQuery(api.auth.getCurrentUser, {});
+  } catch {
+    redirect("/sign-in");
+  }
+  if (!user) redirect("/sign-in");
+}
+
 export async function loadOverview(): Promise<LoadedOverview> {
+  await requireOperator();
   if (process.env.NEXT_PUBLIC_CONVEX_URL) {
     try {
       const snapshot = (await fetchQuery(

@@ -19,9 +19,6 @@ import { authClient } from "@/lib/auth-client";
  * UI stays in sync when the session is loading OR the email's local
  * part doesn't match.
  */
-const MCP_FALLBACK_SLUG =
-  process.env.NEXT_PUBLIC_CASTLE_ACTOR_FALLBACK || "jerry";
-
 export function useActorSlug(): [string | null, (slug: string | null) => void] {
   const { data: session } = authClient.useSession();
   const email = (session as { user?: { email?: string } } | null)?.user?.email;
@@ -32,5 +29,11 @@ export function useActorSlug(): [string | null, (slug: string | null) => void] {
   const set = useCallback((_next: string | null) => {
     /* picker removed — setter is a no-op for back-compat */
   }, []);
-  return [slug ?? MCP_FALLBACK_SLUG, set];
+  // No session = no actor. The MCP_FALLBACK_SLUG used to kick in for
+  // session-loading frames, but with `/` now public, an anonymous
+  // visitor would have gotten `jerry` and the sidebar would have
+  // auto-selected his conversations → privacy leak. Better: render an
+  // empty chat shell for one frame than ever serve Jerry's history to
+  // a stranger.
+  return [slug ?? null, set];
 }
