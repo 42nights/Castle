@@ -9,12 +9,8 @@ import {
 } from "@/app/connections/actions";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { useActorSlug } from "@/lib/use-actor";
-import {
-  useHermesChat,
-  type ChatMessage,
-  type ToolActivity,
-} from "@/lib/use-hermes-chat";
+import { useChatContext } from "@/lib/chat-context";
+import { type ChatMessage, type ToolActivity } from "@/lib/use-hermes-chat";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { ChatSidebar } from "@/components/chat-sidebar";
 import { ConnectionsRail } from "@/components/connections-rail";
@@ -57,17 +53,24 @@ function useNowBucket() {
  * `+ new` to start fresh.
  */
 export function ChatLanding() {
-  const [actorSlug] = useActorSlug();
-  const [conversationId, setConversationId] =
-    useState<Id<"agent_conversations"> | null>(null);
+  // Chat state lives in a provider at app/layout.tsx so it survives
+  // navigation. Without that hoist, leaving `/` mid-stream wiped the
+  // thinking dots + tool activity + streaming text until the assistant
+  // turn finally landed in Convex history.
+  const {
+    actorSlug,
+    conversationId,
+    setConversationId,
+    messages,
+    status,
+    error,
+    sendMessage,
+    stop,
+    thought,
+    tools,
+  } = useChatContext();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const tailRef = useRef<HTMLDivElement>(null);
-
-  const { messages, status, error, sendMessage, stop, thought, tools } =
-    useHermesChat({
-      actorSlug,
-      conversationId,
-    });
   const clearTranscript = useMutation(api.agentMessages.clear);
   const proposed = useQuery(
     api.agentActions.listOpen,

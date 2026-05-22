@@ -7,6 +7,7 @@ import { ConvexClientProvider } from "@/components/convex-provider";
 import { TopNav } from "@/components/top-nav";
 import { Toaster } from "@/components/ui/sonner";
 import { getToken } from "@/lib/auth-server";
+import { ChatProvider } from "@/lib/chat-context";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -38,11 +39,13 @@ export default async function RootLayout({
     >
       <body className="min-h-full bg-page text-ink font-sans">
         <ConvexClientProvider initialToken={token}>
-          <TopNav />
-          {children}
-          <CommandPalette />
-          <AgentPanel />
-          <Toaster position="bottom-right" />
+          <ChatProvider>
+            <TopNav />
+            {children}
+            <CommandPalette />
+            <AgentPanel />
+            <Toaster position="bottom-right" />
+          </ChatProvider>
         </ConvexClientProvider>
       </body>
     </html>
