@@ -36,12 +36,16 @@ export function CreateTemplateDialog({
     actorSlug ? { slug: actorSlug } : "skip",
   ) as { _id: string } | null | undefined;
   const run = useRunMutation(api.templates.create);
+  const setGithubRepo = useRunMutation(api.templates.setGithubRepo);
+  const setLiveUrl = useRunMutation(api.templates.setLiveUrl);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState<Category>("Ops");
   const [originId, setOriginId] = useState("");
   const [authorId, setAuthorId] = useState("");
   const [capsText, setCapsText] = useState("");
+  const [githubRepo, setGithubRepoValue] = useState("");
+  const [liveUrl, setLiveUrlValue] = useState("");
   const [pending, setPending] = useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -51,7 +55,7 @@ export function CreateTemplateDialog({
       return;
     }
     setPending(true);
-    await run(
+    const created = (await run(
       {
         name: name.trim(),
         category,
@@ -64,10 +68,39 @@ export function CreateTemplateDialog({
         actor_fde_id: (actor?._id ?? null) as never,
       },
       { success: "Template added" },
-    );
+    )) as { id: string; slug: string } | undefined;
+    // Apply optional URL fields in follow-up mutations — keeps the
+    // primary `create` signature stable while letting the dialog
+    // accept them in one form submission.
+    if (created?.id) {
+      const trimmedRepo = githubRepo.trim();
+      if (trimmedRepo) {
+        await setGithubRepo(
+          {
+            id: created.id as never,
+            repo: trimmedRepo as never,
+            actor_fde_id: (actor?._id ?? null) as never,
+          },
+          {},
+        );
+      }
+      const trimmedLive = liveUrl.trim();
+      if (trimmedLive) {
+        await setLiveUrl(
+          {
+            id: created.id as never,
+            url: trimmedLive as never,
+            actor_fde_id: (actor?._id ?? null) as never,
+          },
+          {},
+        );
+      }
+    }
     setPending(false);
     setName("");
     setCapsText("");
+    setGithubRepoValue("");
+    setLiveUrlValue("");
     onClose();
   };
 
@@ -146,9 +179,28 @@ export function CreateTemplateDialog({
             </DialogSelect>
           </DialogField>
         </div>
+        <div className="grid md:grid-cols-2 gap-x-4">
+          <DialogField
+            label="GitHub repo"
+            hint="Optional. owner/repo or full github.com URL. Powers the &lsquo;analyze repo&rsquo; tool."
+          >
+            <DialogInput
+              value={githubRepo}
+              onChange={(e) => setGithubRepoValue(e.target.value)}
+              placeholder="42nights/deal-flow-scout"
+            />
+          </DialogField>
+          <DialogField label="Live URL" hint="Optional. https://… for the deployed instance.">
+            <DialogInput
+              value={liveUrl}
+              onChange={(e) => setLiveUrlValue(e.target.value)}
+              placeholder="https://demo.42nights.dev"
+            />
+          </DialogField>
+        </div>
         <DialogField
           label="Capabilities"
-          hint="One per line; order matters and is preserved as positions."
+          hint="One per line; order matters and is preserved as positions. (You can also analyze a github repo on the detail page to auto-fill these.)"
         >
           <DialogTextarea
             value={capsText}

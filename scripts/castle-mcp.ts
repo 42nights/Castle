@@ -1832,6 +1832,16 @@ if (httpFlag === -1) {
       res.writeHead(204).end();
       return;
     }
+    // Liveness probe — Railway hits this to decide whether to restart the
+    // container. Cheap: just confirms the process is up and able to write
+    // a response. Doesn't probe Convex connectivity; that would be a
+    // readiness probe and would force a restart if Convex hiccups.
+    if (req.url === "/healthz" || req.url === "/health") {
+      res
+        .writeHead(200, { "content-type": "application/json" })
+        .end(JSON.stringify({ ok: true, ts: new Date().toISOString() }));
+      return;
+    }
     if (!req.url?.startsWith("/mcp")) {
       res.writeHead(404).end();
       return;
@@ -1912,6 +1922,18 @@ if (httpFlag === -1) {
 }
 }
 
+
+// Survive a single misbehaving tool call without taking the whole MCP down.
+// Without these handlers, an uncaught promise from any of the ~50 tool
+// wrappers would crash the process and force Railway to restart — and the
+// restart cycle is what "Castle MCP disconnected" looks like from the
+// chat client. Log loudly so the next bad call shows up in `railway logs`.
+process.on("unhandledRejection", (reason) => {
+  console.error("[castle-mcp] unhandled rejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[castle-mcp] uncaught exception:", err);
+});
 
 main().catch((err) => {
   console.error("castle-mcp fatal:", err);
