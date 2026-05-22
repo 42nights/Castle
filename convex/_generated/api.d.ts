@@ -25,6 +25,7 @@ import type * as lib_bounds from "../lib/bounds.js";
 import type * as lib_util from "../lib/util.js";
 import type * as patternExtractions from "../patternExtractions.js";
 import type * as seed from "../seed.js";
+import type * as suggestions from "../suggestions.js";
 import type * as templates from "../templates.js";
 
 import type {
@@ -51,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   "lib/util": typeof lib_util;
   patternExtractions: typeof patternExtractions;
   seed: typeof seed;
+  suggestions: typeof suggestions;
   templates: typeof templates;
 }>;
 

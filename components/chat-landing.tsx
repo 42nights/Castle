@@ -19,13 +19,34 @@ import { ChatMarkdown } from "@/components/chat-markdown";
 import { ChatSidebar } from "@/components/chat-sidebar";
 import { ConnectionsRail } from "@/components/connections-rail";
 
-const SUGGESTIONS = [
+/** Fallback list rendered if `api.suggestions.list` hasn't responded yet
+ *  (transient) or errors out (degraded). Same shape Hermes can answer;
+ *  the dynamic query just replaces these with state-aware variants. */
+const FALLBACK_SUGGESTIONS = [
   "what's red right now?",
-  "show me eragon's MRR",
   "list FDEs and their utilization",
-  "remember: jerry prefers terse one-line answers",
   "what did i ask you to remember last time?",
+  "summarize today across all engagements",
+  "remember: jerry prefers terse one-line answers",
 ];
+
+/**
+ * Per-minute ticker for the suggestions reactive query — matches the
+ * pattern in components/sections/attention-live.tsx. Causes Convex to
+ * re-run when state would have shifted (snooze expiry, a red flag
+ * appearing, an FDE going overcommitted).
+ */
+function useNowBucket() {
+  const [b, setB] = useState(() => Math.floor(Date.now() / 60_000));
+  useEffect(() => {
+    const id = setInterval(
+      () => setB(Math.floor(Date.now() / 60_000)),
+      60_000,
+    );
+    return () => clearInterval(id);
+  }, []);
+  return b;
+}
 
 /**
  * Castle chat landing. Three-column layout:
@@ -56,6 +77,26 @@ export function ChatLanding() {
     | undefined;
   const dismissAction = useMutation(api.agentActions.dismiss);
   const [draft, setDraft] = useState("");
+
+  // Dynamic suggestions for the empty state. Three cadences stack:
+  //   nowBucket      — reactive within ~60s of state changes
+  //   rotationBucket — daily variety axis (same operator, different day,
+  //                    different ordering, even with the same state)
+  //   mountSeed      — stable within a single mount; refreshes on
+  //                    conversation switch (re-runs the ref initializer
+  //                    via the key). UX freebie: "give me different
+  //                    suggestions" = click a chat and back.
+  const nowBucket = useNowBucket();
+  const rotationBucket = Math.floor(Date.now() / 86_400_000);
+  const mountSeedRef = useRef(Math.floor(Math.random() * 1e9));
+  const dynamicSuggestions = useQuery(api.suggestions.list, {
+    nowBucket,
+    rotationBucket,
+    mountSeed: mountSeedRef.current,
+  }) as Array<{ id: string; prompt: string }> | undefined;
+  const suggestions = (dynamicSuggestions ?? []).length > 0
+    ? (dynamicSuggestions as Array<{ id: string; prompt: string }>).map((s) => s.prompt)
+    : FALLBACK_SUGGESTIONS;
 
   // Reset draft + focus the input when the user switches conversations.
   useEffect(() => {
@@ -113,7 +154,10 @@ export function ChatLanding() {
         <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="mx-auto max-w-[720px] px-6 pt-16 pb-10">
             {empty ? (
-              <EmptyState onPick={(s) => setDraft(s)} />
+              <EmptyState
+                suggestions={suggestions}
+                onPick={(s) => setDraft(s)}
+              />
             ) : (
               <div className="flex flex-col gap-4">
                 {(() => {
@@ -231,7 +275,13 @@ export function ChatLanding() {
   );
 }
 
-function EmptyState({ onPick }: { onPick: (s: string) => void }) {
+function EmptyState({
+  suggestions,
+  onPick,
+}: {
+  suggestions: string[];
+  onPick: (s: string) => void;
+}) {
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -244,7 +294,7 @@ function EmptyState({ onPick }: { onPick: (s: string) => void }) {
         </p>
       </div>
       <ul className="flex flex-col gap-1">
-        {SUGGESTIONS.map((s) => (
+        {suggestions.map((s) => (
           <li key={s}>
             <button
               type="button"
