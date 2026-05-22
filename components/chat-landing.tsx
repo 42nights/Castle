@@ -14,6 +14,38 @@ import { type ChatMessage, type ToolActivity } from "@/lib/use-hermes-chat";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { ChatSidebar } from "@/components/chat-sidebar";
 import { ConnectionsRail } from "@/components/connections-rail";
+import { DotLoader } from "@/components/ui/dot-loader";
+
+// Searching-style scan around a 7x7 dot grid. Used as the "thinking"
+// indicator — the agent is hunting for context before any text arrives.
+const THINKING_FRAMES: number[][] = [
+  [9, 16, 17, 15, 23],
+  [10, 17, 18, 16, 24],
+  [11, 18, 19, 17, 25],
+  [18, 25, 26, 24, 32],
+  [25, 32, 33, 31, 39],
+  [32, 39, 40, 38, 46],
+  [31, 38, 39, 37, 45],
+  [30, 37, 38, 36, 44],
+  [23, 30, 31, 29, 37],
+  [31, 29, 37, 22, 24, 23, 38, 36],
+  [16, 23, 24, 22, 30],
+];
+
+// Comet across the middle row — quick, light, reads as "outputting".
+// Active while assistant text is streaming in.
+const STREAMING_FRAMES: number[][] = [
+  [21],
+  [21, 22],
+  [21, 22, 23],
+  [22, 23, 24],
+  [23, 24, 25],
+  [24, 25, 26],
+  [25, 26, 27],
+  [26, 27],
+  [27],
+  [],
+];
 
 /** Fallback list rendered if `api.suggestions.list` hasn't responded yet
  *  (transient) or errors out (degraded). Same shape Hermes can answer;
@@ -345,6 +377,18 @@ function Turn({
   return (
     <div>
       <ChatMarkdown streaming={message.streaming}>{message.text}</ChatMarkdown>
+      {message.streaming && message.text !== "" && (
+        <div className="mt-1.5 flex items-center gap-2 text-[11px] text-ink-3">
+          <DotLoader
+            frames={STREAMING_FRAMES}
+            duration={80}
+            repeatCount={-1}
+            className="gap-px"
+            dotClassName="size-[3px] rounded-[1px] bg-ink/10 [&.active]:bg-ink/70"
+          />
+          <span className="num">streaming…</span>
+        </div>
+      )}
       {actions && actions.length > 0 && (
         <div className="mt-2 flex flex-col gap-1.5">
           {actions.map((a) => (
@@ -480,18 +524,14 @@ function Thinking({
 
   return (
     <div className="flex flex-col gap-1 px-0.5 py-1 text-[12px] text-ink-3">
-      <div className="flex items-center gap-2">
-        <span className="inline-flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse" />
-          <span
-            className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse"
-            style={{ animationDelay: "150ms" }}
-          />
-          <span
-            className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse"
-            style={{ animationDelay: "300ms" }}
-          />
-        </span>
+      <div className="flex items-center gap-2.5">
+        <DotLoader
+          frames={THINKING_FRAMES}
+          duration={140}
+          repeatCount={-1}
+          className="gap-px"
+          dotClassName="size-[3px] rounded-[1px] bg-ink/15 [&.active]:bg-ink"
+        />
         <span className="num">
           thinking{elapsed > 0 ? ` · ${elapsed}s` : "…"}
         </span>
