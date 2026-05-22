@@ -32,21 +32,6 @@ const THINKING_FRAMES: number[][] = [
   [16, 23, 24, 22, 30],
 ];
 
-// Comet across the middle row — quick, light, reads as "outputting".
-// Active while assistant text is streaming in.
-const STREAMING_FRAMES: number[][] = [
-  [21],
-  [21, 22],
-  [21, 22, 23],
-  [22, 23, 24],
-  [23, 24, 25],
-  [24, 25, 26],
-  [25, 26, 27],
-  [26, 27],
-  [27],
-  [],
-];
-
 /** Fallback list rendered if `api.suggestions.list` hasn't responded yet
  *  (transient) or errors out (degraded). Same shape Hermes can answer;
  *  the dynamic query just replaces these with state-aware variants. */
@@ -228,14 +213,16 @@ export function ChatLanding() {
                     );
                   });
                 })()}
-                {status === "streaming" &&
-                  messages[messages.length - 1]?.text === "" && (
-                    <Thinking
-                      key={messages.length}
-                      tools={tools}
-                      thought={thought}
-                    />
-                  )}
+                {status === "streaming" && (
+                  <Thinking
+                    key={messages.length}
+                    tools={tools}
+                    thought={thought}
+                    compact={
+                      (messages[messages.length - 1]?.text ?? "") !== ""
+                    }
+                  />
+                )}
                 {error && (
                   <div className="text-accent text-[12.5px]">{error}</div>
                 )}
@@ -377,18 +364,6 @@ function Turn({
   return (
     <div>
       <ChatMarkdown streaming={message.streaming}>{message.text}</ChatMarkdown>
-      {message.streaming && message.text !== "" && (
-        <div className="mt-1.5 flex items-center gap-2 text-[11px] text-ink-3">
-          <DotLoader
-            frames={STREAMING_FRAMES}
-            duration={80}
-            repeatCount={-1}
-            className="gap-px"
-            dotClassName="size-[3px] rounded-[1px] bg-ink/10 [&.active]:bg-ink/70"
-          />
-          <span className="num">streaming…</span>
-        </div>
-      )}
       {actions && actions.length > 0 && (
         <div className="mt-2 flex flex-col gap-1.5">
           {actions.map((a) => (
@@ -495,9 +470,14 @@ function ConnectCta({
 function Thinking({
   tools = [],
   thought = "",
+  compact = false,
 }: {
   tools?: ToolActivity[];
   thought?: string;
+  /** Slim variant rendered alongside assistant text mid-stream. Shows
+   *  the same dot loader + elapsed + recent tools but drops the
+   *  thought preview (redundant with the streamed text). */
+  compact?: boolean;
 }) {
   // Tick once a second so the operator can tell the agent is alive
   // through long tool calls (Composio MCP roundtrips, especially the
@@ -521,6 +501,35 @@ function Thinking({
     .split("\n")
     .filter(Boolean)
     .slice(-1)[0];
+  const runningToolName = tools.find((t) => t.status === "running")?.name;
+
+  // Compact mode: shown alongside assistant text while it's streaming.
+  // A single inline row — dot loader + label + running tool name if
+  // any — so the operator can see the agent is actively doing
+  // something even when text isn't moving (e.g. mid long tool call).
+  if (compact) {
+    return (
+      <div className="flex items-center gap-2 px-0.5 py-1 text-[11.5px] text-ink-3 num">
+        <DotLoader
+          frames={THINKING_FRAMES}
+          duration={140}
+          repeatCount={-1}
+          className="gap-px"
+          dotClassName="size-[3px] rounded-[1px] bg-ink/15 [&.active]:bg-ink"
+        />
+        <span>
+          {runningToolName ? (
+            <>
+              <span className="text-ink-2">⚡ {runningToolName}</span>
+              <span className="text-ink-3"> · {elapsed}s</span>
+            </>
+          ) : (
+            <>working · {elapsed}s</>
+          )}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-1 px-0.5 py-1 text-[12px] text-ink-3">
