@@ -338,6 +338,19 @@ export default defineSchema({
     created_at: v.string(),
   }).index("by_turn_seq", ["turn_id", "seq"]),
 
+  /** Email allowlist — operators can add/remove patterns from the
+   *  Settings → Access page. Pattern is either a full email or a
+   *  domain wildcard like "*@example.com". The Better Auth user-create
+   *  hook in `convex/auth.ts` checks against this table on every
+   *  sign-in. A hardcoded rescue list in `lib/auth-allowlist.ts` is
+   *  always merged so we can't lock ourselves out by emptying it. */
+  email_allowlist: defineTable({
+    pattern: v.string(),
+    note: v.optional(v.string()),
+    created_at: v.string(),
+    created_by_email: v.optional(v.string()),
+  }).index("by_pattern", ["pattern"]),
+
   /** Append-only tool / thought events during streaming. */
   agent_tool_events: defineTable({
     turn_id: v.id("agent_turns"),

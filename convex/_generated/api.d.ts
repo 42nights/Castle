@@ -20,6 +20,7 @@ import type * as crons from "../crons.js";
 import type * as customers from "../customers.js";
 import type * as dashboard from "../dashboard.js";
 import type * as deployments from "../deployments.js";
+import type * as emailAllowlist from "../emailAllowlist.js";
 import type * as engagements from "../engagements.js";
 import type * as fdes from "../fdes.js";
 import type * as founderHours from "../founderHours.js";
@@ -52,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   customers: typeof customers;
   dashboard: typeof dashboard;
   deployments: typeof deployments;
+  emailAllowlist: typeof emailAllowlist;
   engagements: typeof engagements;
   fdes: typeof fdes;
   founderHours: typeof founderHours;

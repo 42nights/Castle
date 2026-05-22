@@ -1,11 +1,11 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth/minimal";
 import { createClient, GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { internalAction, query } from "./_generated/server";
 import { DataModel } from "./_generated/dataModel";
 import authConfig from "./auth.config";
-import { isEmailAllowed } from "../lib/auth-allowlist";
+import { isEmailAllowedAgainst } from "../lib/auth-allowlist";
 
 /**
  * Castle auth — Better Auth with the Convex component backing it.
@@ -43,7 +43,20 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
         create: {
           before: async (user) => {
             const email = (user as { email?: string }).email;
-            if (!isEmailAllowed(email)) {
+            // Read patterns from Convex. Hardcoded rescue entries are
+            // merged inside isEmailAllowedAgainst, so even if this
+            // query returns [] (or throws), Jerry / Ayaan / @42nights.dev
+            // / @xiao.sh can still sign in.
+            let patterns: string[] = [];
+            try {
+              patterns = await ctx.runQuery(
+                internal.emailAllowlist.patternsForCheck,
+                {},
+              );
+            } catch {
+              patterns = [];
+            }
+            if (!isEmailAllowedAgainst(email, patterns)) {
               throw new Error(
                 "access_denied: this email is not on the Castle allowlist",
               );

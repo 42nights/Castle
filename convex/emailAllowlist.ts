@@ -1,0 +1,117 @@
+import { v } from "convex/values";
+import { internalQuery, mutation, query } from "./_generated/server";
+import { nowIso } from "./lib/util";
+import { authComponent } from "./auth";
+import {
+  RESCUE_ALLOWLIST,
+  validatePattern,
+} from "../lib/auth-allowlist";
+
+/**
+ * Email allowlist CRUD. Read-side is open to any signed-in operator
+ * (the auth gate already restricts who can hit Castle at all). Write
+ * side is the same — we don't have separate roles right now, so any
+ * allowlisted user can edit the list. Rescue patterns from
+ * lib/auth-allowlist.ts are NOT stored in this table but are surfaced
+ * read-only in `listWithRescue`.
+ */
+
+export const list = query({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db.query("email_allowlist").collect();
+    return rows
+      .map((r) => ({
+        id: r._id,
+        pattern: r.pattern,
+        note: r.note ?? null,
+        created_at: r.created_at,
+        created_by_email: r.created_by_email ?? null,
+        kind: r.pattern.startsWith("*@")
+          ? ("domain" as const)
+          : ("email" as const),
+        source: "dynamic" as const,
+      }))
+      .sort((a, b) => a.pattern.localeCompare(b.pattern));
+  },
+});
+
+/** Returns rescue (hardcoded) patterns alongside dynamic ones, so the
+ *  settings UI can show "these are baked into the codebase" rows that
+ *  can't be removed. */
+export const listWithRescue = query({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db.query("email_allowlist").collect();
+    const dynamic = rows.map((r) => ({
+      id: r._id as string | null,
+      pattern: r.pattern,
+      note: r.note ?? null,
+      created_at: r.created_at,
+      created_by_email: r.created_by_email ?? null,
+      kind: r.pattern.startsWith("*@")
+        ? ("domain" as const)
+        : ("email" as const),
+      source: "dynamic" as const,
+    }));
+    const rescue = RESCUE_ALLOWLIST.map((p) => ({
+      id: null,
+      pattern: p,
+      note: "rescue — hardcoded in lib/auth-allowlist.ts",
+      created_at: "",
+      created_by_email: null,
+      kind: p.startsWith("*@") ? ("domain" as const) : ("email" as const),
+      source: "rescue" as const,
+    }));
+    return [...rescue, ...dynamic].sort((a, b) =>
+      a.pattern.localeCompare(b.pattern),
+    );
+  },
+});
+
+/** Patterns array — what convex/auth.ts hook compares against. */
+export const patternsForCheck = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db.query("email_allowlist").collect();
+    return rows.map((r) => r.pattern);
+  },
+});
+
+export const add = mutation({
+  args: {
+    pattern: v.string(),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, { pattern, note }) => {
+    const cleaned = validatePattern(pattern);
+
+    const existing = await ctx.db
+      .query("email_allowlist")
+      .withIndex("by_pattern", (q) => q.eq("pattern", cleaned))
+      .unique();
+    if (existing) {
+      throw new Error(`"${cleaned}" is already on the allowlist.`);
+    }
+    if (RESCUE_ALLOWLIST.includes(cleaned)) {
+      throw new Error(`"${cleaned}" is already a hardcoded rescue entry.`);
+    }
+
+    const me = await authComponent.safeGetAuthUser(ctx);
+    return ctx.db.insert("email_allowlist", {
+      pattern: cleaned,
+      note: note?.trim() || undefined,
+      created_at: nowIso(),
+      created_by_email: me?.email ?? undefined,
+    });
+  },
+});
+
+export const remove = mutation({
+  args: { id: v.id("email_allowlist") },
+  handler: async (ctx, { id }) => {
+    const row = await ctx.db.get(id);
+    if (!row) throw new Error("Pattern already gone.");
+    await ctx.db.delete(id);
+  },
+});

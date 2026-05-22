@@ -13,6 +13,11 @@ import { getSessionCookie } from "better-auth/cookies";
  * navigation, not to be a security boundary on its own.
  */
 export function middleware(req: NextRequest) {
+  // The chat landing at "/" is intentionally public — anyone can hit
+  // Castle's chat. The operator console (everything else) still needs
+  // a session cookie.
+  if (req.nextUrl.pathname === "/") return NextResponse.next();
+
   const cookie = getSessionCookie(req);
   if (cookie) return NextResponse.next();
 
@@ -30,6 +35,9 @@ export const config = {
    *  - `/api/auth/*` (Better Auth route handler — sign-in flow needs to hit this)
    *  - `/_next/*`, `/favicon`, `/static`, image-optimization, etc.
    *  - common public assets (extensions whitelisted)
+   *
+   *  Note: `/` is matched but allowed through inside the handler
+   *  (above), since the chat landing needs to be public.
    */
   matcher: [
     "/((?!sign-in|api/auth|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|css|js|map|woff2?)$).*)",

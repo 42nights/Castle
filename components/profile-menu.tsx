@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -93,11 +94,18 @@ export function ProfileMenu() {
               </div>
             )}
           </div>
+          <Link
+            href="/settings/access"
+            onClick={() => setOpen(false)}
+            className="block px-3 py-2 text-[12.5px] text-ink-2 hover:bg-surface hover:text-ink"
+          >
+            Access · email allowlist
+          </Link>
           <button
             type="button"
             onClick={signOut}
             disabled={pending}
-            className="w-full text-left px-3 py-2 text-[12.5px] text-ink-2 hover:bg-surface hover:text-ink disabled:opacity-50"
+            className="w-full text-left px-3 py-2 text-[12.5px] text-ink-2 hover:bg-surface hover:text-ink disabled:opacity-50 border-t border-line"
           >
             {pending ? "Signing out…" : "Sign out"}
           </button>
