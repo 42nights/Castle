@@ -83,6 +83,7 @@ type ConvexTemplate = ConvexDoc<{
   created_at: string;
   github_repo?: string;
   live_url?: string;
+  tags?: string[];
 }>;
 
 type ConvexCapability = ConvexDoc<{
@@ -221,6 +222,7 @@ export function adaptOverview(snapshot: ConvexOverview): AdaptedOverview {
       authored_by_fde_id: slugById[t.authored_by_fde_id] ?? t.authored_by_fde_id,
       github_repo: t.github_repo,
       live_url: t.live_url,
+      tags: t.tags ?? [],
     })),
     deployments: snapshot.deployments.map((d) => ({
       id: d._id,

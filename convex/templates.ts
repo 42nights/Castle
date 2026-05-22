@@ -77,12 +77,23 @@ export const update = mutation({
     patch: v.object({
       name: v.optional(v.string()),
       category: v.optional(category),
+      tags: v.optional(v.array(v.string())),
     }),
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, patch, actor_fde_id }) => {
+    const cleaned: typeof patch = patch.tags
+      ? {
+          ...patch,
+          tags: Array.from(
+            new Set(
+              patch.tags.map((t) => t.trim()).filter((t) => t && t !== "—"),
+            ),
+          ),
+        }
+      : patch;
     await ctx.db.patch(id, {
-      ...patch,
+      ...cleaned,
       updated_at: nowIso(),
       updated_by_fde_id: actor_fde_id,
     });
@@ -151,6 +162,83 @@ export const setLiveUrl = mutation({
       updated_at: nowIso(),
       updated_by_fde_id: actor_fde_id,
     });
+  },
+});
+
+// ─────────────── template tags ───────────────
+
+function cleanTags(tags: string[]): string[] {
+  return Array.from(
+    new Set(tags.map((t) => t.trim()).filter((t) => t && t !== "—")),
+  );
+}
+
+export const setTags = mutation({
+  args: {
+    id: v.id("templates"),
+    tags: v.array(v.string()),
+    actor_fde_id: v.union(v.id("fdes"), v.null()),
+  },
+  handler: async (ctx, { id, tags, actor_fde_id }) => {
+    await ctx.db.patch(id, {
+      tags: cleanTags(tags),
+      updated_at: nowIso(),
+      updated_by_fde_id: actor_fde_id,
+    });
+  },
+});
+
+export const addTag = mutation({
+  args: {
+    id: v.id("templates"),
+    tag: v.string(),
+    actor_fde_id: v.union(v.id("fdes"), v.null()),
+  },
+  handler: async (ctx, { id, tag, actor_fde_id }) => {
+    const tpl = await ctx.db.get(id);
+    if (!tpl) throw new Error("Template not found");
+    const next = cleanTags([...(tpl.tags ?? []), tag]);
+    await ctx.db.patch(id, {
+      tags: next,
+      updated_at: nowIso(),
+      updated_by_fde_id: actor_fde_id,
+    });
+  },
+});
+
+export const removeTag = mutation({
+  args: {
+    id: v.id("templates"),
+    tag: v.string(),
+    actor_fde_id: v.union(v.id("fdes"), v.null()),
+  },
+  handler: async (ctx, { id, tag, actor_fde_id }) => {
+    const tpl = await ctx.db.get(id);
+    if (!tpl) throw new Error("Template not found");
+    const needle = tag.trim().toLowerCase();
+    const next = (tpl.tags ?? []).filter(
+      (t) => t.trim().toLowerCase() !== needle,
+    );
+    await ctx.db.patch(id, {
+      tags: next,
+      updated_at: nowIso(),
+      updated_by_fde_id: actor_fde_id,
+    });
+  },
+});
+
+export const listTags = query({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("templates").collect();
+    const set = new Set<string>();
+    for (const t of all) {
+      for (const tag of t.tags ?? []) {
+        const trimmed = tag.trim();
+        if (trimmed && trimmed !== "—") set.add(trimmed);
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
   },
 });
 

@@ -84,6 +84,7 @@ const template = (overrides: Partial<Template> = {}): Template => ({
   created_at: "2026-04-01",
   origin_customer_id: "c1",
   authored_by_fde_id: "jerry",
+  tags: [],
   ...overrides,
 });
 

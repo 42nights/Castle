@@ -52,6 +52,8 @@ export type Template = {
   github_repo?: string;
   /** Optional canonical live URL (deployment / demo). */
   live_url?: string;
+  /** Free-form discovery tags ("outreach", "github", "stargazer"). */
+  tags: string[];
 };
 
 export type CustomerStatus = "active" | "churned" | "paused";

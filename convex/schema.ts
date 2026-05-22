@@ -140,6 +140,10 @@ export default defineSchema({
      *  https://stargazer.42nights.dev). Surfaced alongside the GitHub
      *  link on the template card + detail page. */
     live_url: v.optional(v.string()),
+    /** Free-form discovery tags (e.g. "outreach", "github", "stargazer").
+     *  Independent of `category` (single enum) — surfaced on the grid
+     *  card and detail header, autocomplete from union across templates. */
+    tags: v.optional(v.array(v.string())),
     created_at: v.string(),
     updated_at: v.string(),
     updated_by_fde_id: v.union(v.id("fdes"), v.null()),

@@ -5,6 +5,7 @@ import { CapabilityEditor } from "@/components/controls/capability-editor";
 import { GithubRepoInput } from "@/components/controls/github-repo-input";
 import { InlineName } from "@/components/controls/inline-name";
 import { LiveUrlInput } from "@/components/controls/live-url-input";
+import { TemplateTagsInput } from "@/components/controls/template-tags-input";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { loadOverview } from "@/lib/load-overview";
 import { formatDate, formatHours } from "@/lib/format";
@@ -81,6 +82,15 @@ export default async function TemplateDetail({
           </div>
         }
       />
+
+      <section className="border-y border-line py-4 mb-4 flex items-start gap-4">
+        <span className="t-caption text-ink-3 pt-1.5 shrink-0">Tags</span>
+        <TemplateTagsInput
+          templateSlug={tpl.id}
+          current={tpl.tags}
+          mode="block"
+        />
+      </section>
 
       <Panel title="Stats">
         <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-line">

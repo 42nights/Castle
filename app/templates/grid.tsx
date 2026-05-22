@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { CategoryBadge } from "@/components/atoms";
+import { TemplateTagsChips } from "@/components/controls/template-tags-input";
 import type { TemplateUsage } from "@/lib/derive";
 import type { Customer, FDE, TemplateCategory } from "@/lib/types";
 import { formatDate } from "@/lib/format";
@@ -98,6 +99,11 @@ export function TemplateGrid({
                   </li>
                 ))}
               </ul>
+              {u.template.tags.length > 0 && (
+                <div className="mt-3">
+                  <TemplateTagsChips tags={u.template.tags} max={5} size="xs" />
+                </div>
+              )}
               <div className="mt-4 pt-3 border-t border-line t-caption flex items-center justify-between">
                 <span className="num text-ink">
                   {u.customerCount} customer{u.customerCount === 1 ? "" : "s"} ·{" "}

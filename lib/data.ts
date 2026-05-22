@@ -44,7 +44,13 @@ export function loadEngagements(): Engagement[] {
   return read<Engagement[]>("engagements.json", []);
 }
 export function loadTemplates(): Template[] {
-  return read<Template[]>("templates.json", []);
+  // tags column is newer than the fixture; coerce missing → [] so the
+  // shape is uniform downstream.
+  const raw = read<Array<Omit<Template, "tags"> & { tags?: string[] }>>(
+    "templates.json",
+    [],
+  );
+  return raw.map((t) => ({ ...t, tags: t.tags ?? [] }));
 }
 export function loadDeployments(): Deployment[] {
   return read<Deployment[]>("deployments.json", []);

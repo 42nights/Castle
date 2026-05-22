@@ -289,8 +289,8 @@ function EmptyState({
           What needs handling?
         </h1>
         <p className="mt-1 text-[12.5px] text-ink-3 leading-snug">
-          Powered by Hermes — each chat in the left rail has its own
-          session, so memory is scoped per thread.
+          Each chat in the left rail has its own session, so memory is
+          scoped per thread.
         </p>
       </div>
       <ul className="flex flex-col gap-1">
