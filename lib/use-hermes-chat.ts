@@ -214,6 +214,7 @@ export function useHermesChat({
         const reader = res.body.getReader();
         const dec = new TextDecoder();
         let buf = "";
+        let sawDone = false;
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
@@ -281,9 +282,19 @@ export function useHermesChat({
               // Mark the stream done — the ticker drains the rest and
               // flips status to idle once the buffer is empty.
               streamDoneRef.current = true;
+              sawDone = true;
               return;
             }
           }
+        }
+        // Stream closed without a `{type:"done"}` event (e.g. the
+        // wrapper raised CancelledError + closed without emitting one,
+        // upstream proxy dropped us, etc). Mark done anyway so the
+        // ticker can flip status to idle — otherwise the UI sits
+        // stuck on "streaming" forever and the stop button looks
+        // broken because there's no live fetch left to abort.
+        if (!sawDone) {
+          streamDoneRef.current = true;
         }
       } catch (err) {
         if (ac.signal.aborted) {
@@ -379,7 +390,26 @@ export function useHermesChat({
   }, [status, streamingText, pendingUser, historyRaw]);
 
   const stop = useCallback(() => {
+    // Try the AbortController path first — that's the clean cancel for
+    // an in-flight fetch (server sees the disconnect and cancels the
+    // upstream session). If there's no live abort (the fetch already
+    // ended silently without emitting a done event), force the local
+    // state back to idle so the operator can send the next prompt.
+    // Without this fallback, status sits at "streaming" forever and
+    // pressing stop looks broken.
     abortRef.current?.abort();
+    if (tickerRef.current) {
+      clearInterval(tickerRef.current);
+      tickerRef.current = null;
+    }
+    bufferRef.current = "";
+    streamDoneRef.current = true;
+    setStatus("idle");
+    setStreamingThought("");
+    setTools([]);
+    // Leave streamingText + pendingUser intact — the handoff effect
+    // clears them once Convex history catches up. Wiping here would
+    // re-introduce the "flash then empty" gap.
   }, []);
 
   return {
