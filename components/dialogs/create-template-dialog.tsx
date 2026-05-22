@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -13,9 +13,22 @@ import {
 } from "@/components/ui/dialog";
 import { api } from "@/convex/_generated/api";
 import { useActorSlug } from "@/lib/use-actor";
+import { useFormDraft, relativeSince } from "@/lib/use-form-draft";
 import { useRunMutation } from "@/lib/use-run-mutation";
 
 type Category = "GTM" | "Ops" | "Content" | "BD" | "Research";
+
+type Draft = {
+  name: string;
+  category: Category;
+  originId: string;
+  authorId: string;
+  capsText: string;
+  githubRepo: string;
+  liveUrl: string;
+};
+
+const DRAFT_KEY = "castle.draft.create-template.v1";
 
 export function CreateTemplateDialog({
   open,
@@ -47,6 +60,66 @@ export function CreateTemplateDialog({
   const [githubRepo, setGithubRepoValue] = useState("");
   const [liveUrl, setLiveUrlValue] = useState("");
   const [pending, setPending] = useState(false);
+
+  const draft = useFormDraft<Draft>(DRAFT_KEY);
+
+  // Auto-restore on first hydrate. The Convex `_id` fields may reference
+  // deleted rows, so we only restore them when the entity still exists in
+  // the current options; otherwise blank them so the user re-picks.
+  // Resets to false when the dialog closes so the next open can restore
+  // afresh (e.g. crash mid-edit → reopen later).
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (!open) restoredRef.current = false;
+  }, [open]);
+  useEffect(() => {
+    if (!draft.hydrated || !draft.snapshot || restoredRef.current) return;
+    if (!open) return; // wait until dialog actually opens
+    const v = draft.snapshot.values;
+    setName(v.name);
+    setCategory(v.category);
+    setCapsText(v.capsText);
+    setGithubRepoValue(v.githubRepo);
+    setLiveUrlValue(v.liveUrl);
+    // Defer customer/author restore until the live lists arrive — those
+    // useQuery calls return undefined briefly on mount.
+    if (customers && customers.some((c) => c._id === v.originId)) {
+      setOriginId(v.originId);
+    } else {
+      setOriginId("");
+    }
+    if (fdes && fdes.some((f) => f._id === v.authorId)) {
+      setAuthorId(v.authorId);
+    } else {
+      setAuthorId("");
+    }
+    restoredRef.current = true;
+  }, [draft.hydrated, draft.snapshot, open, customers, fdes]);
+
+  // Persist on every field change. Skipped when the dialog isn't open
+  // so closing-with-fields-cleared doesn't wipe the saved snapshot.
+  useEffect(() => {
+    if (!open) return;
+    draft.save({
+      name,
+      category,
+      originId,
+      authorId,
+      capsText,
+      githubRepo,
+      liveUrl,
+    });
+  }, [
+    open,
+    draft,
+    name,
+    category,
+    originId,
+    authorId,
+    capsText,
+    githubRepo,
+    liveUrl,
+  ]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,7 +174,19 @@ export function CreateTemplateDialog({
     setCapsText("");
     setGithubRepoValue("");
     setLiveUrlValue("");
+    draft.clear();
     onClose();
+  };
+
+  const discardDraft = () => {
+    setName("");
+    setCategory("Ops");
+    setOriginId("");
+    setAuthorId("");
+    setCapsText("");
+    setGithubRepoValue("");
+    setLiveUrlValue("");
+    draft.clear();
   };
 
   return (
@@ -128,6 +213,24 @@ export function CreateTemplateDialog({
       }
     >
       <form id="new-template-form" onSubmit={onSubmit}>
+        {draft.snapshot && (
+          <div className="mb-4 -mt-2 flex items-center justify-between gap-3 rounded-sm border border-line bg-surface px-2.5 py-1.5 text-[12px] text-ink-2">
+            <span>
+              Draft restored from{" "}
+              <span className="num text-ink">
+                {relativeSince(draft.snapshot.savedAt)}
+              </span>
+              . Autosaving.
+            </span>
+            <button
+              type="button"
+              onClick={discardDraft}
+              className="text-ink-3 hover:text-accent underline underline-offset-2 decoration-line"
+            >
+              discard
+            </button>
+          </div>
+        )}
         <DialogField label="Name">
           <DialogInput
             value={name}
