@@ -4,6 +4,7 @@ import { Castle as CastleIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { InFlightDot } from "@/components/in-flight-dot";
+import { ProfileMenu } from "@/components/profile-menu";
 
 const links = [
   { href: "/", label: "Ask" },
@@ -77,6 +78,7 @@ export function TopNav() {
           <span className="hidden lg:inline text-[11px] text-ink-3">
             <kbd className="num text-[10px] text-ink-2">⌘K</kbd>
           </span>
+          <ProfileMenu />
         </div>
       </div>
     </header>
