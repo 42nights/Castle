@@ -222,6 +222,19 @@ function remoteHermesStream(
         if (buf.trim()) controller.enqueue(enc.encode(buf + "\n"));
         onComplete(assistantText);
       } catch (err) {
+        // Whatever we managed to accumulate before the stream broke is
+        // still useful to persist. Without this, a mid-stream
+        // disconnect (Hermes container restart, network hiccup,
+        // upstream timeout) would silently lose the partial response —
+        // operator reloads and sees a chat with their question but no
+        // answer at all.
+        if (assistantText.trim()) {
+          try {
+            onComplete(assistantText);
+          } catch {
+            /* persist failure is logged inside persistAssistant */
+          }
+        }
         if (!abort.aborted) {
           emit({
             type: "error",
@@ -276,20 +289,35 @@ function localOrbStream(
       });
 
       child.on("close", (code) => {
+        // Persist whatever we accumulated, even on non-zero exit —
+        // operator should never lose visible streamed text just
+        // because the subprocess hiccupped after the fact.
+        if (assistantText.trim()) {
+          try {
+            onComplete(assistantText);
+          } catch {
+            /* persist failure already logged in persistAssistant */
+          }
+        }
         if (code !== 0) {
           emit({
             type: "error",
             message:
               stderr.trim() || `hermes exited with code ${code ?? "?"}`,
           });
-        } else {
-          onComplete(assistantText);
         }
         emit({ type: "done" });
         controller.close();
       });
 
       child.on("error", (err) => {
+        if (assistantText.trim()) {
+          try {
+            onComplete(assistantText);
+          } catch {
+            /* persist failure already logged in persistAssistant */
+          }
+        }
         emit({ type: "error", message: err.message });
         emit({ type: "done" });
         controller.close();
