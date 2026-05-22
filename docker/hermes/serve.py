@@ -529,12 +529,30 @@ async def _stream(session_in: str, text: str) -> AsyncIterator[bytes]:
 
     try:
         async with hermes.stream_prompt(session_id, text) as (q, prompt_fut):
+            # Heartbeat cadence — Vercel / intermediate proxies have been
+            # observed to close idle streams around 25-30s of no bytes
+            # in either direction. The agent often has long quiet
+            # stretches while Claude is generating tokens between tool
+            # calls; emit a no-op ping every IDLE_PING_SEC seconds so
+            # the stream is never truly idle. Clients ignore unknown
+            # event types.
+            IDLE_PING_SEC = 15.0
             while True:
                 drain_task = asyncio.ensure_future(q.get())
                 done, _ = await asyncio.wait(
                     {drain_task, prompt_fut},
                     return_when=asyncio.FIRST_COMPLETED,
+                    timeout=IDLE_PING_SEC,
                 )
+                # No frame within the heartbeat window — emit a ping
+                # and loop. Both the queue task and the prompt future
+                # remain unresolved, so we cancel the queue task (a
+                # fresh one is scheduled on the next iteration) and
+                # leave the prompt future intact.
+                if not done:
+                    drain_task.cancel()
+                    yield _emit({"type": "ping"})
+                    continue
                 if drain_task in done:
                     params = drain_task.result()
                     mapped = _map_update(params.get("update", {}) or {})
