@@ -94,9 +94,24 @@ class HermesACP:
         self._next_id = 1
         self._pending: dict[int, asyncio.Future] = {}
         self._session_queues: dict[str, asyncio.Queue] = {}
+        # Per-session prompt lock. Held from `session/prompt` start
+        # through the prompt-future resolution (including the await on
+        # cancel-cleanup) so a stop-then-immediate-send doesn't fire
+        # the next prompt while Hermes is still releasing its own
+        # runtime_lock — which was making the agent reply with
+        # "Queued for the next turn. (1 queued)" instead of running
+        # the new prompt fresh.
+        self._session_prompt_locks: dict[str, asyncio.Lock] = {}
         self._reader_task: Optional[asyncio.Task] = None
         self._stderr_task: Optional[asyncio.Task] = None
         self._initialized = False
+
+    def _prompt_lock(self, session_id: str) -> asyncio.Lock:
+        lock = self._session_prompt_locks.get(session_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._session_prompt_locks[session_id] = lock
+        return lock
 
     async def ensure_alive(self) -> None:
         if self._proc and self._proc.returncode is None and self._initialized:
@@ -115,6 +130,11 @@ class HermesACP:
                 fut.set_exception(RuntimeError("acp process restarting"))
         self._pending.clear()
         self._session_queues.clear()
+        # Drop any session prompt locks so the next stream_prompt gets a
+        # fresh one. Anything blocked on the old lock will resolve via
+        # the done-callback (the pending future just got an exception
+        # set above, which fires the callback).
+        self._session_prompt_locks.clear()
         for t in (self._reader_task, self._stderr_task):
             if t and not t.done():
                 t.cancel()
@@ -351,14 +371,26 @@ class HermesACP:
 
     @asynccontextmanager
     async def stream_prompt(self, session_id: str, text: str):
-        """Send session/prompt, yield (queue, prompt_future)."""
+        """Send session/prompt, yield (queue, prompt_future).
+
+        Holds a per-session asyncio.Lock from session/prompt write
+        through prompt-future resolution. If the caller is cancelled
+        mid-stream, the lock stays held until we await the future to
+        actually resolve (with a timeout), so the next /agent request
+        for the same session arrives to an idle Hermes runtime_lock
+        instead of getting silently queued behind a half-cancelled
+        prior turn.
+        """
+        lock = self._prompt_lock(session_id)
+        await lock.acquire()
         q: asyncio.Queue = asyncio.Queue()
         self._session_queues[session_id] = q
+        fut: Optional[asyncio.Future] = None
         try:
             req_id = self._next_id
             self._next_id += 1
             loop = asyncio.get_running_loop()
-            fut: asyncio.Future = loop.create_future()
+            fut = loop.create_future()
             self._pending[req_id] = fut
             await self._write(
                 {
@@ -374,6 +406,24 @@ class HermesACP:
             yield q, fut
         finally:
             self._session_queues.pop(session_id, None)
+            # Release the per-session lock. Two paths:
+            #   - Normal exit: prompt_fut is already done; release now.
+            #   - Cancel exit: prompt_fut is still pending (Hermes
+            #     hasn't acknowledged the cancel yet). Defer release
+            #     via add_done_callback so the next prompt on this
+            #     session blocks until Hermes has finished winding
+            #     down. Awaiting in the finally is fragile during
+            #     cancellation propagation; the callback path is
+            #     safer.
+            def _safe_release() -> None:
+                try:
+                    lock.release()
+                except RuntimeError:
+                    pass  # already released — shouldn't happen but defensive
+            if fut is None or fut.done():
+                _safe_release()
+            else:
+                fut.add_done_callback(lambda _: _safe_release())
 
     async def cancel(self, session_id: str) -> None:
         try:
