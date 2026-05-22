@@ -152,6 +152,22 @@ function remoteHermesStream(
         controller.enqueue(enc.encode(JSON.stringify(ev) + "\n"));
       let assistantText = "";
 
+      // Self-imposed deadline ~20s before Vercel's 300s function
+      // maxDuration. Without it, an agent that runs >300s gets killed
+      // by Vercel and the client sees a 504 with no clean done frame;
+      // partial-persist also doesn't fire because the function is
+      // terminated, not gracefully exited. By aborting ourselves at
+      // 280s we get one last shot at persisting partial text and
+      // emitting a structured done event so the UI doesn't sit on
+      // "streaming" forever.
+      const SOFT_DEADLINE_MS = 280_000;
+      const innerAbort = new AbortController();
+      const onOuterAbort = () => innerAbort.abort();
+      abort.addEventListener("abort", onOuterAbort);
+      const deadlineTimer = setTimeout(() => {
+        innerAbort.abort();
+      }, SOFT_DEADLINE_MS);
+
       try {
         const res = await fetch(`${baseUrl.replace(/\/$/, "")}/agent`, {
           method: "POST",
@@ -160,7 +176,7 @@ function remoteHermesStream(
             ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
           },
           body: JSON.stringify({ session, text }),
-          signal: abort,
+          signal: innerAbort.signal,
         });
         if (!res.ok || !res.body) {
           const detail = await res.text().catch(() => "");
@@ -235,13 +251,27 @@ function remoteHermesStream(
             /* persist failure is logged inside persistAssistant */
           }
         }
-        if (!abort.aborted) {
+        // If our soft deadline fired (vs. the client aborting),
+        // emit a structured done event so the UI knows the turn
+        // ended gracefully instead of seeing a torn stream.
+        const deadlineFired = innerAbort.signal.aborted && !abort.aborted;
+        if (deadlineFired) {
+          emit({
+            type: "error",
+            message:
+              "Turn exceeded the 280s route deadline (Vercel maxDuration cap). Partial response saved.",
+          });
+          emit({ type: "done", stop_reason: "duration_limit" });
+        } else if (!abort.aborted) {
           emit({
             type: "error",
             message: err instanceof Error ? err.message : "fetch failed",
           });
           emit({ type: "done" });
         }
+      } finally {
+        clearTimeout(deadlineTimer);
+        abort.removeEventListener("abort", onOuterAbort);
       }
       controller.close();
     },

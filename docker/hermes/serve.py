@@ -427,13 +427,19 @@ class HermesACP:
                 # Belt-and-braces: if Hermes is wedged on a tool call and
                 # never resolves the prompt future (the cancel
                 # notification can't pre-empt an in-flight tool
-                # execution), force-release the lock after 6 minutes so
-                # the next prompt on this session isn't blocked
-                # forever. Double-release is benign — _safe_release
-                # swallows the RuntimeError.
+                # execution), force-release the lock after this many
+                # seconds so the next prompt on this session isn't
+                # blocked forever. Must stay well under Vercel's 300s
+                # function maxDuration — otherwise the route waiting on
+                # this lock gets killed and the client sees a 504.
+                # 30s is generous for normal cancel propagation
+                # (typically <5s) and tight enough that a wedged
+                # session can't soak the entire Vercel budget.
+                # Double-release is benign — _safe_release swallows the
+                # RuntimeError.
                 try:
                     loop = asyncio.get_running_loop()
-                    loop.call_later(360.0, _safe_release)
+                    loop.call_later(30.0, _safe_release)
                 except RuntimeError:
                     pass  # no running loop (process tearing down)
 
