@@ -56,6 +56,14 @@ export function useHermesChat({
   const [tools, setTools] = useState<ToolActivity[]>([]);
   const [status, setStatus] = useState<ChatStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  // Snapshot of the *previous* turn's streamed assistant text when a
+  // new turn starts before Convex has persisted it. Without this, the
+  // sendMessage `setStreamingText("")` would erase your only handle on
+  // the prior assistant message — Convex's `historyRaw` may still be
+  // mid-commit at that moment. Cleared once historyRaw shows a fresh
+  // assistant (more assistants than when the ghost was captured).
+  const [ghostAssistant, setGhostAssistant] = useState<string | null>(null);
+  const ghostAssistantCountRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   // Typewriter reveal — Hermes batches its output, so we accumulate
   // pending characters and drain them at a steady rate to simulate
@@ -70,19 +78,35 @@ export function useHermesChat({
       role: m.role,
       text: m.text,
     }));
+    // Ghost: the prior turn's streamed assistant text that wasn't yet
+    // in Convex when we started a new turn. Insert it between
+    // historyRaw and the new pendingUser so the chronological order
+    // stays right. Only meaningful if historyRaw's tail isn't already
+    // an assistant — once that flips, the dedicated useEffect clears
+    // the ghost.
+    if (ghostAssistant && out[out.length - 1]?.role !== "assistant") {
+      out.push({
+        id: "a-ghost",
+        role: "assistant",
+        text: ghostAssistant,
+      });
+    }
     // History "caught up" = this send's user text is somewhere in the
     // tail of history (so the optimistic user ghost is redundant) AND
     // the last entry is an assistant message (so the streaming ghost is
     // redundant). We check both before the handoff effect clears the
     // optimistic state to avoid a one-frame double-render.
+    const histRows = historyRaw ?? [];
     const userLanded =
       pendingUser !== null &&
-      out.some(
+      histRows.some(
         (m, i) =>
-          i >= out.length - 2 && m.role === "user" && m.text === pendingUser,
+          i >= histRows.length - 2 &&
+          m.role === "user" &&
+          m.text === pendingUser,
       );
     const assistantLanded =
-      userLanded && out[out.length - 1]?.role === "assistant";
+      userLanded && histRows[histRows.length - 1]?.role === "assistant";
     if (pendingUser !== null && !userLanded) {
       out.push({ id: "u-pending", role: "user", text: pendingUser });
     }
@@ -97,7 +121,7 @@ export function useHermesChat({
       });
     }
     return out;
-  }, [historyRaw, pendingUser, streamingText, status]);
+  }, [historyRaw, pendingUser, streamingText, status, ghostAssistant]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -110,6 +134,19 @@ export function useHermesChat({
       )
         return;
 
+      // Snapshot the prior turn's un-persisted assistant text BEFORE
+      // clearing streamingText. Without this, sending a new prompt in
+      // the milliseconds between stream-done and Convex committing the
+      // assistant erases your only handle on the prior reply.
+      const histRowsNow = historyRaw ?? [];
+      const lastIsAssistant =
+        histRowsNow[histRowsNow.length - 1]?.role === "assistant";
+      if (streamingText && !lastIsAssistant) {
+        setGhostAssistant(streamingText);
+        ghostAssistantCountRef.current = histRowsNow.filter(
+          (m) => m.role === "assistant",
+        ).length;
+      }
       setPendingUser(trimmed);
       setStreamingText("");
       setStreamingThought("");
@@ -270,8 +307,29 @@ export function useHermesChat({
         setStatus("error");
       }
     },
-    [actorSlug, conversationId, status],
+    [actorSlug, conversationId, status, historyRaw, streamingText],
   );
+
+  // Ghost cleanup: when historyRaw shows a new assistant message
+  // (count increased since the ghost was captured), the prior turn has
+  // finally persisted and the ghost is redundant. Drop it.
+  useEffect(() => {
+    if (ghostAssistant === null) return;
+    const assistantCount = (historyRaw ?? []).filter(
+      (m) => m.role === "assistant",
+    ).length;
+    if (assistantCount > ghostAssistantCountRef.current) {
+      setGhostAssistant(null);
+    }
+  }, [historyRaw, ghostAssistant]);
+
+  // Clear the ghost on conversation switch so it doesn't bleed into a
+  // different thread. The other transient state intentionally survives
+  // (we want the streaming indicator to follow the user across chats
+  // when they switch mid-stream).
+  useEffect(() => {
+    setGhostAssistant(null);
+  }, [conversationId]);
 
   // Handoff: once the persisted history contains an assistant turn at
   // the tail, the optimistic streaming entry has been replaced by the
