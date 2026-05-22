@@ -7,8 +7,9 @@ import { TemplateGrid } from "./grid";
 export const dynamic = "force-dynamic";
 
 export default async function TemplatesPage() {
-  const { templates, deployments, customers, fdes } = await loadOverview();
-  const usage = templateUsage(templates, deployments);
+  const { templates, deployments, customers, fdes, patternExtractions } =
+    await loadOverview();
+  const usage = templateUsage(templates, deployments, patternExtractions);
   return (
     <PageShell>
       <PageHeader

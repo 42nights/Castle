@@ -1147,12 +1147,18 @@ server.registerTool(
 server.registerTool(
   "template_update",
   {
-    description: "Patch name / category on a template.",
+    description:
+      "Patch name / category / tags / author / origin on a template. " +
+      "For tag-only edits prefer template_set_tags. Author and origin " +
+      "take slugs; they're resolved to Convex ids server-side.",
     inputSchema: {
       template_slug: z.string(),
       patch: z.object({
         name: z.string().optional(),
         category: z.enum(template_categories).optional(),
+        tags: z.array(z.string()).optional(),
+        origin_customer_slug: z.string().optional(),
+        authored_by_fde_slug: z.string().optional(),
       }),
     },
   },
@@ -1162,9 +1168,37 @@ server.registerTool(
       slug: template_slug,
     })) as { _id: string } | null;
     if (!t) return text({ error: "template not found" });
+    // Resolve slug references to Convex ids, then strip them from
+    // the outgoing patch.
+    const {
+      origin_customer_slug,
+      authored_by_fde_slug,
+      ...restPatch
+    } = patch;
+    const resolved: Record<string, unknown> = { ...restPatch };
+    if (origin_customer_slug) {
+      const c = (await convex.query(api.customers.getBySlug, {
+        slug: origin_customer_slug,
+      })) as { _id: string } | null;
+      if (!c) {
+        return text({
+          error: `customer '${origin_customer_slug}' not found`,
+        });
+      }
+      resolved.origin_customer_id = c._id;
+    }
+    if (authored_by_fde_slug) {
+      const f = (await convex.query(api.fdes.getBySlug, {
+        slug: authored_by_fde_slug,
+      })) as { _id: string } | null;
+      if (!f) {
+        return text({ error: `fde '${authored_by_fde_slug}' not found` });
+      }
+      resolved.authored_by_fde_id = f._id;
+    }
     await convex.mutation(api.templates.update, {
       id: t._id as never,
-      patch: patch as never,
+      patch: resolved as never,
       actor_fde_id: (actor ?? null) as never,
     });
     return text({ ok: true, template: template_slug });

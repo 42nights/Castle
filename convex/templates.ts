@@ -78,6 +78,10 @@ export const update = mutation({
       name: v.optional(v.string()),
       category: v.optional(category),
       tags: v.optional(v.array(v.string())),
+      // Operator may need to retroactively fix attribution — pick the
+      // wrong FDE or wrong customer at create time, etc.
+      origin_customer_id: v.optional(v.id("customers")),
+      authored_by_fde_id: v.optional(v.id("fdes")),
     }),
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExtractionRowDelete } from "@/components/controls/extraction-row-delete";
+import { TemplateAuthorSelect } from "@/components/controls/template-author-select";
 import { TemplateCategoryMenu } from "@/components/controls/template-category-menu";
+import { TemplateOriginSelect } from "@/components/controls/template-origin-select";
 import { CapabilityEditor } from "@/components/controls/capability-editor";
 import { GithubRepoInput } from "@/components/controls/github-repo-input";
 import { InlineName } from "@/components/controls/inline-name";
@@ -17,12 +19,14 @@ export default async function TemplateDetail({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const { templates, customers, deployments, fdes, engagements, patternExtractions } =
+  const { templates, customers, deployments, engagements, patternExtractions } =
     await loadOverview();
   const tpl = templates.find((t) => t.id === slug);
   if (!tpl) notFound();
-  const origin = customers.find((c) => c.id === tpl.origin_customer_id);
-  const author = fdes.find((f) => f.id === tpl.authored_by_fde_id);
+  // Author + origin links used to live in the header description as
+  // static text. Now they're TemplateAuthorSelect / TemplateOriginSelect
+  // which pull their own options from useQuery. Keep the lookup
+  // commented-out hint in case other panels want them later.
   const cById = new Map(customers.map((c) => [c.id, c]));
   const deps = deployments.filter((d) => d.template_id === tpl.id);
   const customerCount = new Set(deps.map((d) => d.customer_id)).size;
@@ -54,23 +58,20 @@ export default async function TemplateDetail({
           />
         }
         description={
-          <>
+          <span className="inline-flex items-center gap-1.5 flex-wrap text-[12.5px] text-ink-2">
             Authored{" "}
-            <span className="num">{formatDate(tpl.created_at)}</span> by{" "}
-            <Link
-              href={`/fdes/${author?.id ?? ""}`}
-              className="text-ink hover:underline underline-offset-2 decoration-line"
-            >
-              {author?.name ?? "—"}
-            </Link>{" "}
-            from work with{" "}
-            <Link
-              href={`/customers/${origin?.id ?? ""}`}
-              className="text-ink hover:underline underline-offset-2 decoration-line"
-            >
-              {origin?.name ?? "—"}
-            </Link>
-          </>
+            <span className="num text-ink">{formatDate(tpl.created_at)}</span>{" "}
+            by
+            <TemplateAuthorSelect
+              templateSlug={tpl.id}
+              currentFdeSlug={tpl.authored_by_fde_id}
+            />
+            from work with
+            <TemplateOriginSelect
+              templateSlug={tpl.id}
+              currentCustomerSlug={tpl.origin_customer_id}
+            />
+          </span>
         }
         actions={
           <div className="flex items-center gap-3">

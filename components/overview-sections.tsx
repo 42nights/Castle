@@ -58,7 +58,7 @@ export function OverviewSections({
   const paying = payingCustomerCount(customers);
   const risk = atRiskArr(customers);
   const hours = totalHoursReplaced(deployments);
-  const usage = templateUsage(templates, deployments);
+  const usage = templateUsage(templates, deployments, patternExtractions);
   const points = founderHoursSeries(founderHours);
   const allRows = engagementRows(engagements, customers, fdes);
   const phaseGroups = engagementsByPhase(allRows);

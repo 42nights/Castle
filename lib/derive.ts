@@ -6,6 +6,7 @@ import type {
   FDE,
   FounderHoursEntry,
   Health,
+  PatternExtraction,
   Template,
 } from "./types";
 
@@ -76,21 +77,42 @@ export function daysSince(iso: string, today: Date = new Date()): number {
 
 export type TemplateUsage = {
   template: Template;
+  /** Direct deployment count (rows in `deployments` with this template). */
   deploymentCount: number;
+  /** Pattern-reuse count: distinct customers in pattern_extraction_reuses
+   *  where the parent extraction landed in this template. A template
+   *  can have non-zero reuse with zero deployments (someone borrowed
+   *  the pattern without us shipping yet). */
+  reuseCount: number;
+  /** Union of distinct customers across deployments AND reuses. */
   customerCount: number;
   customerIds: string[];
 };
 
 export function templateUsage(
   templates: Template[],
-  deployments: Deployment[]
+  deployments: Deployment[],
+  patternExtractions: PatternExtraction[] = [],
 ): TemplateUsage[] {
   return templates.map((t) => {
     const deps = deployments.filter((d) => d.template_id === t.id);
-    const customerIds = Array.from(new Set(deps.map((d) => d.customer_id)));
+    const myExtractions = patternExtractions.filter(
+      (p) => p.extracted_into_template_id === t.id,
+    );
+    const reuseCustomerIds = new Set<string>();
+    for (const p of myExtractions) {
+      for (const cid of p.reused_at_customer_ids) reuseCustomerIds.add(cid);
+    }
+    const customerIds = Array.from(
+      new Set<string>([
+        ...deps.map((d) => d.customer_id),
+        ...reuseCustomerIds,
+      ]),
+    );
     return {
       template: t,
       deploymentCount: deps.length,
+      reuseCount: reuseCustomerIds.size,
       customerCount: customerIds.length,
       customerIds,
     };

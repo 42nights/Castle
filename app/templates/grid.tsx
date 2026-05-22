@@ -104,12 +104,22 @@ export function TemplateGrid({
                   <TemplateTagsChips tags={u.template.tags} max={5} size="xs" />
                 </div>
               )}
-              <div className="mt-4 pt-3 border-t border-line t-caption flex items-center justify-between">
-                <span className="num text-ink">
-                  {u.customerCount} customer{u.customerCount === 1 ? "" : "s"} ·{" "}
-                  {u.deploymentCount} dep
-                </span>
-                <span className="text-ink-3">
+              <div className="mt-4 pt-3 border-t border-line t-caption flex items-center justify-between gap-3">
+                {u.customerCount === 0 ? (
+                  <span className="text-ink-3">Not yet deployed</span>
+                ) : (
+                  <span className="num text-ink">
+                    Used by {u.customerCount} customer
+                    {u.customerCount === 1 ? "" : "s"}
+                    {u.deploymentCount > 0 && (
+                      <span className="text-ink-3">
+                        {" "}· {u.deploymentCount} deployment
+                        {u.deploymentCount === 1 ? "" : "s"}
+                      </span>
+                    )}
+                  </span>
+                )}
+                <span className="text-ink-3 text-right truncate">
                   {origin?.name ?? "—"}, {author?.name.split(" ")[0] ?? "—"}
                 </span>
               </div>
