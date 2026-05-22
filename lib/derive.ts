@@ -103,8 +103,14 @@ export function templateUsage(
     for (const p of myExtractions) {
       for (const cid of p.reused_at_customer_ids) reuseCustomerIds.add(cid);
     }
+    // The customer whose engagement gave birth to this template is its
+    // first user. Even with no direct deployment or reuse yet, the
+    // template represents work delivered for them. Without this we
+    // showed "Not yet deployed" for templates that clearly were used
+    // (the operator literally extracted them from a real engagement).
     const customerIds = Array.from(
       new Set<string>([
+        t.origin_customer_id,
         ...deps.map((d) => d.customer_id),
         ...reuseCustomerIds,
       ]),
