@@ -57,7 +57,11 @@ export function OverviewSections({
   const risk = atRiskArr(customers);
   const hours = totalHoursReplaced(deployments);
   const usage = templateUsage(templates, deployments, patternExtractions);
-  const mrrPoints = mrrDailySeries(customers, 90, today);
+  // MRR uses real `new Date()` instead of the pinned `today` — the
+  // pin exists for attention-list determinism (so notification copy is
+  // stable across replays), but the MRR chart should track real time
+  // and pick up newly-started customers immediately.
+  const mrrPoints = mrrDailySeries(customers, 90, new Date());
   const allRows = engagementRows(engagements, customers, fdes);
   const phaseGroups = engagementsByPhase(allRows);
   const attention = attentionItems(engagements, customers, fdes, today);
