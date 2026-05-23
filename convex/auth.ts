@@ -64,6 +64,22 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
             const email = (user as { email?: string }).email;
             const patterns = await readPatterns(ctx);
             if (!isEmailAllowedAgainst(email, patterns)) {
+              // Best-effort log so /settings/access can surface the
+              // exact email GitHub returned. Wrap in try/catch — a
+              // logging failure must not mask the access_denied error.
+              // user.create.before fires from a mutation context, but
+              // the GenericCtx union also includes QueryCtx — narrow
+              // at runtime so TS lets us call runMutation.
+              if (email && "runMutation" in ctx) {
+                try {
+                  await ctx.runMutation(
+                    internal.emailAllowlist.logDenied,
+                    { email },
+                  );
+                } catch (err) {
+                  console.error("[auth] logDenied failed:", err);
+                }
+              }
               throw new Error(
                 "access_denied: this email is not on the Castle allowlist",
               );

@@ -351,6 +351,28 @@ export default defineSchema({
     created_by_email: v.optional(v.string()),
   }).index("by_pattern", ["pattern"]),
 
+  /** Rejected sign-in attempts. Better Auth's user.create.before hook
+   *  logs every denied attempt here so an operator can see the exact
+   *  email GitHub returned and one-click approve it from
+   *  /settings/access. Dedupe by normalized_email — repeat denials
+   *  bump attempt_count + last_attempted_at on the same row. */
+  access_attempts: defineTable({
+    email: v.string(),
+    normalized_email: v.string(),
+    outcome: v.union(
+      v.literal("denied"),
+      v.literal("approved"),
+      v.literal("dismissed"),
+    ),
+    first_attempted_at: v.string(),
+    last_attempted_at: v.string(),
+    attempt_count: v.number(),
+    resolved_at: v.optional(v.string()),
+    resolved_by_email: v.optional(v.string()),
+  })
+    .index("by_normalized_email", ["normalized_email"])
+    .index("by_outcome_attempted", ["outcome", "last_attempted_at"]),
+
   /** Append-only tool / thought events during streaming. */
   agent_tool_events: defineTable({
     turn_id: v.id("agent_turns"),

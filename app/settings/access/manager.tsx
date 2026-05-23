@@ -17,12 +17,38 @@ type Row = {
   source: "rescue" | "dynamic";
 };
 
+type Attempt = {
+  id: string;
+  email: string;
+  attempt_count: number;
+  first_attempted_at: string;
+  last_attempted_at: string;
+};
+
+function timeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  const diff = Date.now() - then;
+  if (Number.isNaN(diff) || diff < 0) return iso;
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  return `${day}d ago`;
+}
+
 export function AllowlistManager() {
   const rows = useQuery(api.emailAllowlist.listWithRescue, {}) as
     | Row[]
     | undefined;
   const add = useRunMutation(api.emailAllowlist.add);
   const remove = useRunMutation(api.emailAllowlist.remove);
+  const attempts = useQuery(api.emailAllowlist.listAttempts, {}) as
+    | Attempt[]
+    | undefined;
+  const approveAttempt = useRunMutation(api.emailAllowlist.approveAttempt);
+  const dismissAttempt = useRunMutation(api.emailAllowlist.dismissAttempt);
 
   const [pattern, setPattern] = useState("");
   const [note, setNote] = useState("");
@@ -101,6 +127,73 @@ export function AllowlistManager() {
           </div>
         </form>
       </section>
+
+      {attempts && attempts.length > 0 && (
+        <section className="panel mb-4">
+          <header className="panel-header">
+            <div className="flex items-baseline gap-2">
+              <h2 className="t-h2 text-ink">Recent rejected sign-ins</h2>
+              <span className="t-caption">{attempts.length}</span>
+            </div>
+          </header>
+          <div className="panel-body no-pad">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-line text-ink-3 uppercase tracking-[0.06em] text-[10px]">
+                  <th className="text-left h-8 px-3 font-medium">Email</th>
+                  <th className="text-left h-8 px-3 font-medium">Tries</th>
+                  <th className="text-left h-8 px-3 font-medium">Last</th>
+                  <th className="text-right h-8 px-3 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {attempts.map((a) => (
+                  <tr
+                    key={a.id}
+                    className="border-b border-line last:border-b-0"
+                  >
+                    <td className="px-3 py-2 num text-ink text-[13px]">
+                      {a.email}
+                    </td>
+                    <td className="px-3 py-2 num text-ink-2 text-[12px]">
+                      {a.attempt_count}×
+                    </td>
+                    <td className="px-3 py-2 text-ink-3 text-[12px]">
+                      {timeAgo(a.last_attempted_at)}
+                    </td>
+                    <td className="px-3 py-2 text-right flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          approveAttempt(
+                            { id: a.id as never },
+                            { success: `Approved ${a.email}` },
+                          )
+                        }
+                        className="text-[12px] text-ink hover:text-accent underline underline-offset-2 decoration-line"
+                      >
+                        approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          dismissAttempt(
+                            { id: a.id as never },
+                            { success: `Dismissed ${a.email}` },
+                          )
+                        }
+                        className="text-[12px] text-ink-3 hover:text-ink underline underline-offset-2 decoration-line"
+                      >
+                        dismiss
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section className="panel">
         <header className="panel-header">
