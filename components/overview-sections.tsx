@@ -4,7 +4,7 @@ import { AttentionListLive } from "@/components/sections/attention-live";
 import { StatsStrip } from "@/components/sections/stats-strip";
 import { FdeWorkloadBoard } from "@/components/sections/fde-workload-board";
 import { PhaseColumns } from "@/components/sections/phase-columns";
-import { FounderHoursChart } from "@/components/sections/founder-hours-chart";
+import { MrrChart } from "@/components/sections/mrr-chart";
 import { TemplateOverview } from "@/components/sections/template-overview";
 import { ExtractionTimeline } from "@/components/sections/extraction-timeline";
 import {
@@ -14,9 +14,9 @@ import {
   contractedArr,
   engagementRows,
   engagementsByPhase,
-  deriveFounderHoursSeries,
   fdeAgentsShippedRecently,
   loadImbalance,
+  mrrDailySeries,
   payingCustomerCount,
   templateUsage,
   totalHoursReplaced,
@@ -57,7 +57,7 @@ export function OverviewSections({
   const risk = atRiskArr(customers);
   const hours = totalHoursReplaced(deployments);
   const usage = templateUsage(templates, deployments, patternExtractions);
-  const points = deriveFounderHoursSeries(fdes, customers, engagements, 6, today);
+  const mrrPoints = mrrDailySeries(customers, 90, today);
   const allRows = engagementRows(engagements, customers, fdes);
   const phaseGroups = engagementsByPhase(allRows);
   const attention = attentionItems(engagements, customers, fdes, today);
@@ -100,7 +100,7 @@ export function OverviewSections({
 
       <PhaseColumns groups={phaseGroups} today={today} />
 
-      <FounderHoursChart points={points} />
+      <MrrChart points={mrrPoints} />
 
       <TemplateOverview usage={usage} customers={customers} limit={6} />
 

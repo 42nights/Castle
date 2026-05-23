@@ -465,6 +465,61 @@ export function fdeRows(
   return fdes.map((f) => ({ fde: f, workload: fdeWorkload(f, engagements, customers) }));
 }
 
+/* ─────────────────────── MRR over time ─────────────────────── */
+
+export type MrrPoint = {
+  /** ISO date string (YYYY-MM-DD) for the snapshot day. */
+  day: string;
+  /** Total monthly recurring revenue across active customers as of `day`. */
+  mrr: number;
+  /** How many active customers contributed to `mrr`. */
+  customerCount: number;
+};
+
+/**
+ * Daily MRR snapshot. For each day in the window, sum `current_mrr`
+ * across customers whose `start_date <= day` and `status === "active"`.
+ *
+ * Why "active" filters: churned/paused customers no longer pay, even
+ * if they did at some past date. We don't track explicit churn dates
+ * (the schema only has a current `status`), so this is the best we
+ * can do — the chart shows "MRR assuming today's statuses applied
+ * historically" rather than a true contemporaneous view. Good enough
+ * for trend, not good enough for accounting.
+ */
+export function mrrDailySeries(
+  customers: Customer[],
+  days = 90,
+  asOf: Date = new Date(),
+): MrrPoint[] {
+  // Churned customers don't pay anymore; paused customers do (Castle
+  // treats paused as still-billing — see `atRiskArr`). Exclude only
+  // churned so the chart doesn't underreport during pause periods.
+  const billing = customers.filter((c) => c.status !== "churned");
+  const points: MrrPoint[] = [];
+  const oneDay = 24 * 60 * 60 * 1000;
+  // Anchor to UTC midnight so daily buckets stay stable across timezones.
+  const todayUtc = Date.UTC(
+    asOf.getUTCFullYear(),
+    asOf.getUTCMonth(),
+    asOf.getUTCDate(),
+  );
+  for (let i = days - 1; i >= 0; i--) {
+    const dayMs = todayUtc - i * oneDay;
+    const day = new Date(dayMs).toISOString().slice(0, 10);
+    let mrr = 0;
+    let count = 0;
+    for (const c of billing) {
+      if (new Date(c.start_date).getTime() <= dayMs + oneDay - 1) {
+        mrr += c.current_mrr;
+        count += 1;
+      }
+    }
+    points.push({ day, mrr, customerCount: count });
+  }
+  return points;
+}
+
 /* ─────────────────── founder leverage chart ─────────────────── */
 
 export type FounderHoursPoint = {
