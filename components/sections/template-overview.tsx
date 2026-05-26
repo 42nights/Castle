@@ -56,7 +56,7 @@ export function TemplateOverview({
                   </span>
                 </div>
                 <div className="mt-1 text-[12px] text-ink-3">
-                  <span className="num text-ink-2">{u.reuseCount}</span> reuses
+                  <span className="num text-ink-2">{u.reuseCount}</span> {u.reuseCount === 1 ? "reuse" : "reuses"}
                   {origin && (
                     <span className="ml-1">from {origin.name}</span>
                   )}

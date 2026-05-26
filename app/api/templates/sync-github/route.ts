@@ -44,16 +44,16 @@ export async function POST(req: Request) {
   // unauthenticated Convex client because there's no operator identity
   // to forward.
   const cron = isVercelCron(req);
-  let me: { email?: string } | null = null;
+  let me: { email?: string; isOperator?: boolean } | null = null;
   if (!cron) {
     try {
       me = (await fetchAuthQuery(api.auth.getCurrentUser, {})) as
-        | { email?: string }
+        | { email?: string; isOperator?: boolean }
         | null;
     } catch {
       return Response.json({ error: "unauthenticated" }, { status: 401 });
     }
-    if (!me) {
+    if (!me || !me.isOperator) {
       return Response.json(
         { error: "unauthorized: must be an allowlisted operator" },
         { status: 403 },
@@ -160,7 +160,12 @@ export async function POST(req: Request) {
 }
 
 /**
- * Vercel cron invokes this route as GET by default. We accept both;
- * the POST path is what the operator-driven "sync now" button uses.
+ * Vercel cron invokes as GET. Only allow cron-authenticated calls
+ * through the GET verb to avoid CSRF on a state-changing endpoint.
  */
-export const GET = POST;
+export async function GET(req: Request) {
+  if (!isVercelCron(req)) {
+    return Response.json({ error: "GET only allowed for cron" }, { status: 405 });
+  }
+  return POST(req);
+}

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { assertOperator } from "./lib/assertOperator";
+import { assertOperator, assertOperatorRead } from "./lib/assertOperator";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
 
 const category = v.union(
@@ -24,6 +24,7 @@ export const list = query({
 export const listGithubCandidates = query({
   args: {},
   handler: async (ctx) => {
+    await assertOperatorRead(ctx);
     const rows = await ctx.db
       .query("template_github_candidates")
       .withIndex("by_discovered")
@@ -44,6 +45,7 @@ export const upsertGithubCandidate = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertOperator(ctx);
     const repo = args.github_repo.toLowerCase();
     const existing = await ctx.db
       .query("template_github_candidates")
@@ -69,6 +71,7 @@ export const upsertGithubCandidate = mutation({
 export const dismissGithubCandidate = mutation({
   args: { id: v.id("template_github_candidates") },
   handler: async (ctx, { id }) => {
+    await assertOperator(ctx);
     await ctx.db.patch(id, { dismissed_at: nowIso() });
   },
 });
@@ -79,6 +82,7 @@ export const markCandidatePromoted = mutation({
     template_id: v.id("templates"),
   },
   handler: async (ctx, { id, template_id }) => {
+    await assertOperator(ctx);
     await ctx.db.patch(id, { promoted_to_template_id: template_id });
   },
 });

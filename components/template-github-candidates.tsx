@@ -104,8 +104,12 @@ export function TemplateGithubCandidates() {
               </div>
               <button
                 onClick={async () => {
-                  await dismiss({ id: c._id });
-                  toast.success("Dismissed.");
+                  try {
+                    await dismiss({ id: c._id });
+                    toast.success("Dismissed.");
+                  } catch {
+                    toast.error("Failed to dismiss.");
+                  }
                 }}
                 className="text-[11px] text-ink-3 hover:text-accent"
               >

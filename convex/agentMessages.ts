@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { nowIso } from "./lib/util";
+import { assertOperator } from "./lib/assertOperator";
 import { assertWriteToken } from "./lib/writeToken";
 import {
   hermesSessionName,
@@ -211,15 +212,12 @@ export const setVisibility = mutation({
   handler: async (ctx, { id, visibility }) => {
     const { conv, user } = await requireConversation(ctx, id);
     if (conv.visibility === visibility) return;
-    // Only the owner can change visibility on a personal chat. For a
-    // shared chat, any operator can demote it back to personal — they
-    // then become the owner of the new personal copy.
+    // Only the owner can change visibility in either direction.
     const isShared = (conv.visibility ?? "personal") === "shared";
-    if (!isShared && conv.owner_user_id && conv.owner_user_id !== user._id) {
-      throw new Error("only the owner may share or unshare this chat");
+    if (conv.owner_user_id && conv.owner_user_id !== user._id) {
+      throw new Error("only the owner may change chat visibility");
     }
-    const newOwner =
-      visibility === "personal" ? user._id : (conv.owner_user_id ?? user._id);
+    const newOwner = conv.owner_user_id ?? user._id;
     const newSession = hermesSessionName(visibility, newOwner);
     await ctx.db.patch(id, {
       visibility,
@@ -290,14 +288,13 @@ export const append = mutation({
   },
 });
 
-/** Convex storage upload URL. Operator-only (any signed-in user is
- *  fine — middleware already gates the dashboard). The client POSTs
- *  the file binary to this URL, then passes the returned storageId in
- *  the `attachments` array on `startTurn`/`append`. */
+/** Convex storage upload URL — operator-only. The client POSTs the
+ *  file binary to this URL, then passes the storageId in `attachments`
+ *  on `startTurn`/`append`. */
 export const generateAttachmentUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireUser(ctx);
+    await assertOperator(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });

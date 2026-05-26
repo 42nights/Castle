@@ -1,6 +1,7 @@
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { authComponent } from "../auth";
+import { isOperator } from "./assertOperator";
 
 /**
  * Conversation visibility + ownership guards.
@@ -48,18 +49,16 @@ export async function requireUser(
   return { _id: id, email: u.email, slug: emailToSlug(u.email) };
 }
 
-function canAccess(conv: Doc<"agent_conversations">, user: AuthUser): boolean {
+async function canAccess(
+  ctx: QueryCtx | MutationCtx,
+  conv: Doc<"agent_conversations">,
+  user: AuthUser,
+): Promise<boolean> {
   const visibility = conv.visibility ?? "personal";
-  if (visibility === "shared") return true;
-  // personal: owner_user_id is the source of truth.
-  //
-  // Legacy unowned rows: we deliberately do NOT fall back to
-  // actor_slug match — two operators with the same email local-part
-  // (`sam@a.com`, `sam@b.com`) would otherwise be able to read each
-  // other's pre-migration chats. The `claimMyUnownedConversations`
-  // mutation runs opportunistically on sidebar mount and stamps
-  // owner_user_id for the first user who logs in with a matching
-  // slug; subsequent same-slug users see nothing on legacy rows.
+  if (visibility === "shared") {
+    const op = await isOperator(ctx);
+    return op !== null;
+  }
   if (conv.owner_user_id) return conv.owner_user_id === user._id;
   return false;
 }
@@ -73,7 +72,7 @@ export async function requireConversation(
   const user = await requireUser(ctx);
   const conv = await ctx.db.get(id);
   if (!conv) throw new Error("conversation not found");
-  if (!canAccess(conv, user)) throw new Error("forbidden");
+  if (!(await canAccess(ctx, conv, user))) throw new Error("forbidden");
   return { conv, user };
 }
 
@@ -97,7 +96,7 @@ export async function tryConversation(
     email: u.email,
     slug: emailToSlug(u.email),
   };
-  if (!canAccess(conv, authUser)) return null;
+  if (!(await canAccess(ctx, conv, authUser))) return null;
   return { conv, user: authUser };
 }
 
