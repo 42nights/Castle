@@ -2,13 +2,6 @@ import Link from "next/link";
 import type { Customer, PatternExtraction, Template } from "@/lib/types";
 import { formatDate } from "@/lib/format";
 
-/**
- * Pattern extraction timeline.
- *
- * Ledger of "From X → built as T → reused at N customers". Date
- * sits in the left margin like a journal entry; the prose flows in
- * the main column.
- */
 export function ExtractionTimeline({
   extractions,
   customers,
@@ -30,21 +23,21 @@ export function ExtractionTimeline({
   const shown = limit ? list.slice(0, limit) : list;
 
   return (
-    <section className="panel mb-4">
-      <header className="panel-header">
-        <h2 className="t-h2 text-ink">Patterns extracted</h2>
+    <div className="rounded-lg bg-surface border border-line overflow-hidden">
+      <header className="flex items-baseline justify-between px-4 py-3 border-b border-line">
+        <h2 className="t-h2">Flywheel</h2>
         {showLinkAll && (
           <Link
             href="/extractions"
-            className="text-[12px] text-ink-3 hover:text-ink"
+            className="text-[12px] text-ink-3 hover:text-ink transition-colors"
           >
-            all extractions →
+            all
           </Link>
         )}
       </header>
 
-      <ol className="ledger">
-        {shown.map((p) => {
+      <ol>
+        {shown.map((p, i) => {
           const src = cById.get(p.source_customer_id);
           const tpl = tById.get(p.extracted_into_template_id);
           const reused = p.reused_at_customer_ids
@@ -53,20 +46,17 @@ export function ExtractionTimeline({
           return (
             <li
               key={p.id}
-              className="px-3 py-2.5 grid md:grid-cols-[88px_1fr] gap-4"
+              className={`px-4 py-3 ${i > 0 ? "border-t border-line" : ""}`}
             >
-              <div className="num text-[11px] text-ink-3 pt-[3px]">
-                {formatDate(p.extracted_at)}
-              </div>
-              <div className="min-w-0">
-                <div className="text-[14.5px] leading-snug text-ink">
+              <div className="flex items-baseline justify-between gap-2 mb-1">
+                <div className="text-[13px] text-ink leading-snug">
                   <Link
                     href={`/customers/${src?.id ?? ""}`}
                     className="hover:underline"
                   >
-                    {src?.name ?? "—"}
+                    {src?.name ?? "Unknown"}
                   </Link>
-                  <span className="text-ink-3"> needed something. We built it as </span>
+                  <span className="text-ink-3 mx-1.5">-&gt;</span>
                   {tpl ? (
                     <Link
                       href={`/templates/${tpl.id}`}
@@ -75,27 +65,23 @@ export function ExtractionTimeline({
                       {tpl.name}
                     </Link>
                   ) : (
-                    <span className="text-ink-3 italic">a since-removed template</span>
+                    <span className="text-ink-3">removed</span>
                   )}
-                  <span className="text-ink-3">. Now used at </span>
-                  <span className="num">{reused.length}</span>{" "}
-                  <span className="text-ink-3">
-                    other{reused.length === 1 ? "" : "s"}.
-                  </span>
                 </div>
-                {reused.length > 0 && (
-                  <p className="mt-1 text-[12.5px] text-ink-3">
-                    {reused.map((c) => c.name).join(", ")}
-                  </p>
-                )}
-                <p className="mt-2 text-[13px] leading-relaxed text-ink-2 max-w-2xl">
-                  {p.source_engagement_summary}
-                </p>
+                <span className="num text-[11px] text-ink-3 shrink-0">
+                  {formatDate(p.extracted_at)}
+                </span>
               </div>
+              {reused.length > 0 && (
+                <div className="text-[12px] text-ink-3">
+                  Reused at <span className="num text-ink-2">{reused.length}</span>{" "}
+                  {reused.length === 1 ? "customer" : "customers"}
+                </div>
+              )}
             </li>
           );
         })}
       </ol>
-    </section>
+    </div>
   );
 }

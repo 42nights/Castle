@@ -22,11 +22,11 @@ export default async function ConnectionsPage({
       />
 
       {!configured && (
-        <div className="panel mb-4">
-          <header className="panel-header">
-            <h2 className="t-h2 text-ink">Setup required</h2>
+        <div className="rounded-lg bg-surface border border-line overflow-hidden mb-4">
+          <header className="px-4 py-3 border-b border-line">
+            <h2 className="t-h2">Setup required</h2>
           </header>
-          <div className="px-3 py-3 text-[13px] text-ink-2 leading-snug space-y-2">
+          <div className="px-4 py-3 text-[13px] text-ink-2 leading-snug space-y-2">
             <p>
               Composio drives external services. Add{" "}
               <span className="num text-ink">COMPOSIO_API_KEY</span> to{" "}

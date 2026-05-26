@@ -252,17 +252,17 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="panel mb-4">
-      <header className="panel-header">
+    <section className="rounded-lg bg-surface border border-line overflow-hidden mb-4">
+      <header className="flex items-baseline justify-between gap-4 px-4 py-3 border-b border-line">
         <div className="flex items-baseline gap-2">
-          <h2 className="t-h2 text-ink">{title}</h2>
+          <h2 className="t-h2">{title}</h2>
           {typeof count === "number" && (
-            <span className="t-caption">{count}</span>
+            <span className="num text-[12px] text-ink-3">{count}</span>
           )}
         </div>
         {right}
       </header>
-      <div className="panel-body no-pad">{children}</div>
+      <div>{children}</div>
     </section>
   );
 }
