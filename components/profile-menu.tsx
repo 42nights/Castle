@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { Avatar } from "@/components/atoms";
 import { authClient } from "@/lib/auth-client";
 
@@ -24,6 +26,8 @@ export function ProfileMenu() {
   const router = useRouter();
   const { data: session } = authClient.useSession();
   const user = ((session as { user?: SessionUser } | null) ?? {}).user ?? null;
+  const currentUser = useQuery(api.auth.getCurrentUser);
+  const isOp = currentUser?.isOperator ?? false;
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -94,13 +98,15 @@ export function ProfileMenu() {
               </div>
             )}
           </div>
-          <Link
-            href="/settings/access"
-            onClick={() => setOpen(false)}
-            className="block px-3 py-2 text-[12.5px] text-ink-2 hover:bg-surface hover:text-ink"
-          >
-            Access · email allowlist
-          </Link>
+          {isOp && (
+            <Link
+              href="/settings/access"
+              onClick={() => setOpen(false)}
+              className="block px-3 py-2 text-[12.5px] text-ink-2 hover:bg-surface hover:text-ink"
+            >
+              Access · email allowlist
+            </Link>
+          )}
           <button
             type="button"
             onClick={signOut}

@@ -64,12 +64,9 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
             const email = (user as { email?: string }).email;
             const patterns = await readPatterns(ctx);
             if (!isEmailAllowedAgainst(email, patterns)) {
-              // Best-effort log so /settings/access can surface the
-              // exact email GitHub returned. Wrap in try/catch — a
-              // logging failure must not mask the access_denied error.
-              // user.create.before fires from a mutation context, but
-              // the GenericCtx union also includes QueryCtx — narrow
-              // at runtime so TS lets us call runMutation.
+              // Log non-allowlisted sign-ins so /settings/access can
+              // surface them. Operators can approve (promote to operator)
+              // or dismiss. Guest users are allowed through.
               if (email && "runMutation" in ctx) {
                 try {
                   await ctx.runMutation(
@@ -80,9 +77,6 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
                   console.error("[auth] logDenied failed:", err);
                 }
               }
-              throw new Error(
-                "access_denied: this email is not on the Castle allowlist",
-              );
             }
             return { data: user };
           },
@@ -94,15 +88,9 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
 
 export const { getAuthUser } = authComponent.clientApi();
 
-/** Operator-facing user object — Castle UI reads this. Returns null
- *  when not signed in (instead of throwing) so the chat landing can
- *  render a sign-in CTA without redirecting.
- *
- *  Also re-checks the allowlist on every read. The user.create.before
- *  hook only fires on first sign-up; without this revalidation,
- *  removing a pattern from /settings/access wouldn't kick out an
- *  existing operator until their session cookie expired. The
- *  middleware doesn't validate either, so the UI is the actual gate.
+/** User object with operator/guest role. Returns null when not signed
+ *  in (no session). Re-checks the allowlist on every read so that
+ *  removing a pattern immediately downgrades to guest.
  */
 export const getCurrentUser = query({
   args: {},
@@ -112,8 +100,8 @@ export const getCurrentUser = query({
     const patterns = (await ctx.db
       .query("email_allowlist")
       .collect()).map((r) => r.pattern);
-    if (!isEmailAllowedAgainst(user.email, patterns)) return null;
-    return user;
+    const isOperator = isEmailAllowedAgainst(user.email, patterns);
+    return { ...user, isOperator };
   },
 });
 

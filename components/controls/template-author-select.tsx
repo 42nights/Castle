@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
+import { useIsOperator } from "@/lib/role-context";
 import { useActorSlug } from "@/lib/use-actor";
 import { useRunMutation } from "@/lib/use-run-mutation";
 
@@ -22,6 +23,7 @@ export function TemplateAuthorSelect({
   templateSlug: string;
   currentFdeSlug: string;
 }) {
+  const op = useIsOperator();
   const [actorSlug] = useActorSlug();
   const template = useQuery(api.templates.getBySlug, {
     slug: templateSlug,
@@ -55,6 +57,15 @@ export function TemplateAuthorSelect({
     );
     setPending(false);
   };
+
+  if (!op) {
+    const currentFde = (fdes ?? []).find((f) => f.slug === currentFdeSlug);
+    return (
+      <span className="h-7 inline-flex items-center rounded-sm text-[12.5px] px-2 text-ink">
+        {currentFde?.name ?? currentFdeSlug}
+      </span>
+    );
+  }
 
   return (
     <select

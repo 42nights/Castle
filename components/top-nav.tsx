@@ -3,10 +3,12 @@
 import { Castle as CastleIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { InFlightDot } from "@/components/in-flight-dot";
 import { ProfileMenu } from "@/components/profile-menu";
 
-const links = [
+const operatorLinks = [
   { href: "/", label: "Ask" },
   { href: "/overview", label: "Overview" },
   { href: "/fdes", label: "FDEs" },
@@ -17,13 +19,21 @@ const links = [
   { href: "/connections", label: "Connections" },
 ] as const;
 
+const guestLinks = [
+  { href: "/templates", label: "Templates" },
+] as const;
+
 export function TopNav() {
   const pathname = usePathname();
+  const user = useQuery(api.auth.getCurrentUser);
+  const isOp = user?.isOperator ?? true;
+  const links = isOp ? operatorLinks : guestLinks;
+
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-page/80 backdrop-blur-xl">
       <div className="mx-auto flex h-12 max-w-[1280px] items-center gap-8 px-6 md:px-8">
         <Link
-          href="/"
+          href={isOp ? "/" : "/templates"}
           className="group flex items-center gap-2"
           aria-label="Castle"
         >
@@ -63,11 +73,13 @@ export function TopNav() {
         </nav>
 
         <div className="ml-auto flex items-center gap-4">
-          <span className="hidden lg:inline text-[11px] text-ink-3">
-            <kbd className="num text-[10px] text-ink-2 bg-surface px-1.5 py-0.5 rounded">
-              &#8984;K
-            </kbd>
-          </span>
+          {isOp && (
+            <span className="hidden lg:inline text-[11px] text-ink-3">
+              <kbd className="num text-[10px] text-ink-2 bg-surface px-1.5 py-0.5 rounded">
+                &#8984;K
+              </kbd>
+            </span>
+          )}
           <ProfileMenu />
         </div>
       </div>

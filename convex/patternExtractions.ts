@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { assertOperator } from "./lib/assertOperator";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
 
 export const list = query({
@@ -58,6 +59,7 @@ export const extract = mutation({
     actor_fde_id: v.id("fdes"),
   },
   handler: async (ctx, args) => {
+    await assertOperator(ctx);
     const eng = await ctx.db.get(args.source_engagement_id);
     if (!eng) throw new Error("source engagement not found");
     const now = nowIso();
@@ -159,6 +161,7 @@ export const update = mutation({
     patch: v.object({ source_engagement_summary: v.optional(v.string()) }),
   },
   handler: async (ctx, { id, patch }) => {
+    await assertOperator(ctx);
     await ctx.db.patch(id, { ...patch, updated_at: nowIso() });
   },
 });
@@ -169,6 +172,7 @@ export const addReusedCustomer = mutation({
     customer_id: v.id("customers"),
   },
   handler: async (ctx, { extraction_id, customer_id }) => {
+    await assertOperator(ctx);
     const existing = await ctx.db
       .query("pattern_extraction_reuses")
       .withIndex("by_extraction_customer", (q) =>
@@ -190,6 +194,7 @@ export const removeReusedCustomer = mutation({
     customer_id: v.id("customers"),
   },
   handler: async (ctx, { extraction_id, customer_id }) => {
+    await assertOperator(ctx);
     const row = await ctx.db
       .query("pattern_extraction_reuses")
       .withIndex("by_extraction_customer", (q) =>
@@ -203,6 +208,7 @@ export const removeReusedCustomer = mutation({
 export const remove = mutation({
   args: { id: v.id("pattern_extractions") },
   handler: async (ctx, { id }) => {
+    await assertOperator(ctx);
     const reuses = await ctx.db
       .query("pattern_extraction_reuses")
       .withIndex("by_extraction_customer", (q) => q.eq("extraction_id", id))

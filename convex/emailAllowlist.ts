@@ -5,49 +5,13 @@ import {
   mutation,
   query,
 } from "./_generated/server";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { nowIso } from "./lib/util";
-import { authComponent } from "./auth";
+import { assertOperator, assertOperatorRead } from "./lib/assertOperator";
 import {
   isEmailAllowedAgainst,
   RESCUE_ALLOWLIST,
   validatePattern,
 } from "../lib/auth-allowlist";
-
-/**
- * Operator check shared across reads and writes. Returns the operator's
- * email if they're allowlisted; null otherwise. The two assert*
- * wrappers below throw on null with consistent error messages.
- *
- * Why read-side too: rejected sign-in attempts contain PII (emails of
- * folks who tried to access Castle). Don't expose them to anonymous
- * callers via `listAttempts`.
- */
-async function isOperator(
-  ctx: QueryCtx | MutationCtx,
-): Promise<string | null> {
-  const me = await authComponent.safeGetAuthUser(ctx);
-  const email = me?.email;
-  if (!email) return null;
-  const dynamic = (await ctx.db.query("email_allowlist").collect()).map(
-    (r) => r.pattern,
-  );
-  return isEmailAllowedAgainst(email, dynamic) ? email : null;
-}
-
-async function assertOperator(ctx: MutationCtx): Promise<{ email: string }> {
-  const email = await isOperator(ctx);
-  if (!email) throw new Error("unauthorized: sign in as an allowlisted operator");
-  return { email };
-}
-
-async function assertOperatorRead(
-  ctx: QueryCtx,
-): Promise<{ email: string }> {
-  const email = await isOperator(ctx);
-  if (!email) throw new Error("unauthorized: sign in as an allowlisted operator");
-  return { email };
-}
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
