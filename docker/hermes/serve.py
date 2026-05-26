@@ -644,10 +644,11 @@ async def agent_start(req: Request) -> JSONResponse:
     attachments = body.get("attachments") or []
     write_token = body.get("writeToken")
     convex_url = body.get("convexUrl")
-    if not all(
-        [turn_id, conversation_id, actor_slug, hermes_session, write_token, convex_url]
-    ):
+    # hermes_session can be an empty string (first turn), _run_turn_to_convex will mint a new session
+    if not all([turn_id, conversation_id, actor_slug, write_token, convex_url]):
         raise HTTPException(400, "missing required fields")
+    if hermes_session is None:
+        raise HTTPException(400, "hermesSession must be present (may be empty string)")
 
     # Verify the kickoff token from the X-Castle-Kickoff header.
     kickoff_token = req.headers.get("X-Castle-Kickoff", "")

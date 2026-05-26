@@ -97,7 +97,27 @@ export async function POST(req: Request) {
         arguments: { org: ORG, per_page: 100 },
       },
     )) as { successful?: boolean; data?: { items?: Repo[] } | Repo[] };
+
+    // Check result.successful and fail the sync if false or missing expected data
+    if (result.successful === false) {
+      return Response.json(
+        {
+          error: `Composio GitHub list-repos returned unsuccessful: ${JSON.stringify(result)}`,
+        },
+        { status: 502 },
+      );
+    }
+
     const data = result?.data;
+    if (!data) {
+      return Response.json(
+        {
+          error: `Composio GitHub list-repos returned no data: ${JSON.stringify(result)}`,
+        },
+        { status: 502 },
+      );
+    }
+
     repos = Array.isArray(data) ? data : (data?.items ?? []);
   } catch (err) {
     return Response.json(

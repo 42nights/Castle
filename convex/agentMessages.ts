@@ -218,6 +218,24 @@ export const setVisibility = mutation({
     if (!isShared && conv.owner_user_id && conv.owner_user_id !== user._id) {
       throw new Error("only the owner may share or unshare this chat");
     }
+
+    // Reject visibility flips while a turn is active
+    const activeTurns = await ctx.db
+      .query("agent_turns")
+      .withIndex("by_conversation", (q) => q.eq("conversation_id", id))
+      .order("desc")
+      .collect();
+    const activeNow = activeTurns.find(
+      (t) =>
+        t.status === "queued" ||
+        t.status === "running",
+    );
+    if (activeNow) {
+      throw new Error(
+        "cannot change visibility while a turn is active; cancel or wait for it to finish",
+      );
+    }
+
     const newOwner =
       visibility === "personal" ? user._id : (conv.owner_user_id ?? user._id);
     const newSession = hermesSessionName(visibility, newOwner);
@@ -304,11 +322,15 @@ export const generateAttachmentUploadUrl = mutation({
 
 /** Resolve a storage id to a (signed) URL — used by the chat renderer
  *  to display attachment chips with click-to-download links. Returns
- *  null for missing/expired ids. */
+ *  null for missing/expired ids. Requires the caller to pass the
+ *  conversation_id so we can re-check access before minting the URL. */
 export const attachmentUrl = query({
-  args: { storageId: v.id("_storage") },
-  handler: async (ctx, { storageId }) => {
-    await requireUser(ctx);
+  args: {
+    storageId: v.id("_storage"),
+    conversation_id: v.id("agent_conversations"),
+  },
+  handler: async (ctx, { storageId, conversation_id }) => {
+    await requireConversation(ctx, conversation_id);
     return await ctx.storage.getUrl(storageId);
   },
 });

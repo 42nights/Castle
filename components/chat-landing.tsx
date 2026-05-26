@@ -244,7 +244,11 @@ export function ChatLanding() {
 
   const submit = () => {
     const text = draft.trim();
-    if ((!text && pendingAttachments.length === 0) || status === "streaming") {
+    if (
+      (!text && pendingAttachments.length === 0) ||
+      status === "streaming" ||
+      uploadingCount > 0
+    ) {
       return;
     }
     sendMessage(
@@ -346,6 +350,7 @@ export function ChatLanding() {
                         message={m}
                         actions={attached.length > 0 ? attached : null}
                         actorSlug={actorSlug}
+                        conversationId={conversationId}
                         isLastAssistant={i === lastAssistantIdx}
                         canRegenerate={canRegenerate}
                         onRegenerate={regenerate}
@@ -470,7 +475,8 @@ export function ChatLanding() {
                     onClick={submit}
                     disabled={
                       (!draft.trim() && pendingAttachments.length === 0) ||
-                      !conversationId
+                      !conversationId ||
+                      uploadingCount > 0
                     }
                     className="h-7 px-3 rounded-sm bg-ink text-page text-[12px] disabled:opacity-40 inline-flex items-center gap-1.5"
                   >
@@ -605,6 +611,7 @@ function Turn({
   message,
   actions,
   actorSlug,
+  conversationId,
   isLastAssistant,
   canRegenerate,
   onRegenerate,
@@ -613,6 +620,7 @@ function Turn({
   message: ChatMessage;
   actions: ProposedAction[] | null;
   actorSlug: string | null;
+  conversationId: Id<"agent_conversations"> | null;
   isLastAssistant: boolean;
   canRegenerate: boolean;
   onRegenerate: () => void;
@@ -634,7 +642,11 @@ function Turn({
           {message.attachments && message.attachments.length > 0 && (
             <div className="flex flex-wrap justify-end gap-1.5">
               {message.attachments.map((a) => (
-                <AttachmentChip key={a.storageId} attachment={a} />
+                <AttachmentChip
+                  key={a.storageId}
+                  attachment={a}
+                  conversationId={conversationId}
+                />
               ))}
             </div>
           )}
@@ -710,12 +722,20 @@ function relativeTime(iso: string): string {
 
 function AttachmentChip({
   attachment,
+  conversationId,
 }: {
   attachment: { storageId: string; name: string; size?: number };
+  conversationId: Id<"agent_conversations"> | null;
 }) {
-  const url = useQuery(api.agentMessages.attachmentUrl, {
-    storageId: attachment.storageId as Id<"_storage">,
-  }) as string | null | undefined;
+  const url = useQuery(
+    api.agentMessages.attachmentUrl,
+    conversationId
+      ? {
+          storageId: attachment.storageId as Id<"_storage">,
+          conversation_id: conversationId,
+        }
+      : "skip",
+  ) as string | null | undefined;
   return (
     <a
       href={url ?? "#"}

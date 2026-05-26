@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
+import { requireUser } from "./lib/conversationAuth";
 
 const category = v.union(
   v.literal("GTM"),
@@ -23,6 +24,7 @@ export const list = query({
 export const listGithubCandidates = query({
   args: {},
   handler: async (ctx) => {
+    await requireUser(ctx);
     const rows = await ctx.db
       .query("template_github_candidates")
       .withIndex("by_discovered")
@@ -43,6 +45,7 @@ export const upsertGithubCandidate = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireUser(ctx);
     const repo = args.github_repo.toLowerCase();
     const existing = await ctx.db
       .query("template_github_candidates")
@@ -68,6 +71,7 @@ export const upsertGithubCandidate = mutation({
 export const dismissGithubCandidate = mutation({
   args: { id: v.id("template_github_candidates") },
   handler: async (ctx, { id }) => {
+    await requireUser(ctx);
     await ctx.db.patch(id, { dismissed_at: nowIso() });
   },
 });
@@ -78,6 +82,7 @@ export const markCandidatePromoted = mutation({
     template_id: v.id("templates"),
   },
   handler: async (ctx, { id, template_id }) => {
+    await requireUser(ctx);
     await ctx.db.patch(id, { promoted_to_template_id: template_id });
   },
 });
@@ -174,7 +179,8 @@ export const update = mutation({
 /** Set the GitHub repo path for a template. Accepts forms like
  *  "42nights/repo", "https://github.com/42nights/repo", or
  *  "github.com/42nights/repo". Stored as the canonical "owner/repo"
- *  shape. Pass null/empty to clear. */
+ *  shape, lowercased for consistent deduplication with
+ *  upsertGithubCandidate. Pass null/empty to clear. */
 export const setGithubRepo = mutation({
   args: {
     id: v.id("templates"),
@@ -193,7 +199,8 @@ export const setGithubRepo = mutation({
       if (!/^[\w.-]+\/[\w.-]+$/.test(m)) {
         throw new Error("Expected '<owner>/<repo>' or a github.com URL");
       }
-      normalized = m;
+      // Lowercase to match upsertGithubCandidate normalization
+      normalized = m.toLowerCase();
     }
     await ctx.db.patch(id, {
       github_repo: normalized ?? undefined,
