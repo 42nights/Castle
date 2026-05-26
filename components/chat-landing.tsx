@@ -10,6 +10,7 @@ import {
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useChatContext } from "@/lib/chat-context";
+import { useChatDraft } from "@/lib/use-chat-draft";
 import { type ChatMessage, type ToolActivity } from "@/lib/use-hermes-chat";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { ChatSidebar } from "@/components/chat-sidebar";
@@ -52,10 +53,7 @@ const FALLBACK_SUGGESTIONS = [
 function useNowBucket() {
   const [b, setB] = useState(() => Math.floor(Date.now() / 60_000));
   useEffect(() => {
-    const id = setInterval(
-      () => setB(Math.floor(Date.now() / 60_000)),
-      60_000,
-    );
+    const id = setInterval(() => setB(Math.floor(Date.now() / 60_000)), 60_000);
     return () => clearInterval(id);
   }, []);
   return b;
@@ -83,20 +81,32 @@ export function ChatLanding() {
     error,
     sendMessage,
     stop,
+    regenerate,
+    canRegenerate,
     thought,
     tools,
   } = useChatContext();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const tailRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Sticky-bottom: only auto-scroll on new content if the user is
+  // already near the bottom. Re-engaged via the "jump to latest" pill.
+  const [stuckToBottom, setStuckToBottom] = useState(true);
+  const STICKY_THRESHOLD_PX = 80;
   const clearTranscript = useMutation(api.agentMessages.clear);
   const proposed = useQuery(
     api.agentActions.listOpen,
     actorSlug ? { actor_slug: actorSlug } : "skip",
   ) as
-    | Array<{ _id: Id<"agent_actions">; toolkit: string; url: string }>
+    | Array<{
+        _id: Id<"agent_actions">;
+        toolkit: string;
+        url: string;
+        created_at: string;
+      }>
     | undefined;
   const dismissAction = useMutation(api.agentActions.dismiss);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft, clearDraft] = useChatDraft(conversationId ?? null);
 
   // Dynamic suggestions for the empty state. Three cadences stack:
   //   nowBucket      — reactive within ~60s of state changes
@@ -114,13 +124,18 @@ export function ChatLanding() {
     rotationBucket,
     mountSeed: mountSeedRef.current,
   }) as Array<{ id: string; prompt: string }> | undefined;
-  const suggestions = (dynamicSuggestions ?? []).length > 0
-    ? (dynamicSuggestions as Array<{ id: string; prompt: string }>).map((s) => s.prompt)
-    : FALLBACK_SUGGESTIONS;
+  const suggestions =
+    (dynamicSuggestions ?? []).length > 0
+      ? (dynamicSuggestions as Array<{ id: string; prompt: string }>).map(
+          (s) => s.prompt,
+        )
+      : FALLBACK_SUGGESTIONS;
 
-  // Reset draft + focus the input when the user switches conversations.
+  // Focus the input when the user switches conversations. Draft
+  // hydration is handled inside useChatDraft (per-conversation
+  // localStorage key) so a switch restores the unsent text instead of
+  // wiping it.
   useEffect(() => {
-    setDraft("");
     inputRef.current?.focus();
   }, [conversationId]);
 
@@ -135,14 +150,109 @@ export function ChatLanding() {
   }, [draft]);
 
   useEffect(() => {
+    if (!stuckToBottom) return;
     tailRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length, status]);
+  }, [messages.length, status, stuckToBottom]);
+
+  // One-shot scroll when a new connect CTA lands — overrides the sticky
+  // guard so the operator never misses the button. Keyed on the latest
+  // open action id so re-renders don't re-scroll repeatedly.
+  const ctaTopId = proposed?.[0]?._id ?? null;
+  useEffect(() => {
+    if (!ctaTopId) return;
+    tailRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    setStuckToBottom(true);
+  }, [ctaTopId]);
+
+  // Track whether the user is near the bottom. When they scroll up
+  // we drop stuckToBottom so streaming text doesn't fight them; the
+  // "jump to latest" pill lets them re-engage on demand.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setStuckToBottom(distance < STICKY_THRESHOLD_PX);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [conversationId]);
+
+  const jumpToLatest = () => {
+    setStuckToBottom(true);
+    tailRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  };
+
+  // Pending attachments staged in the composer before send. Uploaded
+  // to Convex storage on file-pick; rendered as chips above the
+  // textarea. Cleared on send.
+  type StagedAttachment = {
+    storageId: string;
+    name: string;
+    contentType?: string;
+    size?: number;
+  };
+  const [pendingAttachments, setPendingAttachments] = useState<
+    StagedAttachment[]
+  >([]);
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const generateUploadUrl = useMutation(
+    api.agentMessages.generateAttachmentUploadUrl,
+  );
+
+  const onPickFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploadingCount((n) => n + files.length);
+    const uploaded: StagedAttachment[] = [];
+    for (const file of Array.from(files)) {
+      try {
+        const url = await generateUploadUrl({});
+        const res = await fetch(url, {
+          method: "POST",
+          headers: file.type ? { "Content-Type": file.type } : undefined,
+          body: file,
+        });
+        if (!res.ok) throw new Error(`upload ${res.status}`);
+        const { storageId } = (await res.json()) as { storageId: string };
+        uploaded.push({
+          storageId,
+          name: file.name,
+          contentType: file.type || undefined,
+          size: file.size,
+        });
+      } catch (err) {
+        toast.error(
+          `Couldn't upload ${file.name}: ${
+            err instanceof Error ? err.message : "unknown"
+          }`,
+        );
+      }
+    }
+    setUploadingCount((n) => Math.max(0, n - files.length));
+    if (uploaded.length > 0) {
+      setPendingAttachments((prev) => [...prev, ...uploaded]);
+    }
+  };
+
+  const removeAttachment = (storageId: string) => {
+    setPendingAttachments((prev) =>
+      prev.filter((a) => a.storageId !== storageId),
+    );
+  };
 
   const submit = () => {
     const text = draft.trim();
-    if (!text || status === "streaming") return;
-    sendMessage(text);
-    setDraft("");
+    if ((!text && pendingAttachments.length === 0) || status === "streaming" || uploadingCount > 0) {
+      return;
+    }
+    sendMessage(
+      text,
+      pendingAttachments.length ? pendingAttachments : undefined,
+    );
+    clearDraft();
+    setPendingAttachments([]);
   };
 
   const onClear = async () => {
@@ -171,8 +281,22 @@ export function ChatLanding() {
         onSelect={setConversationId}
       />
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="mx-auto max-w-[720px] px-6 pt-16 pb-10">
+        {conversationId ? <ChatHeader conversationId={conversationId} /> : null}
+        <div
+          ref={scrollRef}
+          className="relative flex-1 min-h-0 overflow-y-auto"
+        >
+          {!stuckToBottom && (
+            <div className="sticky bottom-3 z-10 flex justify-center pointer-events-none">
+              <button
+                onClick={jumpToLatest}
+                className="pointer-events-auto h-7 px-3 rounded-full border border-line bg-page shadow-sm text-[11.5px] text-ink hover:bg-surface inline-flex items-center gap-1.5"
+              >
+                ↓ jump to latest
+              </button>
+            </div>
+          )}
+          <div className="mx-auto max-w-[720px] px-6 pt-8 pb-10">
             {empty ? (
               <EmptyState
                 suggestions={suggestions}
@@ -181,13 +305,15 @@ export function ChatLanding() {
             ) : (
               <div className="flex flex-col gap-4">
                 {(() => {
-                  // Render messages. Attach any pending CTAs to the
-                  // most recent assistant message — the agent doesn't
-                  // always echo the toolkit slug verbatim (e.g. "Connect
-                  // button is live in your chat" → no "github" string),
-                  // so the old "text must mention the slug" heuristic
-                  // hid valid CTAs. CTAs dangle until the user clicks
-                  // connect or dismiss.
+                  // Render messages. Attach pending CTAs to the latest
+                  // assistant message ONLY IF that message was created
+                  // *after* the agent_action — otherwise the CTA would
+                  // dangle below the previous assistant message until
+                  // the new streaming response renders, then jump down
+                  // (the "connect button pop" bug). Holding the CTA
+                  // back until the new assistant turn exists means the
+                  // button lands directly under the message that
+                  // proposed it.
                   const visible = messages.filter(
                     (m) => !(m.streaming && m.text === ""),
                   );
@@ -199,15 +325,30 @@ export function ChatLanding() {
                       break;
                     }
                   }
+                  const last =
+                    lastAssistantIdx >= 0 ? visible[lastAssistantIdx] : null;
+                  const earliestAction = open.length
+                    ? open.reduce(
+                        (min, a) => (a.created_at < min ? a.created_at : min),
+                        open[0].created_at,
+                      )
+                    : null;
+                  const showCtas =
+                    last !== null &&
+                    earliestAction !== null &&
+                    last.createdAt >= earliestAction;
                   return visible.map((m, i) => {
                     const attached =
-                      i === lastAssistantIdx && open.length > 0 ? open : [];
+                      showCtas && i === lastAssistantIdx ? open : [];
                     return (
                       <Turn
                         key={m.id}
                         message={m}
                         actions={attached.length > 0 ? attached : null}
                         actorSlug={actorSlug}
+                        isLastAssistant={i === lastAssistantIdx}
+                        canRegenerate={canRegenerate}
+                        onRegenerate={regenerate}
                         onDismissAction={(id) => dismissAction({ id })}
                       />
                     );
@@ -218,9 +359,7 @@ export function ChatLanding() {
                     key={messages.length}
                     tools={tools}
                     thought={thought}
-                    compact={
-                      (messages[messages.length - 1]?.text ?? "") !== ""
-                    }
+                    compact={(messages[messages.length - 1]?.text ?? "") !== ""}
                   />
                 )}
                 {error && (
@@ -235,6 +374,35 @@ export function ChatLanding() {
         <div className="shrink-0 border-t border-line bg-page">
           <div className="mx-auto max-w-[720px] px-6 py-3">
             <div className="rounded-md border border-line bg-page focus-within:border-ink-2 transition-colors">
+              {(pendingAttachments.length > 0 || uploadingCount > 0) && (
+                <div className="flex flex-wrap items-center gap-1.5 px-3 pt-2">
+                  {pendingAttachments.map((a) => (
+                    <span
+                      key={a.storageId}
+                      className="inline-flex items-center gap-1.5 h-6 pl-2 pr-1 rounded-sm border border-line bg-surface text-[11.5px] text-ink"
+                      title={
+                        a.size
+                          ? `${a.name} · ${Math.round(a.size / 1024)} KB`
+                          : a.name
+                      }
+                    >
+                      <span className="truncate max-w-[160px]">{a.name}</span>
+                      <button
+                        onClick={() => removeAttachment(a.storageId)}
+                        className="text-ink-3 hover:text-accent text-[12px] px-0.5"
+                        aria-label={`Remove ${a.name}`}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  {uploadingCount > 0 && (
+                    <span className="text-[11px] text-ink-3 num">
+                      uploading {uploadingCount}…
+                    </span>
+                  )}
+                </div>
+              )}
               <textarea
                 ref={inputRef}
                 value={draft}
@@ -254,8 +422,27 @@ export function ChatLanding() {
                 disabled={!conversationId}
                 className="block w-full resize-none bg-transparent text-[14px] leading-[22px] text-ink placeholder:text-ink-3 outline-none px-3 pt-2.5 pb-1 min-h-[42px] max-h-[200px] disabled:opacity-50"
               />
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                hidden
+                onChange={(e) => {
+                  onPickFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
               <div className="flex items-center justify-between px-2 pb-2">
                 <span className="text-[11px] text-ink-3 inline-flex items-center gap-3">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={!conversationId}
+                    className="text-ink-3 hover:text-ink disabled:opacity-40"
+                    aria-label="Attach files"
+                    title="Attach files"
+                  >
+                    📎
+                  </button>
                   <span>
                     castle ·{" "}
                     <span className="text-ink-2">
@@ -281,7 +468,10 @@ export function ChatLanding() {
                 ) : (
                   <button
                     onClick={submit}
-                    disabled={!draft.trim() || !conversationId}
+                    disabled={
+                      (!draft.trim() && pendingAttachments.length === 0) ||
+                      !conversationId
+                    }
                     className="h-7 px-3 rounded-sm bg-ink text-page text-[12px] disabled:opacity-40 inline-flex items-center gap-1.5"
                   >
                     send <kbd className="num text-[10px] opacity-70">⏎</kbd>
@@ -293,6 +483,76 @@ export function ChatLanding() {
         </div>
       </div>
       <ConnectionsRail />
+    </div>
+  );
+}
+
+function ChatHeader({
+  conversationId,
+}: {
+  conversationId: Id<"agent_conversations">;
+}) {
+  // Pull both lists; whichever contains this conversation is the
+  // source of truth for visibility. Cheap — both are already cached.
+  const personal = useQuery(api.agentMessages.listPersonal, {}) as
+    | Array<{
+        _id: Id<"agent_conversations">;
+        visibility?: "personal" | "shared";
+      }>
+    | undefined;
+  const shared = useQuery(api.agentMessages.listShared, {}) as
+    | Array<{
+        _id: Id<"agent_conversations">;
+        visibility?: "personal" | "shared";
+      }>
+    | undefined;
+  const setVisibility = useMutation(api.agentMessages.setVisibility);
+  const all = [...(personal ?? []), ...(shared ?? [])];
+  const me = all.find((c) => c._id === conversationId);
+  if (!me) return null;
+  const visibility = me.visibility ?? "personal";
+
+  const flip = async () => {
+    const target = visibility === "personal" ? "shared" : "personal";
+    const blurb =
+      target === "shared"
+        ? "Make this chat shared? Any teammate on the allowlist will be able to read and post here, and a fresh Hermes memory store will be created — prior memory in this thread won't carry over."
+        : "Make this chat personal again? It'll only be visible to you, and a fresh Hermes memory store will be created — prior memory in this thread won't carry over.";
+    if (!confirm(blurb)) return;
+    try {
+      await setVisibility({ id: conversationId, visibility: target });
+      toast.success(
+        target === "shared" ? "Chat is now shared." : "Chat is now personal.",
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not change visibility.",
+      );
+    }
+  };
+
+  return (
+    <div className="shrink-0 border-b border-line bg-page">
+      <div className="mx-auto max-w-[720px] px-6 py-2 flex items-center justify-between gap-3">
+        <span
+          className={`text-[10.5px] uppercase tracking-wider num inline-flex items-center gap-1.5 ${
+            visibility === "shared" ? "text-ink" : "text-ink-3"
+          }`}
+        >
+          <span
+            className={`inline-block size-1.5 rounded-full ${
+              visibility === "shared" ? "bg-ink" : "bg-ink-3"
+            }`}
+          />
+          {visibility}
+        </span>
+        <button
+          onClick={flip}
+          className="text-[11.5px] text-ink-3 hover:text-ink underline underline-offset-2 decoration-line"
+        >
+          {visibility === "personal" ? "make shared" : "make personal"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -311,8 +571,8 @@ function EmptyState({
           What needs handling?
         </h1>
         <p className="mt-1 text-[12.5px] text-ink-3 leading-snug">
-          Each chat in the left rail has its own session, so memory is
-          scoped per thread.
+          Each chat in the left rail has its own session, so memory is scoped
+          per thread.
         </p>
       </div>
       <ul className="flex flex-col gap-1">
@@ -345,25 +605,58 @@ function Turn({
   message,
   actions,
   actorSlug,
+  isLastAssistant,
+  canRegenerate,
+  onRegenerate,
   onDismissAction,
 }: {
   message: ChatMessage;
   actions: ProposedAction[] | null;
   actorSlug: string | null;
+  isLastAssistant: boolean;
+  canRegenerate: boolean;
+  onRegenerate: () => void;
   onDismissAction: (id: Id<"agent_actions">) => void;
 }) {
   if (message.role === "user") {
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-sm bg-ink text-page px-2.5 py-1.5 text-[13.5px] leading-snug whitespace-pre-wrap">
-          {message.text}
+      <div className="group flex justify-end">
+        <div className="flex flex-col items-end gap-1.5 max-w-[80%]">
+          {message.text && (
+            <div className="rounded-sm bg-ink text-page px-2.5 py-1.5 text-[13.5px] leading-snug whitespace-pre-wrap relative">
+              {message.text}
+              <Timestamp
+                iso={message.createdAt}
+                className="absolute -bottom-4 right-1"
+              />
+            </div>
+          )}
+          {message.attachments && message.attachments.length > 0 && (
+            <div className="flex flex-wrap justify-end gap-1.5">
+              {message.attachments.map((a) => (
+                <AttachmentChip key={a.storageId} attachment={a} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
   }
   return (
-    <div>
+    <div className="group">
       <ChatMarkdown streaming={message.streaming}>{message.text}</ChatMarkdown>
+      <div className="mt-1 flex items-center gap-3 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        <Timestamp iso={message.createdAt} />
+        {isLastAssistant && !message.streaming && canRegenerate && (
+          <button
+            onClick={onRegenerate}
+            className="text-[11px] text-ink-3 hover:text-ink underline underline-offset-2 decoration-line"
+          >
+            regenerate
+          </button>
+        )}
+        <CopyButton text={message.text} />
+      </div>
       {actions && actions.length > 0 && (
         <div className="mt-2 flex flex-col gap-1.5">
           {actions.map((a) => (
@@ -378,6 +671,90 @@ function Turn({
         </div>
       )}
     </div>
+  );
+}
+
+function Timestamp({ iso, className }: { iso: string; className?: string }) {
+  const [label, setLabel] = useState(() => relativeTime(iso));
+  // Tick once a minute so "just now" → "1m ago" etc. without a hard
+  // refresh. Cheap; one interval per visible timestamp is fine for a
+  // chat of <100 messages.
+  useEffect(() => {
+    const id = setInterval(() => setLabel(relativeTime(iso)), 60_000);
+    return () => clearInterval(id);
+  }, [iso]);
+  const absolute = new Date(iso).toLocaleString();
+  return (
+    <time
+      dateTime={iso}
+      title={absolute}
+      className={`text-[10.5px] text-ink-3 num ${className ?? ""}`}
+    >
+      {label}
+    </time>
+  );
+}
+
+function relativeTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(ms / 1000);
+  if (s < 10) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+function AttachmentChip({
+  attachment,
+}: {
+  attachment: { storageId: string; name: string; size?: number };
+}) {
+  const url = useQuery(api.agentMessages.attachmentUrl, {
+    storageId: attachment.storageId as Id<"_storage">,
+  }) as string | null | undefined;
+  return (
+    <a
+      href={url ?? "#"}
+      onClick={(e) => {
+        if (!url) e.preventDefault();
+      }}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1.5 h-6 px-2 rounded-sm border border-line bg-page text-[11.5px] text-ink hover:bg-surface"
+      title={
+        attachment.size
+          ? `${attachment.name} · ${Math.round(attachment.size / 1024)} KB`
+          : attachment.name
+      }
+    >
+      <span className="text-ink-3">📎</span>
+      <span className="truncate max-w-[180px]">{attachment.name}</span>
+    </a>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!text.trim()) return null;
+  return (
+    <button
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          /* clipboard denied — silent */
+        }
+      }}
+      className="text-[11px] text-ink-3 hover:text-ink"
+    >
+      {copied ? "copied" : "copy"}
+    </button>
   );
 }
 
@@ -556,7 +933,10 @@ function Thinking({
               {t.status === "running" ? (
                 <span className="text-ink-3">…</span>
               ) : t.durationMs ? (
-                <span className="text-ink-3"> · {(t.durationMs / 1000).toFixed(1)}s</span>
+                <span className="text-ink-3">
+                  {" "}
+                  · {(t.durationMs / 1000).toFixed(1)}s
+                </span>
               ) : null}
             </span>
           ))}

@@ -37,6 +37,8 @@ logging.basicConfig(
 BEARER = os.environ.get("CASTLE_HERMES_TOKEN") or None
 PROTOCOL_VERSION = int(os.environ.get("ACP_PROTOCOL_VERSION", "1"))
 HERMES_CWD = os.environ.get("HERMES_CWD") or "/tmp"
+
+
 # ACP's _register_session_mcp_servers does NOT auto-attach config.yaml MCPs
 # to sessions — it only honors what we pass in session/new mcpServers. The
 # global config.yaml block governs discover_mcp_tools() (toolset loading),
@@ -50,9 +52,7 @@ def _mcp_servers() -> list[dict]:
     servers: list[dict] = []
     castle = os.environ.get("CASTLE_MCP_URL")
     if castle:
-        servers.append(
-            {"type": "http", "name": "castle", "url": castle, "headers": []}
-        )
+        servers.append({"type": "http", "name": "castle", "url": castle, "headers": []})
     composio = os.environ.get("COMPOSIO_MCP_URL")
     if composio:
         # Composio's hosted MCP endpoint refuses requests without an API
@@ -188,9 +188,7 @@ class HermesACP:
                 line = await self._proc.stderr.readline()
                 if not line:
                     break
-                logger.info(
-                    "[acp-stderr] %s", line.decode("utf-8", "replace").rstrip()
-                )
+                logger.info("[acp-stderr] %s", line.decode("utf-8", "replace").rstrip())
         except asyncio.CancelledError:
             return
 
@@ -219,9 +217,7 @@ class HermesACP:
             if fut and not fut.done():
                 if "error" in msg:
                     err = msg["error"] or {}
-                    fut.set_exception(
-                        RuntimeError(err.get("message") or "acp error")
-                    )
+                    fut.set_exception(RuntimeError(err.get("message") or "acp error"))
                 else:
                     fut.set_result(msg.get("result"))
             return
@@ -248,7 +244,7 @@ class HermesACP:
     def _auto_allow_permission(self, msg: dict) -> None:
         req_id = msg.get("id")
         params = msg.get("params") or {}
-        options = (params.get("options") or [])
+        options = params.get("options") or []
         # Prefer an "allow"-shaped option; fall back to the first.
         chosen = None
         for opt in options:
@@ -407,6 +403,7 @@ class HermesACP:
             yield q, fut
         finally:
             self._session_queues.pop(session_id, None)
+
             # Release the per-session lock. Two paths:
             #   - Normal exit: prompt_fut is already done; release now.
             #   - Cancel exit: prompt_fut is still pending (Hermes
@@ -421,6 +418,7 @@ class HermesACP:
                     lock.release()
                 except RuntimeError:
                     pass  # already released — shouldn't happen but defensive
+
             if fut is None or fut.done():
                 _safe_release()
             else:
@@ -606,9 +604,7 @@ async def agent(req: Request) -> StreamingResponse:
     if not isinstance(session, str):
         raise HTTPException(400, "session must be a string (may be empty)")
 
-    return StreamingResponse(
-        _stream(session, text), media_type="application/x-ndjson"
-    )
+    return StreamingResponse(_stream(session, text), media_type="application/x-ndjson")
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -628,6 +624,7 @@ _inflight_turns: dict[str, asyncio.Task] = {}
 
 def _hashed_body_for_verify(payload: bytes) -> str:
     import hashlib as _h
+
     return _h.sha256(payload).hexdigest()
 
 
@@ -642,15 +639,20 @@ async def agent_start(req: Request) -> JSONResponse:
     conversation_id = body.get("conversationId")
     actor_slug = body.get("actorSlug")
     hermes_session = body.get("hermesSession")
+    visibility = body.get("visibility") or "personal"
     text = body.get("text") or ""
+    attachments = body.get("attachments") or []
     write_token = body.get("writeToken")
     convex_url = body.get("convexUrl")
-    if not all([turn_id, conversation_id, actor_slug, hermes_session, write_token, convex_url]):
+    if not all(
+        [turn_id, conversation_id, actor_slug, hermes_session, write_token, convex_url]
+    ):
         raise HTTPException(400, "missing required fields")
 
     # Verify the kickoff token from the X-Castle-Kickoff header.
     kickoff_token = req.headers.get("X-Castle-Kickoff", "")
     from turn_token import CASTLE_STREAM_SECRET, TokenError, verify_kickoff_token
+
     if not CASTLE_STREAM_SECRET:
         raise HTTPException(500, "CASTLE_STREAM_SECRET not set on wrapper")
     try:
@@ -666,6 +668,7 @@ async def agent_start(req: Request) -> JSONResponse:
     # Atomic queued → running claim. Throws if the turn isn't in queued
     # state (replay protection).
     from convex_client import ConvexClient
+
     cc = ConvexClient(convex_url)
     try:
         await cc.mutation(
@@ -681,9 +684,12 @@ async def agent_start(req: Request) -> JSONResponse:
         _run_turn_to_convex(
             cc=cc,
             turn_id=turn_id,
+            conversation_id=conversation_id,
             actor_slug=actor_slug,
             hermes_session=hermes_session,
+            visibility=visibility,
             text=text,
+            attachments=attachments,
             write_token=write_token,
             convex_url=convex_url,
         )
@@ -711,9 +717,12 @@ async def _run_turn_to_convex(
     *,
     cc: Any,  # ConvexClient
     turn_id: str,
+    conversation_id: str,
     actor_slug: str,
     hermes_session: str,
+    visibility: str,
     text: str,
+    attachments: list,
     write_token: str,
     convex_url: str,
 ) -> None:
@@ -722,6 +731,7 @@ async def _run_turn_to_convex(
     is no longer in the picture.
     """
     from turn_token import CASTLE_STREAM_SECRET, mint_write_token
+
     # Renew the write token if it's getting old (TTL was set to 1h
     # by Vercel; for a 30-min turn this is fine, but agents that go
     # longer would lose write authority. Re-mint as needed.)
@@ -855,14 +865,89 @@ async def _run_turn_to_convex(
         # session resolution mirrors _stream() at line ~511. New session
         # if hermes_session doesn't resolve.
         actual_session_id = hermes_session
+        minted_new = False
         if actual_session_id:
             ok = await hermes.load_session(actual_session_id)
             if not ok:
                 actual_session_id = await hermes.new_session()
+                minted_new = True
         else:
             actual_session_id = await hermes.new_session()
+            minted_new = True
 
-        async with hermes.stream_prompt(actual_session_id, text) as (q, prompt_fut):
+        # Bind the actual session id back to Convex when we mint a fresh
+        # one. Without this, every turn observes the stored
+        # hermes_session, fails to load it, mints yet another new one,
+        # and the agent never accumulates context — the "new context
+        # every turn" bug. Best-effort; a failure is logged but doesn't
+        # abort the turn.
+        if minted_new and actual_session_id and actual_session_id != hermes_session:
+            try:
+                await cc.mutation(
+                    "agentMessages:bindSession",
+                    {
+                        "id": conversation_id,
+                        "turn_id": turn_id,
+                        "write_token": _token(),
+                        "hermes_session": actual_session_id,
+                        # Race safety: if `setVisibility` re-minted while
+                        # we were loading, the row's current
+                        # hermes_session no longer matches what we
+                        # observed at the start of this turn — the
+                        # mutation skips the patch and the new session
+                        # stays authoritative.
+                        "expected_hermes_session": hermes_session,
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "agentMessages:bindSession failed (turn=%s)",
+                    turn_id,
+                )
+
+        # Visibility-aware preamble. Personal chats get a discretion
+        # nudge; shared chats are flagged so the agent knows multiple
+        # operators may read. Prepended as a single line in front of the
+        # user's text — kept short to avoid blowing context for chatty
+        # multi-turn sessions.
+        if visibility == "shared":
+            preamble = (
+                "[chat mode: shared — multiple teammates may read and "
+                "post here; treat statements as multi-author and avoid "
+                "echoing private memory unless the asker confirms it's "
+                "ok to surface]"
+            )
+        else:
+            preamble = (
+                "[chat mode: personal — this thread is private to the "
+                f"asker ({actor_slug}); their memory should not be "
+                "surfaced into shared chats unless they ask]"
+            )
+        # Attachments: surface as a one-line directory of file URLs.
+        # The agent can fetch them with its own tools if needed; we do
+        # not download or pre-process anything server-side (no OCR, no
+        # preview rendering — that's a follow-up).
+        attachment_block = ""
+        if attachments:
+            lines = []
+            for a in attachments:
+                name = a.get("name") if isinstance(a, dict) else None
+                url = a.get("url") if isinstance(a, dict) else None
+                ct = a.get("contentType") if isinstance(a, dict) else None
+                if not name or not url:
+                    continue
+                lines.append(f"- {name}" + (f" ({ct})" if ct else "") + f": {url}")
+            if lines:
+                attachment_block = (
+                    "[the asker attached these files; fetch them if "
+                    "the question references them]\n" + "\n".join(lines) + "\n\n"
+                )
+        framed_text = f"{preamble}\n\n{attachment_block}{text}"
+
+        async with hermes.stream_prompt(actual_session_id, framed_text) as (
+            q,
+            prompt_fut,
+        ):
             IDLE_PING_SEC = 1.0  # tight loop; we flush manually
             while True:
                 drain_task = asyncio.ensure_future(q.get())

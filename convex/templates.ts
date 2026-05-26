@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { assertOperator, assertOperatorRead } from "./lib/assertOperator";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
 
 const category = v.union(
@@ -13,6 +14,76 @@ const category = v.union(
 export const list = query({
   args: {},
   handler: async (ctx) => ctx.db.query("templates").collect(),
+});
+
+// ────────────────────── GitHub candidates ──────────────────────────
+
+/** Active candidates — discovered repos that haven't been promoted to
+ *  a real template or dismissed yet. The /templates page surfaces
+ *  these so an operator can decide which to turn into templates. */
+export const listGithubCandidates = query({
+  args: {},
+  handler: async (ctx) => {
+    await assertOperatorRead(ctx);
+    const rows = await ctx.db
+      .query("template_github_candidates")
+      .withIndex("by_discovered")
+      .order("desc")
+      .collect();
+    return rows.filter((r) => !r.dismissed_at && !r.promoted_to_template_id);
+  },
+});
+
+/** Idempotent upsert: insert a candidate if its github_repo isn't
+ *  already on file (active OR resolved), no-op otherwise.
+ *  Not operator-gated because the Vercel cron calls this via an
+ *  unauthenticated ConvexHttpClient. The HTTP route gates access
+ *  (operator check for manual sync, CRON_SECRET for scheduled). */
+export const upsertGithubCandidate = mutation({
+  args: {
+    github_repo: v.string(),
+    name: v.string(),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const repo = args.github_repo.toLowerCase();
+    const existing = await ctx.db
+      .query("template_github_candidates")
+      .withIndex("by_repo", (q) => q.eq("github_repo", repo))
+      .first();
+    if (existing) return { id: existing._id, inserted: false };
+    const linkedTemplate = await ctx.db
+      .query("templates")
+      .filter((q) => q.eq(q.field("github_repo"), repo))
+      .first();
+    if (linkedTemplate) return { id: null, inserted: false } as const;
+    const id = await ctx.db.insert("template_github_candidates", {
+      github_repo: repo,
+      name: args.name,
+      description: args.description,
+      discovered_at: nowIso(),
+    });
+    return { id, inserted: true };
+  },
+});
+
+export const dismissGithubCandidate = mutation({
+  args: { id: v.id("template_github_candidates") },
+  handler: async (ctx, { id }) => {
+    await assertOperator(ctx);
+    await ctx.db.patch(id, { dismissed_at: nowIso() });
+  },
+});
+
+export const markCandidatePromoted = mutation({
+  args: {
+    id: v.id("template_github_candidates"),
+    template_id: v.id("templates"),
+  },
+  handler: async (ctx, { id, template_id }) => {
+    await assertOperator(ctx);
+    await ctx.db.patch(id, { promoted_to_template_id: template_id });
+  },
 });
 
 export const listCapabilities = query({
@@ -45,6 +116,7 @@ export const create = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, args) => {
+    await assertOperator(ctx);
     const slug = await uniqueSlug(ctx, "templates", slugify(args.name));
     const now = nowIso();
     const id = await ctx.db.insert("templates", {
@@ -86,6 +158,7 @@ export const update = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, patch, actor_fde_id }) => {
+    await assertOperator(ctx);
     const cleaned: typeof patch = patch.tags
       ? {
           ...patch,
@@ -115,6 +188,7 @@ export const setGithubRepo = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, repo, actor_fde_id }) => {
+    await assertOperator(ctx);
     let normalized: string | null = null;
     if (repo) {
       const m = repo
@@ -145,6 +219,7 @@ export const setLiveUrl = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, url, actor_fde_id }) => {
+    await assertOperator(ctx);
     let normalized: string | null = null;
     if (url) {
       const trimmed = url.trim();
@@ -184,6 +259,7 @@ export const setTags = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, tags, actor_fde_id }) => {
+    await assertOperator(ctx);
     await ctx.db.patch(id, {
       tags: cleanTags(tags),
       updated_at: nowIso(),
@@ -199,6 +275,7 @@ export const addTag = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, tag, actor_fde_id }) => {
+    await assertOperator(ctx);
     const tpl = await ctx.db.get(id);
     if (!tpl) throw new Error("Template not found");
     const next = cleanTags([...(tpl.tags ?? []), tag]);
@@ -217,6 +294,7 @@ export const removeTag = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, tag, actor_fde_id }) => {
+    await assertOperator(ctx);
     const tpl = await ctx.db.get(id);
     if (!tpl) throw new Error("Template not found");
     const needle = tag.trim().toLowerCase();
@@ -253,6 +331,7 @@ export const addCapability = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { template_id, body, actor_fde_id }) => {
+    await assertOperator(ctx);
     const last = await ctx.db
       .query("template_capabilities")
       .withIndex("by_template_position", (q) =>
@@ -280,6 +359,7 @@ export const updateCapability = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { capability_id, body, actor_fde_id }) => {
+    await assertOperator(ctx);
     await ctx.db.patch(capability_id, {
       body,
       updated_at: nowIso(),
@@ -295,6 +375,7 @@ export const reorderCapability = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { capability_id, new_position, actor_fde_id }) => {
+    await assertOperator(ctx);
     await ctx.db.patch(capability_id, {
       position: new_position,
       updated_at: nowIso(),
@@ -316,6 +397,7 @@ export const swapCapabilityPositions = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { a_id, b_id, actor_fde_id }) => {
+    await assertOperator(ctx);
     if (a_id === b_id) return;
     const a = await ctx.db.get(a_id);
     const b = await ctx.db.get(b_id);
@@ -340,6 +422,7 @@ export const swapCapabilityPositions = mutation({
 export const removeCapability = mutation({
   args: { capability_id: v.id("template_capabilities") },
   handler: async (ctx, { capability_id }) => {
+    await assertOperator(ctx);
     await ctx.db.delete(capability_id);
   },
 });
@@ -347,6 +430,7 @@ export const removeCapability = mutation({
 export const remove = mutation({
   args: { id: v.id("templates") },
   handler: async (ctx, { id }) => {
+    await assertOperator(ctx);
     const caps = await ctx.db
       .query("template_capabilities")
       .withIndex("by_template_position", (q) => q.eq("template_id", id))

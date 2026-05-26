@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { assertOperatorRead } from "./lib/assertOperator";
 import { checkNonNegative } from "./lib/bounds";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
 
@@ -16,7 +17,10 @@ const health = v.union(
 
 export const list = query({
   args: {},
-  handler: async (ctx) => ctx.db.query("customers").collect(),
+  handler: async (ctx) => {
+    await assertOperatorRead(ctx);
+    return ctx.db.query("customers").collect();
+  },
 });
 
 export const getBySlug = query({

@@ -1,17 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import {
-  listConnections,
-  type ConnectionRow,
-} from "@/app/connections/actions";
+import { listConnections, type ConnectionRow } from "@/app/connections/actions";
 import { useActorSlug } from "@/lib/use-actor";
 
 /**
  * Right-rail integration status. Shows the operator's CONNECTED
  * toolkits at a glance; the full catalog (1000+) lives behind the
- * "browse all" link to /connections.
+ * "browse all" link to /connections. Each row renders the toolkit's
+ * real logo on the left and a status icon (filled check vs. pulsing
+ * dot) on the right.
  */
 export function ConnectionsRail() {
   const [actorSlug] = useActorSlug();
@@ -26,6 +26,8 @@ export function ConnectionsRail() {
       setRows([]);
       return;
     }
+    setLoaded(false);
+    setRows([]);
     let cancelled = false;
     listConnections(actorSlug).then((r) => {
       if (!cancelled) {
@@ -45,8 +47,7 @@ export function ConnectionsRail() {
     // next actor change or full page reload.
     const bump = () => setRefreshKey((k) => k + 1);
     window.addEventListener("castle:connections-changed", bump);
-    return () =>
-      window.removeEventListener("castle:connections-changed", bump);
+    return () => window.removeEventListener("castle:connections-changed", bump);
   }, []);
 
   const connected = rows.filter((r) => r.status === "connected");
@@ -69,15 +70,15 @@ export function ConnectionsRail() {
 
       {!actorSlug ? (
         <div className="px-3 py-3 text-[12px] text-ink-3 leading-snug">
-          Pick an actor in the top nav to see your connections.
+          Sign in to see your connections.
         </div>
       ) : !loaded ? (
         <div className="px-3 py-3 text-[12px] text-ink-3">Checking…</div>
       ) : connected.length === 0 && pending.length === 0 ? (
         <div className="px-3 py-3 flex flex-col gap-2">
           <p className="text-[12px] text-ink-3 leading-snug">
-            Nothing connected yet. Castle works without integrations, but
-            it gets a lot more useful with them.
+            Nothing connected yet. Castle works without integrations, but it
+            gets a lot more useful with them.
           </p>
           <Link
             href="/connections"
@@ -91,17 +92,13 @@ export function ConnectionsRail() {
           {[...connected, ...pending].map((r) => (
             <li
               key={r.toolkit}
-              className="px-3 py-2 border-b border-line last:border-b-0 flex items-center justify-between gap-2"
+              className="px-3 py-2 border-b border-line last:border-b-0 flex items-center gap-2.5"
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <StatusGlyph status={r.status} />
-                <span className="text-[13px] text-ink truncate">
-                  {r.toolkit}
-                </span>
-              </div>
-              <span className="text-[11px] text-ink-3">
-                {r.status === "connected" ? "on" : "pending"}
+              <ToolkitLogo logo={r.logo} slug={r.toolkit} />
+              <span className="flex-1 min-w-0 text-[13px] text-ink truncate">
+                {r.name ?? r.toolkit}
               </span>
+              <StatusIcon status={r.status} />
             </li>
           ))}
         </ul>
@@ -121,25 +118,69 @@ export function ConnectionsRail() {
   );
 }
 
-function StatusGlyph({
-  status,
-}: {
-  status: "connected" | "pending" | "none";
-}) {
+function ToolkitLogo({ logo, slug }: { logo?: string; slug: string }) {
+  const [errored, setErrored] = useState(false);
+  if (logo && !errored) {
+    return (
+      <span className="inline-flex shrink-0 h-5 w-5 items-center justify-center rounded-sm bg-page border border-line overflow-hidden">
+        <Image
+          src={logo}
+          alt=""
+          width={20}
+          height={20}
+          className="object-contain"
+          onError={() => setErrored(true)}
+          unoptimized
+        />
+      </span>
+    );
+  }
+  // Fallback: first letter of slug in a neutral chip.
+  return (
+    <span
+      className="inline-flex shrink-0 h-5 w-5 items-center justify-center rounded-sm bg-surface border border-line text-[10px] text-ink-2 uppercase"
+      aria-hidden="true"
+    >
+      {slug.charAt(0)}
+    </span>
+  );
+}
+
+function StatusIcon({ status }: { status: "connected" | "pending" | "none" }) {
   if (status === "connected") {
     return (
-      <span
-        className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-ink text-page text-[10px] leading-none"
+      <svg
+        viewBox="0 0 12 12"
+        className="size-3.5 text-ink"
         aria-label="connected"
       >
-        ✓
-      </span>
+        <circle cx="6" cy="6" r="5" fill="currentColor" />
+        <path
+          d="M3.5 6.3L5.2 8L8.5 4.6"
+          stroke="var(--color-page, white)"
+          strokeWidth="1.4"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
     );
   }
   if (status === "pending") {
     return (
-      <span className="hp" data-health="yellow" aria-label="pending" />
+      <span
+        className="relative inline-flex size-3 items-center justify-center"
+        aria-label="pending"
+      >
+        <span className="absolute inset-0 rounded-full bg-yellow-500/30 animate-ping" />
+        <span className="relative size-2 rounded-full bg-yellow-500" />
+      </span>
     );
   }
-  return <span className="hp" aria-label="not connected" />;
+  return (
+    <span
+      className="inline-block size-2 rounded-full border border-line"
+      aria-label="not connected"
+    />
+  );
 }

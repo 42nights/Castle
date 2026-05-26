@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { assertWriteToken } from "./lib/writeToken";
 import { nowIso } from "./lib/util";
+import { requireConversation, tryConversation } from "./lib/conversationAuth";
 
 /**
  * Agent turn lifecycle.
@@ -34,22 +35,38 @@ const status = v.union(
 export const startTurn = mutation({
   args: {
     conversation_id: v.id("agent_conversations"),
-    actor_slug: v.string(),
     user_text: v.string(),
-    hermes_session: v.string(),
+    attachments: v.optional(
+      v.array(
+        v.object({
+          storageId: v.id("_storage"),
+          name: v.string(),
+          contentType: v.optional(v.string()),
+          size: v.optional(v.number()),
+        }),
+      ),
+    ),
   },
   handler: async (ctx, args) => {
+    // Owner / shared check + identity. The caller (Vercel route) must
+    // forward Better Auth identity via fetchAuthMutation — we don't
+    // trust a client-passed actor_slug anymore.
+    const { conv, user } = await requireConversation(ctx, args.conversation_id);
+    const actorSlug = user.slug ?? conv.actor_slug;
     const now = nowIso();
     const user_message_id = await ctx.db.insert("agent_messages", {
       conversation_id: args.conversation_id,
-      actor_slug: args.actor_slug,
+      actor_slug: actorSlug,
       role: "user",
       text: args.user_text,
+      ...(args.attachments && args.attachments.length > 0
+        ? { attachments: args.attachments }
+        : {}),
       created_at: now,
     });
     const assistant_message_id = await ctx.db.insert("agent_messages", {
       conversation_id: args.conversation_id,
-      actor_slug: args.actor_slug,
+      actor_slug: actorSlug,
       role: "assistant",
       text: "",
       status: "streaming",
@@ -58,10 +75,10 @@ export const startTurn = mutation({
     });
     const turn_id = await ctx.db.insert("agent_turns", {
       conversation_id: args.conversation_id,
-      actor_slug: args.actor_slug,
+      actor_slug: actorSlug,
       user_message_id,
       assistant_message_id,
-      hermes_session: args.hermes_session,
+      hermes_session: conv.hermes_session,
       status: "queued",
       started_at: now,
       last_heartbeat_at: now,
@@ -69,18 +86,40 @@ export const startTurn = mutation({
     // Wire the assistant placeholder back to the turn it belongs to so
     // the reactive query can hop from message → turn.
     await ctx.db.patch(assistant_message_id, { turn_id });
-    // Bump the conversation so it floats to the top of the sidebar +
-    // auto-title from the user's first message (mirrors the prior
-    // append() behavior).
-    const conv = await ctx.db.get(args.conversation_id);
-    if (conv) {
-      const patch: { updated_at: string; title?: string } = { updated_at: now };
-      if (conv.title === "New chat") {
-        patch.title = args.user_text.trim().slice(0, 48) || "New chat";
-      }
-      await ctx.db.patch(args.conversation_id, patch);
+    const patch: { updated_at: string; title?: string } = { updated_at: now };
+    if (conv.title === "New chat") {
+      patch.title = args.user_text.trim().slice(0, 48) || "New chat";
     }
-    return { turn_id, user_message_id, assistant_message_id };
+    await ctx.db.patch(args.conversation_id, patch);
+    // Resolve attachment URLs once for the route to forward to Hermes.
+    // The route can't call storage.getUrl itself without another Convex
+    // round-trip per file; doing it here keeps the kickoff cheap.
+    const attachment_links: Array<{
+      name: string;
+      url: string;
+      contentType?: string;
+    }> = [];
+    if (args.attachments) {
+      for (const a of args.attachments) {
+        const url = await ctx.storage.getUrl(a.storageId);
+        if (url) {
+          attachment_links.push({
+            name: a.name,
+            url,
+            contentType: a.contentType,
+          });
+        }
+      }
+    }
+    return {
+      turn_id,
+      user_message_id,
+      assistant_message_id,
+      hermes_session: conv.hermes_session,
+      visibility: conv.visibility ?? "personal",
+      actor_slug: actorSlug,
+      attachment_links,
+    };
   },
 });
 
@@ -178,23 +217,23 @@ export const fail = mutation({
 
 /**
  * Vercel route writes this when the user clicks stop. The wrapper polls
- * for it and aborts its asyncio task. No write_token needed — this is
- * a server-only mutation called from the Vercel route (which is already
- * auth-gated by Better Auth middleware). Caller must pass actor_slug;
- * the mutation verifies it matches the turn's actor.
+ * for it and aborts its asyncio task. No write_token — the route uses
+ * `fetchAuthMutation` so Convex sees the Better Auth user identity, and
+ * we re-verify ownership against the turn's conversation.
  */
 export const cancel = mutation({
   args: {
     turn_id: v.id("agent_turns"),
-    actor_slug: v.string(),
   },
-  handler: async (ctx, { turn_id, actor_slug }) => {
+  handler: async (ctx, { turn_id }) => {
     const turn = await ctx.db.get(turn_id);
     if (!turn) throw new Error("turn not found");
-    if (turn.actor_slug !== actor_slug) {
-      throw new Error("forbidden");
-    }
-    if (turn.status === "complete" || turn.status === "failed" || turn.status === "canceled") {
+    await requireConversation(ctx, turn.conversation_id);
+    if (
+      turn.status === "complete" ||
+      turn.status === "failed" ||
+      turn.status === "canceled"
+    ) {
       return { ok: true, already: turn.status };
     }
     const now = nowIso();
@@ -213,19 +252,18 @@ export const cancel = mutation({
 
 /**
  * Vercel route uses this when Railway kickoff fails. Marks the just-
- * created queued turn as failed without needing a write_token (Vercel
- * is trusted; the route already authed the actor).
+ * created queued turn as failed. Re-verifies ownership against the
+ * turn's conversation via the forwarded Better Auth identity.
  */
 export const failFromRoute = mutation({
   args: {
     turn_id: v.id("agent_turns"),
-    actor_slug: v.string(),
     error: v.string(),
   },
-  handler: async (ctx, { turn_id, actor_slug, error }) => {
+  handler: async (ctx, { turn_id, error }) => {
     const turn = await ctx.db.get(turn_id);
     if (!turn) return;
-    if (turn.actor_slug !== actor_slug) throw new Error("forbidden");
+    await requireConversation(ctx, turn.conversation_id);
     if (turn.status !== "queued") return;
     const now = nowIso();
     await ctx.db.patch(turn_id, {
@@ -242,27 +280,113 @@ export const failFromRoute = mutation({
 });
 
 /**
+ * Regenerate the latest assistant turn. Used by the chat UI's
+ * "regenerate" button on the last assistant message.
+ *
+ * Behavior: finds the most recent terminal (complete/failed/canceled)
+ * turn for the conversation, deletes its assistant_message + the turn
+ * row + any chunks/tool events, then creates a new queued turn that
+ * reuses the same user_message (and the conversation's current
+ * hermes_session so the agent has the same context).
+ *
+ * Refuses if a turn is currently active. Caller must be able to access
+ * the conversation.
+ */
+export const regenerateLast = mutation({
+  args: {
+    conversation_id: v.id("agent_conversations"),
+  },
+  handler: async (ctx, { conversation_id }) => {
+    const { conv, user } = await requireConversation(ctx, conversation_id);
+    const turns = await ctx.db
+      .query("agent_turns")
+      .withIndex("by_conversation", (q) =>
+        q.eq("conversation_id", conversation_id),
+      )
+      .order("desc")
+      .collect();
+    if (turns.length === 0) throw new Error("no turn to regenerate");
+    const latest = turns[0];
+    if (latest.status === "queued" || latest.status === "running") {
+      throw new Error("a turn is already running; cancel it first");
+    }
+    // Delete chunks + tool events + the assistant message for this turn.
+    const chunks = await ctx.db
+      .query("agent_message_chunks")
+      .withIndex("by_turn_seq", (q) => q.eq("turn_id", latest._id))
+      .collect();
+    for (const c of chunks) await ctx.db.delete(c._id);
+    const events = await ctx.db
+      .query("agent_tool_events")
+      .withIndex("by_turn_seq", (q) => q.eq("turn_id", latest._id))
+      .collect();
+    for (const e of events) await ctx.db.delete(e._id);
+    await ctx.db.delete(latest.assistant_message_id);
+    await ctx.db.delete(latest._id);
+    // Re-create a fresh assistant placeholder + queued turn pointing at
+    // the original user message. Reuses the conversation's current
+    // hermes_session so the agent re-runs against the same memory.
+    const now = nowIso();
+    const newAssistantId = await ctx.db.insert("agent_messages", {
+      conversation_id,
+      actor_slug: user.slug ?? conv.actor_slug,
+      role: "assistant",
+      text: "",
+      status: "streaming",
+      created_at: now,
+      updated_at: now,
+    });
+    const newTurnId = await ctx.db.insert("agent_turns", {
+      conversation_id,
+      actor_slug: user.slug ?? conv.actor_slug,
+      user_message_id: latest.user_message_id,
+      assistant_message_id: newAssistantId,
+      hermes_session: conv.hermes_session,
+      status: "queued",
+      started_at: now,
+      last_heartbeat_at: now,
+    });
+    await ctx.db.patch(newAssistantId, { turn_id: newTurnId });
+    // Fetch the original user message text for the route to forward to
+    // Hermes (mirrors what `/api/agent/start` passes).
+    const userMsg = await ctx.db.get(latest.user_message_id);
+    const attachment_links: Array<{ name: string; url: string; contentType?: string }> = [];
+    if (userMsg?.attachments) {
+      for (const a of userMsg.attachments) {
+        const url = await ctx.storage.getUrl(a.storageId);
+        if (url) attachment_links.push({ name: a.name, url, contentType: a.contentType });
+      }
+    }
+    return {
+      turn_id: newTurnId,
+      user_message_id: latest.user_message_id,
+      assistant_message_id: newAssistantId,
+      hermes_session: conv.hermes_session,
+      visibility: conv.visibility ?? "personal",
+      actor_slug: user.slug ?? conv.actor_slug,
+      user_text: userMsg?.text ?? "",
+      attachment_links,
+    };
+  },
+});
+
+/**
  * Reactive query: the active turn for a conversation (if any). Returns
  * the turn + its chunks + its tool events so the client gets one
  * subscription instead of three.
  *
- * Auth: caller's actor_slug must match the conversation's actor_slug.
- * Phase A: actor_slug is derived client-side (Better Auth email →
- * slug). The query accepts it as an arg and asserts the conversation
- * row matches. A more locked-down Phase B would use ctx.auth identity
- * directly.
+ * Auth: caller must be authenticated and able to access the
+ * conversation (owner for personal, any operator for shared). Returns
+ * null (not throws) on missing / forbidden so a transient
+ * mid-visibility-flip subscription doesn't surface as an error.
  */
 export const activeFor = query({
   args: {
     conversation_id: v.id("agent_conversations"),
-    actor_slug: v.string(),
   },
-  handler: async (ctx, { conversation_id, actor_slug }) => {
-    const conv = await ctx.db.get(conversation_id);
-    if (!conv) return null;
-    if (conv.actor_slug !== actor_slug) {
-      throw new Error("forbidden");
-    }
+  handler: async (ctx, { conversation_id }) => {
+    const access = await tryConversation(ctx, conversation_id);
+    if (!access) return null;
     // Active = anything not yet complete/failed/canceled. There should
     // be at most one such turn per conversation (the wrapper's per-
     // session lock enforces it).
@@ -313,7 +437,10 @@ export const sweepStuck = mutation({
       .query("agent_turns")
       .withIndex("by_status_heartbeat")
       .filter((q) =>
-        q.or(q.eq(q.field("status"), "queued"), q.eq(q.field("status"), "running")),
+        q.or(
+          q.eq(q.field("status"), "queued"),
+          q.eq(q.field("status"), "running"),
+        ),
       )
       .collect();
     const failed: Array<Id<"agent_turns">> = [];

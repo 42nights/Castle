@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
+import { useIsOperator } from "@/lib/role-context";
 import { useRunMutation } from "@/lib/use-run-mutation";
 
 /**
@@ -15,8 +16,11 @@ export function ExtractionRowDelete({
 }: {
   extractionId: string;
 }) {
+  const op = useIsOperator();
   const run = useRunMutation(api.patternExtractions.remove);
   const [pending, setPending] = useState(false);
+
+  if (!op) return null;
 
   const remove = async () => {
     if (pending) return;

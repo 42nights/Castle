@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
+import { useIsOperator } from "@/lib/role-context";
 import { useActorSlug } from "@/lib/use-actor";
 import { useRunMutation } from "@/lib/use-run-mutation";
 
@@ -24,6 +25,7 @@ export function TemplateTagsInput({
   current: string[];
   mode?: "row" | "block";
 }) {
+  const op = useIsOperator();
   const tpl = useQuery(api.templates.getBySlug, { slug: templateSlug }) as
     | { _id: string }
     | null
@@ -105,6 +107,14 @@ export function TemplateTagsInput({
       addTag(opt.slice("__create__:".length));
     else addTag(opt);
   };
+
+  if (!op) {
+    return selected.length === 0 ? (
+      <span className="text-[13px] text-ink-3">—</span>
+    ) : (
+      <TemplateTagsChips tags={selected} />
+    );
+  }
 
   if (mode === "row" && !open) {
     const display = selected.length === 0 ? "—" : selected.join(", ");

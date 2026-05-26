@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
+import { useIsOperator } from "@/lib/role-context";
 import { useActorSlug } from "@/lib/use-actor";
 import { useRunMutation } from "@/lib/use-run-mutation";
 
@@ -18,20 +19,24 @@ type CustomerRow = { _id: string; slug: string; name: string };
 export function TemplateOriginSelect({
   templateSlug,
   currentCustomerSlug,
+  currentName,
 }: {
   templateSlug: string;
   currentCustomerSlug: string;
+  currentName?: string;
 }) {
+  const op = useIsOperator();
   const [actorSlug] = useActorSlug();
-  const template = useQuery(api.templates.getBySlug, {
-    slug: templateSlug,
-  }) as { _id: string } | null | undefined;
-  const customers = useQuery(api.customers.list, {}) as
+  const template = useQuery(
+    api.templates.getBySlug,
+    op ? { slug: templateSlug } : "skip",
+  ) as { _id: string } | null | undefined;
+  const customers = useQuery(api.customers.list, op ? {} : "skip") as
     | CustomerRow[]
     | undefined;
   const actorFde = useQuery(
     api.fdes.getBySlug,
-    actorSlug ? { slug: actorSlug } : "skip",
+    op && actorSlug ? { slug: actorSlug } : "skip",
   ) as { _id: string } | null | undefined;
   const run = useRunMutation(api.templates.update);
   const [pending, setPending] = useState(false);
@@ -57,6 +62,14 @@ export function TemplateOriginSelect({
     );
     setPending(false);
   };
+
+  if (!op) {
+    return (
+      <span className="h-7 inline-flex items-center rounded-sm text-[12.5px] px-2 text-ink">
+        {currentName ?? currentCustomerSlug}
+      </span>
+    );
+  }
 
   return (
     <select

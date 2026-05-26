@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSyncedDraft } from "@/lib/use-synced-draft";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
+import { useIsOperator } from "@/lib/role-context";
 import { useActorSlug } from "@/lib/use-actor";
 import { useRunMutation } from "@/lib/use-run-mutation";
 
@@ -23,6 +24,7 @@ export function CapabilityEditor({
   /** Read-only list shown when Convex isn't provisioned. */
   fallback?: string[];
 }) {
+  const op = useIsOperator();
   const tpl = useQuery(api.templates.getBySlug, { slug: templateSlug }) as
     | { _id: string }
     | null
@@ -67,6 +69,27 @@ export function CapabilityEditor({
   }
 
   const sorted = [...live].sort((a, b) => a.position - b.position);
+
+  if (!op) {
+    return (
+      <ul className="border-t border-line">
+        {sorted.map((cap) => (
+          <li
+            key={cap._id}
+            className="border-b border-line py-3 grid grid-cols-[auto_1fr] items-center gap-3"
+          >
+            <span className="t-caption num text-ink-3 w-7">
+              {cap.position}.
+            </span>
+            <span className="text-[14.5px] text-ink">{cap.body}</span>
+          </li>
+        ))}
+        {sorted.length === 0 && (
+          <li className="text-ink-3 text-sm py-6">No capabilities yet.</li>
+        )}
+      </ul>
+    );
+  }
 
   const onAdd = async () => {
     if (!tpl) return;

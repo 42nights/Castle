@@ -24,7 +24,7 @@ export function AttentionList({ items }: { items: AttentionItem[] }) {
     <section className="mb-8">
       <div className="flex items-baseline justify-between mb-3">
         <h2 className="t-h2">Needs attention</h2>
-        <span className="text-[12px] text-ink-3 num">{items.length} items</span>
+        <span className="text-[12px] text-ink-3 num">{items.length} {items.length === 1 ? "item" : "items"}</span>
       </div>
 
       <div className="rounded-lg border border-line overflow-hidden">
@@ -86,7 +86,7 @@ function SeverityDot({ severity }: { severity: AttentionSeverity }) {
     >
       <span className={`absolute inset-0 rounded-full ${color}`} />
       {severity === "critical" && (
-        <span className="absolute inset-0 rounded-full bg-accent animate-ping opacity-40" />
+        <span className="absolute inset-0 rounded-full bg-accent motion-safe:animate-ping opacity-40" />
       )}
     </span>
   );

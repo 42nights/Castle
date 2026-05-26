@@ -151,6 +151,25 @@ export default defineSchema({
     .index("by_slug", ["slug"])
     .index("by_category", ["category"]),
 
+  /** Repositories discovered in the 42nights GitHub org via the
+   *  Composio sync job, but not yet promoted to a real template. Each
+   *  row is a single repo; deduped by `github_repo`. Operators can
+   *  promote a candidate (open the create-template dialog and link the
+   *  github_repo) or dismiss it. Promoted/dismissed rows stay around
+   *  for audit + to keep the sync job idempotent. */
+  template_github_candidates: defineTable({
+    /** "<org>/<repo>", e.g. "42nights/deal-flow-scout". Lowercased. */
+    github_repo: v.string(),
+    /** Repo name as returned by GitHub (no org prefix). */
+    name: v.string(),
+    description: v.optional(v.string()),
+    discovered_at: v.string(),
+    dismissed_at: v.optional(v.string()),
+    promoted_to_template_id: v.optional(v.id("templates")),
+  })
+    .index("by_repo", ["github_repo"])
+    .index("by_discovered", ["discovered_at"]),
+
   template_capabilities: defineTable({
     template_id: v.id("templates"),
     body: v.string(),
@@ -247,18 +266,36 @@ export default defineSchema({
 
   /** Per-actor chat conversation. Hermes session name is derived from
    *  the doc id, so each conversation has its own independent memory in
-   *  Hermes' session store. */
+   *  Hermes' session store.
+   *
+   *  Visibility model: `personal` rows are only visible to / writable
+   *  by their `owner_user_id` (Better Auth user id). `shared` rows are
+   *  visible + writable to any allowlisted user. Both fields are
+   *  optional so the migration can backfill them; readers default to
+   *  `personal` + owner-by-actor_slug for legacy rows. */
   agent_conversations: defineTable({
     actor_slug: v.string(),
     title: v.string(),
     /** Hermes session name passed to `--continue`. Computed once on
-     *  create and never changed (so the session keeps accumulating). */
+     *  create and never changed (so the session keeps accumulating).
+     *  Personal chats use the prefix `castle-personal-{owner}-...` and
+     *  shared chats use `castle-shared-...` so the FTS5 session store
+     *  is naturally partitioned. */
     hermes_session: v.string(),
+    /** "personal" (only owner sees it) or "shared" (any allowlisted
+     *  operator). Optional during migration; treat absent as
+     *  "personal". */
+    visibility: v.optional(v.union(v.literal("personal"), v.literal("shared"))),
+    /** Better Auth user id of the creator. Optional during migration;
+     *  treat absent as legacy/unowned (excluded from listings). */
+    owner_user_id: v.optional(v.string()),
     created_at: v.string(),
     updated_at: v.string(),
   })
     .index("by_actor_updated", ["actor_slug", "updated_at"])
-    .index("by_hermes_session", ["hermes_session"]),
+    .index("by_hermes_session", ["hermes_session"])
+    .index("by_owner_updated", ["owner_user_id", "updated_at"])
+    .index("by_visibility_updated", ["visibility", "updated_at"]),
 
   /** Castle chat transcript. Hermes itself owns the agent's memory in
    *  its FTS5 session store; this table is purely so the UI can render
@@ -297,6 +334,20 @@ export default defineSchema({
     /** Back-pointer to the agent_turns row that produced this message.
      *  Absent on user rows and pre-migration assistant rows. */
     turn_id: v.optional(v.id("agent_turns")),
+    /** Files the operator attached when sending this message. Stored as
+     *  Convex storage ids — resolve to public URLs via `storage.getUrl`
+     *  on demand. Absent on assistant rows and any user message sent
+     *  without attachments. */
+    attachments: v.optional(
+      v.array(
+        v.object({
+          storageId: v.id("_storage"),
+          name: v.string(),
+          contentType: v.optional(v.string()),
+          size: v.optional(v.number()),
+        }),
+      ),
+    ),
     created_at: v.string(),
     updated_at: v.optional(v.string()),
   })

@@ -50,12 +50,16 @@ export function ExtractionTimeline({
             >
               <div className="flex items-baseline justify-between gap-2 mb-1">
                 <div className="text-[13px] text-ink leading-snug">
-                  <Link
-                    href={`/customers/${src?.id ?? ""}`}
-                    className="hover:underline"
-                  >
-                    {src?.name ?? "Unknown"}
-                  </Link>
+                  {src?.id ? (
+                    <Link
+                      href={`/customers/${src.id}`}
+                      className="hover:underline"
+                    >
+                      {src?.name ?? "Unknown"}
+                    </Link>
+                  ) : (
+                    <span>{src?.name ?? "Unknown"}</span>
+                  )}
                   <span className="text-ink-3 mx-1.5">-&gt;</span>
                   {tpl ? (
                     <Link
