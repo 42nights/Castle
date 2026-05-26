@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { assertOperator } from "./lib/assertOperator";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
 
 const category = v.union(
@@ -45,6 +46,7 @@ export const create = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, args) => {
+    await assertOperator(ctx);
     const slug = await uniqueSlug(ctx, "templates", slugify(args.name));
     const now = nowIso();
     const id = await ctx.db.insert("templates", {
@@ -86,6 +88,7 @@ export const update = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, patch, actor_fde_id }) => {
+    await assertOperator(ctx);
     const cleaned: typeof patch = patch.tags
       ? {
           ...patch,
@@ -115,6 +118,7 @@ export const setGithubRepo = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, repo, actor_fde_id }) => {
+    await assertOperator(ctx);
     let normalized: string | null = null;
     if (repo) {
       const m = repo
@@ -145,6 +149,7 @@ export const setLiveUrl = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, url, actor_fde_id }) => {
+    await assertOperator(ctx);
     let normalized: string | null = null;
     if (url) {
       const trimmed = url.trim();
@@ -184,6 +189,7 @@ export const setTags = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, tags, actor_fde_id }) => {
+    await assertOperator(ctx);
     await ctx.db.patch(id, {
       tags: cleanTags(tags),
       updated_at: nowIso(),
@@ -199,6 +205,7 @@ export const addTag = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, tag, actor_fde_id }) => {
+    await assertOperator(ctx);
     const tpl = await ctx.db.get(id);
     if (!tpl) throw new Error("Template not found");
     const next = cleanTags([...(tpl.tags ?? []), tag]);
@@ -217,6 +224,7 @@ export const removeTag = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, tag, actor_fde_id }) => {
+    await assertOperator(ctx);
     const tpl = await ctx.db.get(id);
     if (!tpl) throw new Error("Template not found");
     const needle = tag.trim().toLowerCase();
@@ -253,6 +261,7 @@ export const addCapability = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { template_id, body, actor_fde_id }) => {
+    await assertOperator(ctx);
     const last = await ctx.db
       .query("template_capabilities")
       .withIndex("by_template_position", (q) =>
@@ -280,6 +289,7 @@ export const updateCapability = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { capability_id, body, actor_fde_id }) => {
+    await assertOperator(ctx);
     await ctx.db.patch(capability_id, {
       body,
       updated_at: nowIso(),
@@ -295,6 +305,7 @@ export const reorderCapability = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { capability_id, new_position, actor_fde_id }) => {
+    await assertOperator(ctx);
     await ctx.db.patch(capability_id, {
       position: new_position,
       updated_at: nowIso(),
@@ -316,6 +327,7 @@ export const swapCapabilityPositions = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { a_id, b_id, actor_fde_id }) => {
+    await assertOperator(ctx);
     if (a_id === b_id) return;
     const a = await ctx.db.get(a_id);
     const b = await ctx.db.get(b_id);
@@ -340,6 +352,7 @@ export const swapCapabilityPositions = mutation({
 export const removeCapability = mutation({
   args: { capability_id: v.id("template_capabilities") },
   handler: async (ctx, { capability_id }) => {
+    await assertOperator(ctx);
     await ctx.db.delete(capability_id);
   },
 });
@@ -347,6 +360,7 @@ export const removeCapability = mutation({
 export const remove = mutation({
   args: { id: v.id("templates") },
   handler: async (ctx, { id }) => {
+    await assertOperator(ctx);
     const caps = await ctx.db
       .query("template_capabilities")
       .withIndex("by_template_position", (q) => q.eq("template_id", id))

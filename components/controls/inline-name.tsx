@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
+import { useIsOperator } from "@/lib/role-context";
 import { useActorSlug } from "@/lib/use-actor";
 import { useRunMutation } from "@/lib/use-run-mutation";
 import { useSyncedDraft } from "@/lib/use-synced-draft";
@@ -27,6 +28,7 @@ export function InlineName({
   current: string;
   className?: string;
 }) {
+  const op = useIsOperator();
   const entity = useQuery(API[kind].get, { slug }) as
     | { _id: string }
     | null
@@ -68,6 +70,10 @@ export function InlineName({
       { success: "Renamed" },
     );
   };
+
+  if (!op) {
+    return <span className={className}>{current}</span>;
+  }
 
   if (!editing) {
     return (

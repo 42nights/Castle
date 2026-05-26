@@ -10,7 +10,8 @@ import { InlineName } from "@/components/controls/inline-name";
 import { LiveUrlInput } from "@/components/controls/live-url-input";
 import { TemplateTagsInput } from "@/components/controls/template-tags-input";
 import { PageHeader, PageShell } from "@/components/page-shell";
-import { loadOverview } from "@/lib/load-overview";
+import { loadTemplateData, requireSignedIn } from "@/lib/load-overview";
+import { RoleProvider } from "@/lib/role-context";
 import { formatDate, formatHours } from "@/lib/format";
 
 export default async function TemplateDetail({
@@ -19,8 +20,9 @@ export default async function TemplateDetail({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const { isOperator } = await requireSignedIn();
   const { templates, customers, deployments, engagements, patternExtractions } =
-    await loadOverview();
+    await loadTemplateData();
   const tpl = templates.find((t) => t.id === slug);
   if (!tpl) notFound();
   // Author + origin links used to live in the header description as
@@ -42,6 +44,7 @@ export default async function TemplateDetail({
         );
 
   return (
+    <RoleProvider role={isOperator ? "operator" : "guest"}>
     <PageShell>
       <PageHeader
         kicker={
@@ -218,6 +221,7 @@ export default async function TemplateDetail({
         </Panel>
       )}
     </PageShell>
+    </RoleProvider>
   );
 }
 

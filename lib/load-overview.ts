@@ -33,37 +33,13 @@ export type LoadedOverview = {
  * same `LoadedOverview` so list + detail pages can stay shape-agnostic.
  */
 /**
- * Server-side allowlist gate for operator pages. `getCurrentUser`
- * already returns null when the session is invalid OR when the email
- * has been removed from the allowlist after sign-in. Pages that show
- * operator data (templates, customers, settings) call this first so a
- * stale session cookie can't keep an ex-operator on the console.
- *
- * The chat landing at "/" does NOT call this — it's intentionally
- * public.
- *
- * If Convex itself is unreachable we fall through (don't redirect) so
- * `loadOverview`'s existing JSON-fixture fallback still renders. A
- * complete platform outage shouldn't masquerade as an auth failure.
+ * Requires any valid session. Returns { isOperator } so callers can
+ * distinguish guests from operators. Guests pass through here but get
+ * restricted access (e.g. read-only templates).
  */
-export async function requireOperator(): Promise<void> {
-  // Pure JSON-fixture mode (no Convex env at all) — there's no auth
-  // backend to consult and no live data being served, so we let the
-  // page render. This matches the loadOverview fallback contract.
-  if (!process.env.NEXT_PUBLIC_CONVEX_URL) return;
-  // Convex is configured → the page is about to serve live operator
-  // data. The middleware only checks cookie presence, so this is the
-  // real gate. Fail closed on any error: auth misconfigured,
-  // unreachable, or session invalid all map to "redirect to sign-in".
-  //
-  // TRADE-OFF: loadOverview() has a documented JSON-fixture fallback
-  // for "Convex unreachable" scenarios. Since the same outage that
-  // breaks fetchQuery also breaks fetchAuthQuery, the fallback is
-  // unreachable in prod when this gate is active — we redirect to
-  // /sign-in instead of rendering stale fixture data to an
-  // unauthenticated viewer. Stale-and-anonymous is worse than "Castle
-  // is down, sign in to retry" for an operator console.
-  let user: unknown;
+export async function requireSignedIn(): Promise<{ isOperator: boolean }> {
+  if (!process.env.NEXT_PUBLIC_CONVEX_URL) return { isOperator: true };
+  let user: { isOperator?: boolean } | null = null;
   try {
     const { fetchAuthQuery } = await import("@/lib/auth-server");
     user = await fetchAuthQuery(api.auth.getCurrentUser, {});
@@ -71,10 +47,42 @@ export async function requireOperator(): Promise<void> {
     redirect("/sign-in");
   }
   if (!user) redirect("/sign-in");
+  return { isOperator: user.isOperator ?? false };
 }
 
-export async function loadOverview(): Promise<LoadedOverview> {
-  await requireOperator();
+/**
+ * Requires an allowlisted operator session. Guests get redirected to
+ * /templates (the one area they can access). Unauthenticated users
+ * go to /sign-in.
+ */
+export async function requireOperator(): Promise<void> {
+  if (!process.env.NEXT_PUBLIC_CONVEX_URL) return;
+  let user: { isOperator?: boolean } | null = null;
+  try {
+    const { fetchAuthQuery } = await import("@/lib/auth-server");
+    user = await fetchAuthQuery(api.auth.getCurrentUser, {});
+  } catch {
+    redirect("/sign-in");
+  }
+  if (!user) redirect("/sign-in");
+  if (!user.isOperator) redirect("/templates");
+}
+
+export type TemplateData = Omit<LoadedOverview, "founderHours">;
+
+/**
+ * Narrower loader for guest-accessible template pages. Returns only
+ * the entities templates reference (no founder-hours or other
+ * operator-only aggregates). Requires a valid session but not operator.
+ */
+export async function loadTemplateData(): Promise<TemplateData> {
+  await requireSignedIn();
+  const full = await loadOverviewUnchecked();
+  const { founderHours: _, ...rest } = full;
+  return rest;
+}
+
+async function loadOverviewUnchecked(): Promise<LoadedOverview> {
   if (process.env.NEXT_PUBLIC_CONVEX_URL) {
     try {
       const snapshot = (await fetchQuery(
@@ -105,4 +113,9 @@ export async function loadOverview(): Promise<LoadedOverview> {
   }
   const json = loadJson();
   return { ...json, convexIdBySlug: {} };
+}
+
+export async function loadOverview(): Promise<LoadedOverview> {
+  await requireOperator();
+  return loadOverviewUnchecked();
 }

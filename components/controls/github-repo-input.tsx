@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
+import { useIsOperator } from "@/lib/role-context";
 import { useActorSlug } from "@/lib/use-actor";
 import { useRunMutation } from "@/lib/use-run-mutation";
 
@@ -19,6 +20,7 @@ export function GithubRepoInput({
   templateSlug: string;
   current?: string;
 }) {
+  const op = useIsOperator();
   const tpl = useQuery(api.templates.getBySlug, { slug: templateSlug }) as
     | { _id: string }
     | null
@@ -59,6 +61,22 @@ export function GithubRepoInput({
       },
     );
   };
+
+  if (!op) {
+    if (!current) {
+      return <span className="text-[12px] text-ink-3">—</span>;
+    }
+    return (
+      <a
+        href={`https://github.com/${current}`}
+        target="_blank"
+        rel="noreferrer"
+        className="num text-[12px] text-ink hover:underline underline-offset-2 decoration-line"
+      >
+        {current}
+      </a>
+    );
+  }
 
   if (!editing) {
     if (!current) {
