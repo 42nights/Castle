@@ -35,9 +35,10 @@ export const listGithubCandidates = query({
 });
 
 /** Idempotent upsert: insert a candidate if its github_repo isn't
- *  already on file (active OR resolved), no-op otherwise. Returns the
- *  resulting row id and a flag for whether it was newly inserted.
- *  Called by the GitHub sync route on each repo. */
+ *  already on file (active OR resolved), no-op otherwise.
+ *  Not operator-gated because the Vercel cron calls this via an
+ *  unauthenticated ConvexHttpClient. The HTTP route gates access
+ *  (operator check for manual sync, CRON_SECRET for scheduled). */
 export const upsertGithubCandidate = mutation({
   args: {
     github_repo: v.string(),
@@ -45,14 +46,12 @@ export const upsertGithubCandidate = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await assertOperator(ctx);
     const repo = args.github_repo.toLowerCase();
     const existing = await ctx.db
       .query("template_github_candidates")
       .withIndex("by_repo", (q) => q.eq("github_repo", repo))
       .first();
     if (existing) return { id: existing._id, inserted: false };
-    // Also skip if a template already links to this repo.
     const linkedTemplate = await ctx.db
       .query("templates")
       .filter((q) => q.eq(q.field("github_repo"), repo))

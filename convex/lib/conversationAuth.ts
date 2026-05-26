@@ -60,7 +60,9 @@ async function canAccess(
     return op !== null;
   }
   if (conv.owner_user_id) return conv.owner_user_id === user._id;
-  return false;
+  // Legacy fallback: no owner stamped yet — match by actor_slug
+  // until claimMyUnownedConversations runs on sidebar mount.
+  return !!user.slug && conv.actor_slug === user.slug;
 }
 
 /** Load a conversation by id and assert the caller can access it.

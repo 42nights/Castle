@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { nowIso } from "./lib/util";
-import { assertOperator } from "./lib/assertOperator";
+import { assertOperator, assertOperatorRead } from "./lib/assertOperator";
 import { assertWriteToken } from "./lib/writeToken";
 import {
   hermesSessionName,
@@ -86,7 +86,7 @@ export const listPersonal = query({
 export const listShared = query({
   args: {},
   handler: async (ctx) => {
-    await requireUser(ctx);
+    await assertOperatorRead(ctx);
     return ctx.db
       .query("agent_conversations")
       .withIndex("by_visibility_updated", (q) => q.eq("visibility", "shared"))
@@ -101,6 +101,7 @@ export const createConversation = mutation({
     visibility: v.optional(visibilityArg),
   },
   handler: async (ctx, { title, visibility }) => {
+    await assertOperator(ctx);
     const user = await requireUser(ctx);
     const now = nowIso();
     const vis = visibility ?? "personal";
