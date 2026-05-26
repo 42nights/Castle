@@ -1,19 +1,5 @@
 import { formatPct, formatUsdCompact } from "@/lib/format";
 
-/**
- * Four stats. Not five.
- *
- * Dropped "Hours / wk replaced" — downstream of deployments, already
- * surfaced on the FDE workload board. Including it doubles the count
- * without adding a new operator question.
- *
- * No surrounding card. No top hairline tying the four together. The
- * numbers ARE the section — they sit directly on the page next to
- * Today, separated only by whitespace.
- *
- * At-risk ARR is the only one that uses the accent, and only when
- * non-zero. The accent says "look here," used once per surface.
- */
 export function StatsStrip({
   payingCustomers,
   contractedArr,
@@ -29,7 +15,7 @@ export function StatsStrip({
 }) {
   const atRiskPct = contractedArr === 0 ? 0 : atRisk / contractedArr;
   return (
-    <section className="panel mb-4 grid grid-cols-2 md:grid-cols-4 divide-x divide-line">
+    <section className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
       <Stat label="Paying customers" value={String(payingCustomers)} />
       <Stat label="Contracted ARR" value={formatUsdCompact(contractedArr)} />
       <Stat
@@ -59,15 +45,12 @@ function Stat({
   accent?: boolean;
 }) {
   return (
-    <div className="px-3 py-3">
-      <div className="text-[10px] tracking-[0.06em] text-ink-3 uppercase mb-1">
+    <div className="rounded-lg bg-surface border border-line px-4 py-3">
+      <div className="text-[11px] tracking-wide text-ink-3 uppercase mb-1.5">
         {label}
       </div>
       <div
-        className={[
-          "num text-[24px] leading-[28px] font-medium",
-          accent ? "text-accent" : "text-ink",
-        ].join(" ")}
+        className={`num text-[22px] leading-tight font-medium ${accent ? "text-accent" : "text-ink"}`}
       >
         {value}
       </div>

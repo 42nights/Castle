@@ -4,80 +4,68 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* 42nights design system — Paper file artboard "50-0".
- * Light mode by default. Pure white ground, ink #0A0A0A type, one accent.
- */
-
 @theme inline {
-  /* 42nights · Castle — dark B2B console.
-   * Black ground, white ink, full-contrast borders so structure reads.
-   * Accent is the only chroma. */
-  --color-page: #000000;
-  --color-surface: #0c0c0c;       /* 1 level above page */
-  --color-surface-2: #161616;     /* hover-on-surface */
-  --color-surface-hover: #161616; /* legacy alias */
-  --color-ink: #ffffff;
-  --color-ink-2: rgba(255, 255, 255, 0.62);
-  --color-ink-3: rgba(255, 255, 255, 0.42);
-  --color-line: rgba(255, 255, 255, 0.18);        /* always visible */
-  --color-line-strong: rgba(255, 255, 255, 0.45); /* section dividers */
+  --color-page: #09090b;
+  --color-surface: #111113;
+  --color-surface-2: #1a1a1e;
+  --color-surface-hover: #1a1a1e;
+  --color-ink: #fafafa;
+  --color-ink-2: rgba(250, 250, 250, 0.64);
+  --color-ink-3: rgba(250, 250, 250, 0.40);
+  --color-line: rgba(250, 250, 250, 0.08);
+  --color-line-strong: rgba(250, 250, 250, 0.16);
   --color-accent: #ff3b47;
 
-  /* Semantic / shadcn aliases */
   --color-background: var(--color-page);
   --color-foreground: var(--color-ink);
-  --color-card: var(--color-page);
+  --color-card: var(--color-surface);
   --color-card-foreground: var(--color-ink);
-  --color-popover: var(--color-page);
+  --color-popover: var(--color-surface);
   --color-popover-foreground: var(--color-ink);
   --color-primary: var(--color-ink);
-  --color-primary-foreground: #000000;
+  --color-primary-foreground: #09090b;
   --color-secondary: var(--color-surface);
   --color-secondary-foreground: var(--color-ink);
   --color-muted: var(--color-surface);
   --color-muted-foreground: var(--color-ink-2);
-  --color-accent-foreground: #000000;
+  --color-accent-foreground: #09090b;
   --color-destructive: var(--color-accent);
   --color-border: var(--color-line);
   --color-input: var(--color-line);
   --color-ring: var(--color-ink);
 
-  /* Health palette — pulled toward the brand, not generic */
-  --color-ok: #2d6a4f;
-  --color-warn: #b8860b;
+  --color-ok: #22c55e;
+  --color-warn: #eab308;
   --color-bad: var(--color-accent);
 
-  /* Chart palette */
   --color-chart-1: var(--color-ink);
   --color-chart-2: var(--color-ink-3);
   --color-chart-3: var(--color-accent);
-  --color-chart-4: #2d6a4f;
-  --color-chart-5: #b8860b;
+  --color-chart-4: #22c55e;
+  --color-chart-5: #eab308;
 
-  /* Fonts */
-  --font-display: var(--font-display);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-mono);
-  --font-heading: var(--font-display);
+  --font-display: var(--font-geist-sans);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
 
-  /* Geometry — 4-px base, conservative radius */
-  --radius: 0.25rem;
-  --radius-sm: 0.1875rem;
-  --radius-md: 0.25rem;
-  --radius-lg: 0.375rem;
-  --radius-xl: 0.5rem;
-  --radius-2xl: 0.75rem;
+  --radius: 0.375rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
 }
 
 :root {
   --background: var(--color-page);
   --foreground: var(--color-ink);
-  --card: var(--color-page);
+  --card: var(--color-surface);
   --card-foreground: var(--color-ink);
-  --popover: var(--color-page);
+  --popover: var(--color-surface);
   --popover-foreground: var(--color-ink);
   --primary: var(--color-ink);
-  --primary-foreground: #000000;
+  --primary-foreground: #09090b;
   --secondary: var(--color-surface);
   --secondary-foreground: var(--color-ink);
   --muted: var(--color-surface);
@@ -91,8 +79,8 @@
   --chart-1: var(--color-ink);
   --chart-2: var(--color-ink-3);
   --chart-3: var(--color-accent);
-  --chart-4: #2d6a4f;
-  --chart-5: #b8860b;
+  --chart-4: #22c55e;
+  --chart-5: #eab308;
 }
 
 @layer base {
@@ -107,57 +95,51 @@
     text-rendering: optimizeLegibility;
   }
   body {
-    font-feature-settings: "ss01" off;
-    letter-spacing: -0.005em;
-    line-height: 1.55;
-    font-size: 15px;
+    letter-spacing: -0.011em;
+    line-height: 1.5;
+    font-size: 14px;
     color: var(--color-ink);
   }
 
-  /* Squint test passes: hierarchy comes from weight + size, not boxes. */
-
-  /* B2B operator console — Linear/Vercel idiom.
-   * Sans only. No serif display. Tight scale. The page reads as a tool,
-   * not a magazine. */
   .t-display,
   .t-h1 {
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
     font-weight: 600;
     font-size: 20px;
     line-height: 28px;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
   }
   .t-h2 {
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
-    font-weight: 600;
+    font-weight: 500;
     font-size: 13px;
     line-height: 16px;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
-    color: var(--color-ink);
+    color: var(--color-ink-3);
   }
   .t-h3 {
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
     font-weight: 500;
     font-size: 14px;
     line-height: 20px;
-    letter-spacing: -0.005em;
+    letter-spacing: -0.011em;
   }
   .t-eyebrow {
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
     font-weight: 500;
     font-size: 11px;
     line-height: 14px;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--color-ink-3);
   }
   .t-caption {
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
-    font-weight: 500;
-    font-size: 11px;
-    line-height: 14px;
-    letter-spacing: 0.02em;
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.01em;
     color: var(--color-ink-3);
     font-variant-numeric: tabular-nums;
   }
@@ -165,20 +147,15 @@
     font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 12px;
     line-height: 18px;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
   }
 
-  /* Tabular numbers — apply to any "data" number */
   .num {
     font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
   }
 
-  /* The pip. The signature.
-   * One dot, three states. Red = critical/brand mark (only the bad state
-   * uses chroma). Yellow = ink (no second chromatic tint). Green = ink-3
-   * (the absence of trouble is muted, not loud). 6px not 8 — quieter. */
   .hp {
     display: inline-block;
     width: 6px;
@@ -188,17 +165,15 @@
     flex-shrink: 0;
   }
   .hp[data-health="green"] {
-    background: var(--color-ink-3);
+    background: var(--color-ok);
   }
   .hp[data-health="yellow"] {
-    background: var(--color-ink);
+    background: var(--color-warn);
   }
   .hp[data-health="red"] {
     background: var(--color-accent);
   }
 
-  /* Ledger row — single hairline between rows, no surrounding box.
-   * Use on operator queue, deployment tables, capability lists. */
   .ledger > * {
     border-bottom: 1px solid var(--color-line);
   }
@@ -206,31 +181,27 @@
     border-bottom: 0;
   }
 
-  /* Panel — bordered section container. Visible structural compartment
-   * — what the operator scans as one unit. Header gets a strong-line
-   * bottom edge, body sits inside the box. */
   .panel {
     border: 1px solid var(--color-line);
-    border-radius: 4px;
-    background: var(--color-page);
+    border-radius: 8px;
+    background: var(--color-surface);
   }
   .panel-header {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 1.5rem;
-    padding: 8px 12px;
+    padding: 10px 14px;
     border-bottom: 1px solid var(--color-line);
   }
   .panel-body {
-    padding: 8px 12px;
+    padding: 10px 14px;
   }
   .panel-body.no-pad {
     padding: 0;
   }
 }
 
-/* Recharts override — make grid + axes match design system */
 .recharts-cartesian-grid line {
   stroke: var(--color-line) !important;
 }
@@ -242,5 +213,5 @@
   fill: var(--color-ink-3) !important;
   font-size: 11px !important;
   font-family: var(--font-mono), ui-monospace, monospace !important;
-  letter-spacing: 0.02em !important;
+  letter-spacing: 0.01em !important;
 }

@@ -12,37 +12,23 @@ const severityLabel: Record<AttentionSeverity, string> = {
 export function AttentionList({ items }: { items: AttentionItem[] }) {
   if (items.length === 0) {
     return (
-      <section className="mb-8 border border-line rounded-md p-4 bg-surface">
-        <div className="t-eyebrow mb-2">— What needs you today</div>
-        <p className="text-ink-2 text-[14px]">
-          Nothing flagged. Everything green, no engagement stale beyond 7 days.
+      <section className="mb-8 rounded-lg bg-surface p-4">
+        <p className="text-ink-3 text-[13px]">
+          Nothing flagged. All engagements green, none stale beyond 7 days.
         </p>
       </section>
     );
   }
-  const counts = items.reduce<Record<AttentionSeverity, number>>(
-    (acc, i) => ({ ...acc, [i.severity]: (acc[i.severity] ?? 0) + 1 }),
-    { critical: 0, high: 0, medium: 0 }
-  );
 
   return (
     <section className="mb-8">
-      <div className="flex items-end justify-between mb-4">
-        <div>
-          <div className="t-eyebrow mb-2">— What needs you today</div>
-          <h2 className="t-h2 text-ink">Operator queue</h2>
-        </div>
-        <div className="t-caption flex items-center gap-3">
-          {counts.critical > 0 && (
-            <Badge severity="critical" count={counts.critical} />
-          )}
-          {counts.high > 0 && <Badge severity="high" count={counts.high} />}
-          {counts.medium > 0 && <Badge severity="medium" count={counts.medium} />}
-        </div>
+      <div className="flex items-baseline justify-between mb-3">
+        <h2 className="t-h2">Needs attention</h2>
+        <span className="text-[12px] text-ink-3 num">{items.length} items</span>
       </div>
 
-      <ul className="border-t border-line">
-        {items.map((item) => {
+      <div className="rounded-lg border border-line overflow-hidden">
+        {items.map((item, i) => {
           const engagementSlug = item.engagement?.id;
           const showTouch =
             engagementSlug &&
@@ -50,82 +36,58 @@ export function AttentionList({ items }: { items: AttentionItem[] }) {
               item.id.startsWith("red-") ||
               item.id.startsWith("yellow-"));
           return (
-            <li
+            <div
               key={item.id}
-              className="border-b border-line last:border-b-0 group"
+              className={`group flex items-center gap-4 px-4 py-3 hover:bg-surface transition-colors ${i > 0 ? "border-t border-line" : ""}`}
             >
-              <div className="grid grid-cols-[88px_1fr_auto] items-center gap-5 py-4 px-3 -mx-3 rounded-sm hover:bg-surface transition-colors">
-                <SeverityChip severity={item.severity} />
-                <Link href={item.href} className="min-w-0 block">
-                  <div className="text-[14.5px] text-ink leading-tight hover:underline">
-                    {item.title}
-                  </div>
-                  <p className="mt-1 text-[12.5px] text-ink-2 leading-relaxed line-clamp-2">
-                    {item.subtitle}
-                  </p>
-                </Link>
-                <div className="flex items-center gap-3">
-                  {item.owner && (
-                    <span className="inline-flex items-center gap-2">
-                      <Avatar name={item.owner.name} size={20} />
-                      <span className="t-caption">
-                        {item.owner.name.split(" ")[0]}
-                      </span>
-                    </span>
-                  )}
-                  {showTouch && engagementSlug && (
-                    <TouchedButton engagementSlug={engagementSlug} />
-                  )}
-                  <Link
-                    href={item.href}
-                    className="t-caption text-ink-3 group-hover:text-ink"
-                  >
-                    open →
-                  </Link>
+              <SeverityDot severity={item.severity} />
+              <Link href={item.href} className="flex-1 min-w-0">
+                <div className="text-[13.5px] text-ink leading-snug truncate group-hover:underline">
+                  {item.title}
                 </div>
+                <p className="mt-0.5 text-[12px] text-ink-3 leading-snug truncate">
+                  {item.subtitle}
+                </p>
+              </Link>
+              <div className="flex items-center gap-3 shrink-0">
+                {item.owner && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Avatar name={item.owner.name} size={18} />
+                    <span className="text-[12px] text-ink-3 hidden sm:inline">
+                      {item.owner.name.split(" ")[0]}
+                    </span>
+                  </span>
+                )}
+                {showTouch && engagementSlug && (
+                  <TouchedButton engagementSlug={engagementSlug} />
+                )}
               </div>
-            </li>
+            </div>
           );
         })}
-      </ul>
+      </div>
     </section>
   );
 }
 
-function SeverityChip({ severity }: { severity: AttentionSeverity }) {
-  const tone =
-    severity === "critical"
-      ? "bg-accent text-page"
-      : severity === "high"
-        ? "bg-ink text-page"
-        : "border border-line text-ink-2 bg-page";
-  return (
-    <span
-      className={`inline-flex h-5 w-fit items-center rounded-sm px-1.5 uppercase tracking-[0.08em] font-medium text-[10px] ${tone}`}
-    >
-      {severityLabel[severity]}
-    </span>
-  );
-}
-
-function Badge({
-  severity,
-  count,
-}: {
-  severity: AttentionSeverity;
-  count: number;
-}) {
-  const dot =
+function SeverityDot({ severity }: { severity: AttentionSeverity }) {
+  const color =
     severity === "critical"
       ? "bg-accent"
       : severity === "high"
         ? "bg-ink"
         : "bg-ink-3";
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={`inline-block h-1.5 w-1.5 rounded-full ${dot}`} />
-      <span className="num text-ink">{count}</span>
-      <span className="text-ink-3">{severityLabel[severity].toLowerCase()}</span>
+    <span
+      className="relative flex h-2 w-2 shrink-0"
+      title={severityLabel[severity]}
+      aria-label={`Severity: ${severityLabel[severity]}`}
+      role="img"
+    >
+      <span className={`absolute inset-0 rounded-full ${color}`} />
+      {severity === "critical" && (
+        <span className="absolute inset-0 rounded-full bg-accent animate-ping opacity-40" />
+      )}
     </span>
   );
 }

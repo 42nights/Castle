@@ -5,18 +5,6 @@ import { LogHoursButton } from "@/components/controls/log-hours-button";
 import type { FdeWorkload } from "@/lib/derive";
 import { formatHours, formatPct } from "@/lib/format";
 
-/**
- * FDE workload.
- *
- * Each FDE = one row, not a card. The whole row is a sentence:
- *
- *   Jerry X · Founder · overcommitted
- *   50h committed against 45h cap (111%). Actual 38h. 2 active.
- *   3 shipped this wk. Portfolio ·
- *
- * No cards. Hairlines between rows. Capacity + log-hours stay inline
- * (frequent ops); everything else lives on /fdes/[slug].
- */
 export function FdeWorkloadBoard({
   workloads,
   weeklyShipsByFde,
@@ -27,21 +15,21 @@ export function FdeWorkloadBoard({
   imbalance: number;
 }) {
   return (
-    <section className="panel mb-4">
-      <header className="panel-header">
-        <h2 className="t-h2 text-ink">Bench</h2>
+    <section className="rounded-lg bg-surface border border-line overflow-hidden">
+      <header className="flex items-baseline justify-between px-4 py-3 border-b border-line">
+        <h2 className="t-h2">Bench</h2>
         <span className="text-[11px] text-ink-3">
-          load σ ={" "}
-          <span className="num text-ink-2">{imbalance.toFixed(2)}</span>
+          load spread <span className="num text-ink-2">{imbalance.toFixed(2)}</span>
         </span>
       </header>
 
-      <ol className="ledger">
-        {workloads.map((w) => (
+      <ol>
+        {workloads.map((w, i) => (
           <FdeRow
             key={w.fde.id}
             workload={w}
             shippedLast7d={weeklyShipsByFde[w.fde.id] ?? 0}
+            border={i > 0}
           />
         ))}
       </ol>
@@ -52,80 +40,68 @@ export function FdeWorkloadBoard({
 function FdeRow({
   workload: w,
   shippedLast7d,
+  border,
 }: {
   workload: FdeWorkload;
   shippedLast7d: number;
+  border: boolean;
 }) {
   const util = w.utilization;
   const utilLabel =
     w.status === "overcommitted"
-      ? "overcommitted"
+      ? "over"
       : w.status === "at capacity"
-        ? "at capacity"
+        ? "full"
         : w.status === "healthy"
-          ? "healthy"
-          : "available";
+          ? "ok"
+          : "free";
   const utilTone =
-    w.status === "overcommitted" ? "text-accent" : "text-ink-2";
-  const portfolioPip =
-    w.avgPortfolioHealth === "—" ? undefined : w.avgPortfolioHealth;
+    w.status === "overcommitted" ? "text-accent" : "text-ink-3";
 
   return (
-    <li className="px-3 py-2.5 grid grid-cols-[1fr_auto] gap-6 items-baseline">
-      <div className="min-w-0">
-        <div className="flex items-baseline gap-3 flex-wrap">
+    <li className={`px-4 py-3 hover:bg-surface-2 transition-colors ${border ? "border-t border-line" : ""}`}>
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="flex items-baseline gap-2 min-w-0">
           <Link
             href={`/fdes/${w.fde.id}`}
-            className="t-h3 text-ink hover:underline"
+            className="text-[13.5px] font-medium text-ink hover:underline truncate"
           >
             {w.fde.name}
           </Link>
-          <span className="text-[13px] text-ink-3">
-            {w.fde.role}
-            {w.fde.is_founder && " · co-founder"}
-          </span>
-          <span className={`text-[13px] ${utilTone}`}>{utilLabel}</span>
-          {w.fde.tags.length > 0 && (
-            <FdeTagsChips tags={w.fde.tags} max={4} size="xs" />
-          )}
+          <span className="text-[12px] text-ink-3 shrink-0">{w.fde.role}</span>
         </div>
-
-        <p className="mt-2 text-[14px] text-ink-2 leading-relaxed">
-          <span className="num text-ink">
-            {w.committedHours.toFixed(0)}h
-          </span>{" "}
-          committed against{" "}
-          <CapacityInput
-            fdeSlug={w.fde.id}
-            current={w.capacityHours}
-          />{" "}
-          cap (
-          <span className={`num ${utilTone}`}>{formatPct(util)}</span>
-          ).{" "}
-          <span className="text-ink-3">
-            Actual{" "}
-            <span className="num">{formatHours(w.actualHours)}</span>
-            <LogHoursButton fdeSlug={w.fde.id} />
-            {" · "}
-            <span className="num">{w.activeEngagements.length}</span> active
-            {" · "}
-            <span className="num">{shippedLast7d}</span> shipped this wk
-            {portfolioPip && (
-              <>
-                {" · "}portfolio{" "}
-                <span
-                  className="hp inline-block translate-y-[-1px]"
-                  data-health={portfolioPip}
-                />
-              </>
-            )}
-          </span>
-        </p>
+        <span className={`num text-[12px] ${utilTone}`}>
+          {formatPct(util)} {utilLabel}
+        </span>
       </div>
 
-      <div className="w-32 self-center">
-        <CapacityBar utilization={util} status={w.status} />
+      <CapacityBar utilization={util} status={w.status} />
+
+      <div className="mt-2 flex items-baseline gap-2 flex-wrap text-[12px] text-ink-3">
+        <span>
+          <span className="num text-ink-2">{w.committedHours.toFixed(0)}h</span> /
+          <CapacityInput fdeSlug={w.fde.id} current={w.capacityHours} />
+        </span>
+        <span className="text-line-strong">|</span>
+        <span>
+          actual <span className="num text-ink-2">{formatHours(w.actualHours)}</span>
+          <LogHoursButton fdeSlug={w.fde.id} />
+        </span>
+        <span className="text-line-strong">|</span>
+        <span>
+          <span className="num">{w.activeEngagements.length}</span> active
+        </span>
+        <span className="text-line-strong">|</span>
+        <span>
+          <span className="num">{shippedLast7d}</span> shipped
+        </span>
       </div>
+
+      {w.fde.tags.length > 0 && (
+        <div className="mt-2">
+          <FdeTagsChips tags={w.fde.tags} max={4} size="xs" />
+        </div>
+      )}
     </li>
   );
 }
@@ -137,17 +113,17 @@ function CapacityBar({
   utilization: number;
   status: FdeWorkload["status"];
 }) {
-  const VISUAL_MAX = 1.5;
+  const VISUAL_MAX = 1.4;
   const width = Math.min(100, (utilization / VISUAL_MAX) * 100);
   const capLine = (1 / VISUAL_MAX) * 100;
-  const fill = status === "overcommitted" ? "bg-accent" : "bg-ink";
+  const fill = status === "overcommitted" ? "bg-accent" : "bg-ink-2";
   return (
     <div
-      className="relative h-[3px] bg-line rounded-full overflow-hidden"
+      className="relative h-1 rounded-full bg-line overflow-hidden"
       aria-hidden
     >
       <span
-        className={`absolute inset-y-0 left-0 ${fill}`}
+        className={`absolute inset-y-0 left-0 rounded-full ${fill} transition-all`}
         style={{ width: `${width}%` }}
       />
       <span

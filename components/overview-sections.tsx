@@ -1,7 +1,7 @@
-import { PageHeader, PageShell } from "@/components/page-shell";
+import { PageShell } from "@/components/page-shell";
 import { AttentionList } from "@/components/sections/attention";
 import { AttentionListLive } from "@/components/sections/attention-live";
-import { StatsStrip } from "@/components/sections/stats-strip";
+import { HeroMetrics } from "@/components/sections/hero-metrics";
 import { FdeWorkloadBoard } from "@/components/sections/fde-workload-board";
 import { PhaseColumns } from "@/components/sections/phase-columns";
 import { MrrChart } from "@/components/sections/mrr-chart";
@@ -57,17 +57,13 @@ export function OverviewSections({
   const risk = atRiskArr(customers);
   const hours = totalHoursReplaced(deployments);
   const usage = templateUsage(templates, deployments, patternExtractions);
-  // MRR uses real `new Date()` instead of the pinned `today` — the
-  // pin exists for attention-list determinism (so notification copy is
-  // stable across replays), but the MRR chart should track real time
-  // and pick up newly-started customers immediately.
   const mrrPoints = mrrDailySeries(customers, 90, new Date());
   const allRows = engagementRows(engagements, customers, fdes);
   const phaseGroups = engagementsByPhase(allRows);
   const attention = attentionItems(engagements, customers, fdes, today);
   const workloads = allFdeWorkloads(fdes, engagements, customers);
   const imbalance = loadImbalance(workloads);
-  void hours; // formerly surfaced in stats; removed per design system
+  void hours;
   const utilAvg =
     workloads.length === 0
       ? 0
@@ -81,40 +77,45 @@ export function OverviewSections({
 
   return (
     <PageShell>
-      <PageHeader
-        title="Overview"
-        description="Engagements, FDE load, templates, and founder hours — current state."
+      <HeroMetrics
+        mrr={mrrPoints.at(-1)?.mrr ?? 0}
+        mrrDelta={
+          mrrPoints.length >= 2
+            ? (mrrPoints.at(-1)?.mrr ?? 0) - (mrrPoints[0]?.mrr ?? 0)
+            : 0
+        }
+        mrrPoints={mrrPoints}
+        payingCustomers={paying}
+        contractedArr={arr}
+        atRiskArr={risk}
+        utilization={utilAvg}
+        attentionCount={attention.length}
+        criticalCount={attention.filter((a) => a.severity === "critical").length}
       />
 
       {liveAttention ? <AttentionListLive /> : <AttentionList items={attention} />}
 
-      <StatsStrip
-        payingCustomers={paying}
-        contractedArr={arr}
-        atRisk={risk}
-        templateCount={templates.length}
-        utilizationAvg={utilAvg}
-      />
-
-      <FdeWorkloadBoard
-        workloads={workloads}
-        weeklyShipsByFde={weeklyShipsByFde}
-        imbalance={imbalance}
-      />
-
       <PhaseColumns groups={phaseGroups} today={today} />
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <FdeWorkloadBoard
+          workloads={workloads}
+          weeklyShipsByFde={weeklyShipsByFde}
+          imbalance={imbalance}
+        />
+        <div className="flex flex-col gap-4">
+          <TemplateOverview usage={usage} customers={customers} limit={5} />
+          <ExtractionTimeline
+            extractions={patternExtractions}
+            customers={customers}
+            templates={templates}
+            limit={3}
+            showLinkAll
+          />
+        </div>
+      </div>
+
       <MrrChart points={mrrPoints} />
-
-      <TemplateOverview usage={usage} customers={customers} limit={6} />
-
-      <ExtractionTimeline
-        extractions={patternExtractions}
-        customers={customers}
-        templates={templates}
-        limit={5}
-        showLinkAll
-      />
     </PageShell>
   );
 }
