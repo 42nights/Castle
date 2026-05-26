@@ -109,7 +109,11 @@ export function TemplateTagsInput({
   };
 
   if (!op) {
-    return <TemplateTagsChips tags={selected} />;
+    return selected.length === 0 ? (
+      <span className="text-[13px] text-ink-3">—</span>
+    ) : (
+      <TemplateTagsChips tags={selected} />
+    );
   }
 
   if (mode === "row" && !open) {

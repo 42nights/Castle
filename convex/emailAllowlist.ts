@@ -18,17 +18,16 @@ function normalizeEmail(email: string): string {
 }
 
 /**
- * Email allowlist CRUD. Read-side is open to any signed-in operator
- * (the auth gate already restricts who can hit Castle at all). Write
- * side is the same — we don't have separate roles right now, so any
- * allowlisted user can edit the list. Rescue patterns from
- * lib/auth-allowlist.ts are NOT stored in this table but are surfaced
- * read-only in `listWithRescue`.
+ * Email allowlist CRUD. Both reads and writes require an operator
+ * session (guests must not enumerate who has admin access). Rescue
+ * patterns from lib/auth-allowlist.ts are surfaced read-only in
+ * `listWithRescue`.
  */
 
 export const list = query({
   args: {},
   handler: async (ctx) => {
+    await assertOperatorRead(ctx);
     const rows = await ctx.db.query("email_allowlist").collect();
     return rows
       .map((r) => ({
@@ -52,6 +51,7 @@ export const list = query({
 export const listWithRescue = query({
   args: {},
   handler: async (ctx) => {
+    await assertOperatorRead(ctx);
     const rows = await ctx.db.query("email_allowlist").collect();
     const dynamic = rows.map((r) => ({
       id: r._id as string | null,

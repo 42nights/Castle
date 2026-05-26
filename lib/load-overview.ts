@@ -68,8 +68,21 @@ export async function requireOperator(): Promise<void> {
   if (!user.isOperator) redirect("/templates");
 }
 
-export async function loadOverview(opts?: { skipAuth?: boolean }): Promise<LoadedOverview> {
-  if (!opts?.skipAuth) await requireOperator();
+export type TemplateData = Omit<LoadedOverview, "founderHours">;
+
+/**
+ * Narrower loader for guest-accessible template pages. Returns only
+ * the entities templates reference (no founder-hours or other
+ * operator-only aggregates). Requires a valid session but not operator.
+ */
+export async function loadTemplateData(): Promise<TemplateData> {
+  await requireSignedIn();
+  const full = await loadOverviewUnchecked();
+  const { founderHours: _, ...rest } = full;
+  return rest;
+}
+
+async function loadOverviewUnchecked(): Promise<LoadedOverview> {
   if (process.env.NEXT_PUBLIC_CONVEX_URL) {
     try {
       const snapshot = (await fetchQuery(
@@ -100,4 +113,9 @@ export async function loadOverview(opts?: { skipAuth?: boolean }): Promise<Loade
   }
   const json = loadJson();
   return { ...json, convexIdBySlug: {} };
+}
+
+export async function loadOverview(): Promise<LoadedOverview> {
+  await requireOperator();
+  return loadOverviewUnchecked();
 }

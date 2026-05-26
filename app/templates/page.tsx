@@ -1,6 +1,6 @@
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { NewTemplateButton } from "@/components/ctas";
-import { loadOverview, requireSignedIn } from "@/lib/load-overview";
+import { loadTemplateData, requireSignedIn } from "@/lib/load-overview";
 import { RoleProvider } from "@/lib/role-context";
 import { templateUsage } from "@/lib/derive";
 import { TemplateGrid } from "./grid";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function TemplatesPage() {
   const { isOperator } = await requireSignedIn();
   const { templates, deployments, customers, fdes, patternExtractions } =
-    await loadOverview({ skipAuth: true });
+    await loadTemplateData();
   const usage = templateUsage(templates, deployments, patternExtractions);
   return (
     <RoleProvider role={isOperator ? "operator" : "guest"}>
