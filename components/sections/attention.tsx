@@ -78,7 +78,12 @@ function SeverityDot({ severity }: { severity: AttentionSeverity }) {
         ? "bg-ink"
         : "bg-ink-3";
   return (
-    <span className="relative flex h-2 w-2 shrink-0" title={severityLabel[severity]}>
+    <span
+      className="relative flex h-2 w-2 shrink-0"
+      title={severityLabel[severity]}
+      aria-label={`Severity: ${severityLabel[severity]}`}
+      role="img"
+    >
       <span className={`absolute inset-0 rounded-full ${color}`} />
       {severity === "critical" && (
         <span className="absolute inset-0 rounded-full bg-accent animate-ping opacity-40" />
