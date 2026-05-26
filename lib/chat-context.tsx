@@ -39,8 +39,18 @@ type ChatContextValue = {
   error: string | null;
   thought: string;
   tools: ToolActivity[];
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (
+    text: string,
+    attachments?: Array<{
+      storageId: string;
+      name: string;
+      contentType?: string;
+      size?: number;
+    }>,
+  ) => Promise<void>;
   stop: () => void;
+  regenerate: () => Promise<void>;
+  canRegenerate: boolean;
 };
 
 const Ctx = createContext<ChatContextValue | null>(null);

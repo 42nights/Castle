@@ -22,8 +22,8 @@ export function AgentPanel() {
   const onChatLanding = pathname === "/";
 
   const conversations = useQuery(
-    api.agentMessages.listConversations,
-    actorSlug ? { actor_slug: actorSlug } : "skip",
+    api.agentMessages.listPersonal,
+    actorSlug ? {} : "skip",
   ) as { _id: Id<"agent_conversations"> }[] | undefined;
   const create = useMutation(api.agentMessages.createConversation);
   const proposed = useQuery(
@@ -36,15 +36,17 @@ export function AgentPanel() {
   const [conversationId, setConversationId] =
     useState<Id<"agent_conversations"> | null>(null);
 
-  // Latch onto the most-recent existing conversation, or create one
-  // lazily the first time the panel is opened.
+  // Latch onto the most-recent existing personal conversation, or
+  // create one lazily the first time the panel is opened. The slide-
+  // out panel always uses a personal thread — shared chats live only
+  // on the landing page.
   useEffect(() => {
     if (!actorSlug || !conversations) return;
     if (conversationId) return;
     if (conversations.length > 0) {
       setConversationId(conversations[0]._id);
     } else if (open) {
-      create({ actor_slug: actorSlug }).then(setConversationId);
+      create({ visibility: "personal" }).then(setConversationId);
     }
   }, [actorSlug, conversations, conversationId, open, create]);
 
@@ -112,8 +114,8 @@ export function AgentPanel() {
           <div className="flex-1 overflow-auto px-3 py-3 flex flex-col gap-3 text-[13.5px]">
             {messages.length === 0 && (
               <div className="text-ink-3 text-[12.5px] leading-snug">
-                This continues your most recent chat. Switch threads from
-                the sidebar on the landing page.
+                This continues your most recent chat. Switch threads from the
+                sidebar on the landing page.
               </div>
             )}
             {messages.map((m) => {

@@ -1,8 +1,16 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { nowIso } from "./lib/util";
+import { assertWriteToken } from "./lib/writeToken";
+import {
+  hermesSessionName,
+  requireConversation,
+  requireUser,
+  tryConversation,
+} from "./lib/conversationAuth";
 
 const role = v.union(v.literal("user"), v.literal("assistant"));
+const visibilityArg = v.union(v.literal("personal"), v.literal("shared"));
 
 /** One-off: wipe legacy rows from before conversation_id existed. Safe
  *  to call repeatedly; deletes any row without a conversation_id field
@@ -24,27 +32,86 @@ export const wipeLegacy = mutation({
 
 // ─────────────────────────── conversations ───────────────────────────
 
+/** Legacy: still here so the Vercel `/api/agent/start` route can look
+ *  up `hermes_session` server-side without a separate query. Returns
+ *  only conversations the caller can see (personal-owned + all shared).
+ *  Reactive UI uses `listPersonal` + `listShared` below. */
 export const listConversations = query({
-  args: { actor_slug: v.string() },
-  handler: async (ctx, { actor_slug }) =>
-    ctx.db
+  args: { actor_slug: v.optional(v.string()) },
+  handler: async (ctx) => {
+    const user = await requireUser(ctx);
+    const personal = await ctx.db
       .query("agent_conversations")
-      .withIndex("by_actor_updated", (q) => q.eq("actor_slug", actor_slug))
+      .withIndex("by_owner_updated", (q) => q.eq("owner_user_id", user._id))
       .order("desc")
-      .collect(),
+      .collect();
+    const shared = await ctx.db
+      .query("agent_conversations")
+      .withIndex("by_visibility_updated", (q) => q.eq("visibility", "shared"))
+      .order("desc")
+      .collect();
+    const seen = new Set<string>();
+    const out = [] as typeof personal;
+    for (const r of [...personal, ...shared]) {
+      if (seen.has(r._id)) continue;
+      seen.add(r._id);
+      out.push(r);
+    }
+    out.sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
+    return out;
+  },
+});
+
+export const listPersonal = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireUser(ctx);
+    // Owner-only listing. Legacy unowned rows are intentionally dropped
+    // here — the sidebar's opportunistic `claimMyUnownedConversations`
+    // mutation runs on mount and stamps `owner_user_id` for any row
+    // whose `actor_slug` matches the caller's slug. The reactive query
+    // then re-runs and the rows pop in. This avoids a same-local-part
+    // collision where two operators (`sam@a.com`, `sam@b.com`) would
+    // briefly see each other's pre-migration chats in their list.
+    const owned = await ctx.db
+      .query("agent_conversations")
+      .withIndex("by_owner_updated", (q) => q.eq("owner_user_id", user._id))
+      .order("desc")
+      .collect();
+    return owned.filter((r) => (r.visibility ?? "personal") === "personal");
+  },
+});
+
+export const listShared = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    return ctx.db
+      .query("agent_conversations")
+      .withIndex("by_visibility_updated", (q) => q.eq("visibility", "shared"))
+      .order("desc")
+      .collect();
+  },
 });
 
 export const createConversation = mutation({
-  args: { actor_slug: v.string(), title: v.optional(v.string()) },
-  handler: async (ctx, { actor_slug, title }) => {
+  args: {
+    title: v.optional(v.string()),
+    visibility: v.optional(visibilityArg),
+  },
+  handler: async (ctx, { title, visibility }) => {
+    const user = await requireUser(ctx);
     const now = nowIso();
-    // Hermes session name must be opaque and stable. Use a short random
-    // suffix so two conversations never share a memory.
-    const session = `castle-${actor_slug}-${Math.random().toString(36).slice(2, 8)}`;
+    const vis = visibility ?? "personal";
+    const session = hermesSessionName(vis, user._id);
     return ctx.db.insert("agent_conversations", {
-      actor_slug,
+      // Keep actor_slug populated for legacy readers (Castle MCP on
+      // Railway still keys agent_actions, etc. by slug).
+      actor_slug: user.slug ?? "anon",
       title: title?.trim() || "New chat",
       hermes_session: session,
+      visibility: vis,
+      owner_user_id: user._id,
       created_at: now,
       updated_at: now,
     });
@@ -52,25 +119,58 @@ export const createConversation = mutation({
 });
 
 /**
- * Bind an ACP-minted session id back to a Castle conversation. Called by
- * `/api/agent` the first time Hermes mints a fresh session for an existing
- * conversation (e.g. after the wrapper switched from `hermes -z` to
- * `hermes acp` and the legacy `castle-<slug>-<rand>` string didn't resolve
- * via `session/load`). Subsequent turns reuse the bound id.
+ * Bind an ACP-minted session id back to a Castle conversation. Called
+ * by the Hermes wrapper the first time it mints a fresh session for an
+ * existing conversation (e.g. after the stored name fails to load).
+ * Subsequent turns reuse the bound id, so memory accumulates instead of
+ * resetting on every turn.
+ *
+ * Auth: per-turn HMAC `write_token` (same scheme as `agentTurns.*`),
+ * plus the turn must belong to this conversation. Without these the
+ * mutation is publicly callable by any signed-in user — they could
+ * rewrite another conversation's memory pointer.
+ *
+ * Race safety: `expected_hermes_session` is the value the wrapper
+ * loaded at the start of the turn. If the row's current value differs
+ * (e.g. an operator flipped visibility mid-turn and `setVisibility`
+ * already re-minted), the patch is skipped — we do NOT clobber a fresh
+ * shared/personal session with the old turn's minted id.
  */
 export const bindSession = mutation({
   args: {
     id: v.id("agent_conversations"),
+    turn_id: v.id("agent_turns"),
+    write_token: v.string(),
     hermes_session: v.string(),
+    expected_hermes_session: v.string(),
   },
-  handler: async (ctx, { id, hermes_session }) => {
+  handler: async (
+    ctx,
+    { id, turn_id, write_token, hermes_session, expected_hermes_session },
+  ) => {
+    await assertWriteToken({ token: write_token, turnId: turn_id });
+    const turn = await ctx.db.get(turn_id);
+    if (!turn) throw new Error("turn not found");
+    if (turn.conversation_id !== id) {
+      throw new Error("turn does not belong to this conversation");
+    }
+    const conv = await ctx.db.get(id);
+    if (!conv) throw new Error("conversation not found");
+    if (conv.hermes_session !== expected_hermes_session) {
+      // The conversation has been re-minted (likely a visibility flip)
+      // since this turn started. Drop the bind — the new session is
+      // authoritative.
+      return { skipped: true as const, reason: "session changed" };
+    }
     await ctx.db.patch(id, { hermes_session, updated_at: nowIso() });
+    return { skipped: false as const };
   },
 });
 
 export const renameConversation = mutation({
   args: { id: v.id("agent_conversations"), title: v.string() },
   handler: async (ctx, { id, title }) => {
+    await requireConversation(ctx, id);
     await ctx.db.patch(id, {
       title: title.trim() || "Untitled",
       updated_at: nowIso(),
@@ -81,13 +181,52 @@ export const renameConversation = mutation({
 export const deleteConversation = mutation({
   args: { id: v.id("agent_conversations") },
   handler: async (ctx, { id }) => {
-    // Cascade delete messages.
+    const { conv, user } = await requireConversation(ctx, id);
+    // Extra guard for shared chats: only the original owner may delete,
+    // even though any operator can read/write. Anyone can demote it to
+    // personal first if they want to delete — that's an intentional
+    // step.
+    if ((conv.visibility ?? "personal") === "shared") {
+      if (conv.owner_user_id && conv.owner_user_id !== user._id) {
+        throw new Error("only the original owner may delete a shared chat");
+      }
+    }
     const msgs = await ctx.db
       .query("agent_messages")
       .withIndex("by_conversation_time", (q) => q.eq("conversation_id", id))
       .collect();
     for (const m of msgs) await ctx.db.delete(m._id);
     await ctx.db.delete(id);
+  },
+});
+
+/** Flip personal ↔ shared. Re-mints `hermes_session` so the two memory
+ *  stores never bleed together. Only the owner may flip; flipping a
+ *  shared chat back to personal sets the caller as owner. */
+export const setVisibility = mutation({
+  args: {
+    id: v.id("agent_conversations"),
+    visibility: visibilityArg,
+  },
+  handler: async (ctx, { id, visibility }) => {
+    const { conv, user } = await requireConversation(ctx, id);
+    if (conv.visibility === visibility) return;
+    // Only the owner can change visibility on a personal chat. For a
+    // shared chat, any operator can demote it back to personal — they
+    // then become the owner of the new personal copy.
+    const isShared = (conv.visibility ?? "personal") === "shared";
+    if (!isShared && conv.owner_user_id && conv.owner_user_id !== user._id) {
+      throw new Error("only the owner may share or unshare this chat");
+    }
+    const newOwner =
+      visibility === "personal" ? user._id : (conv.owner_user_id ?? user._id);
+    const newSession = hermesSessionName(visibility, newOwner);
+    await ctx.db.patch(id, {
+      visibility,
+      owner_user_id: newOwner,
+      hermes_session: newSession,
+      updated_at: nowIso(),
+    });
   },
 });
 
@@ -99,6 +238,12 @@ export const list = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, { conversation_id, limit }) => {
+    // Reactive query: return [] (not throw) when the caller can't see
+    // the conversation. The sidebar query filter will drop the entry
+    // anyway; throwing would surface as a runtime error in the chat
+    // shell during a visibility flip.
+    const access = await tryConversation(ctx, conversation_id);
+    if (!access) return [];
     const rows = await ctx.db
       .query("agent_messages")
       .withIndex("by_conversation_time", (q) =>
@@ -111,34 +256,60 @@ export const list = query({
   },
 });
 
+const attachmentArg = v.object({
+  storageId: v.id("_storage"),
+  name: v.string(),
+  contentType: v.optional(v.string()),
+  size: v.optional(v.number()),
+});
+
 export const append = mutation({
   args: {
     conversation_id: v.id("agent_conversations"),
-    actor_slug: v.string(),
     role,
     text: v.string(),
+    attachments: v.optional(v.array(attachmentArg)),
   },
-  handler: async (ctx, { conversation_id, actor_slug, role: r, text }) => {
+  handler: async (ctx, { conversation_id, role: r, text, attachments }) => {
+    const { conv, user } = await requireConversation(ctx, conversation_id);
     const now = nowIso();
     const id = await ctx.db.insert("agent_messages", {
       conversation_id,
-      actor_slug,
+      actor_slug: user.slug ?? conv.actor_slug,
       role: r,
       text,
+      ...(attachments && attachments.length > 0 ? { attachments } : {}),
       created_at: now,
     });
-    // Bump conversation updated_at so it floats to the top of the
-    // sidebar. Also auto-title from the first user message if the
-    // current title is still the default.
-    const conv = await ctx.db.get(conversation_id);
-    if (conv) {
-      const patch: Partial<typeof conv> = { updated_at: now };
-      if (r === "user" && conv.title === "New chat") {
-        patch.title = text.trim().slice(0, 48) || "New chat";
-      }
-      await ctx.db.patch(conversation_id, patch);
+    const patch: Partial<typeof conv> = { updated_at: now };
+    if (r === "user" && conv.title === "New chat") {
+      patch.title = text.trim().slice(0, 48) || "New chat";
     }
+    await ctx.db.patch(conversation_id, patch);
     return id;
+  },
+});
+
+/** Convex storage upload URL. Operator-only (any signed-in user is
+ *  fine — middleware already gates the dashboard). The client POSTs
+ *  the file binary to this URL, then passes the returned storageId in
+ *  the `attachments` array on `startTurn`/`append`. */
+export const generateAttachmentUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+/** Resolve a storage id to a (signed) URL — used by the chat renderer
+ *  to display attachment chips with click-to-download links. Returns
+ *  null for missing/expired ids. */
+export const attachmentUrl = query({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, { storageId }) => {
+    await requireUser(ctx);
+    return await ctx.storage.getUrl(storageId);
   },
 });
 
@@ -147,6 +318,7 @@ export const append = mutation({
 export const clear = mutation({
   args: { conversation_id: v.id("agent_conversations") },
   handler: async (ctx, { conversation_id }) => {
+    await requireConversation(ctx, conversation_id);
     const rows = await ctx.db
       .query("agent_messages")
       .withIndex("by_conversation_time", (q) =>

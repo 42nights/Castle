@@ -9,6 +9,13 @@ export type ConnectionRow = {
   toolkit: ToolkitSlug;
   connectedAccountId: string | null;
   status: ConnectionStatus;
+  /** Optional toolkit display name (e.g. "GitHub" instead of "github").
+   *  Joined from the toolkit catalog; absent if the catalog fetch failed
+   *  or the slug isn't recognized. */
+  name?: string;
+  /** Public Composio CDN URL for the toolkit logo. Absent on catalog
+   *  miss. The rail renders the first letter of the slug as a fallback. */
+  logo?: string;
 };
 
 export type Toolkit = {
@@ -102,9 +109,22 @@ export async function listConnections(
         });
       }
     }
-    return Array.from(byToolkit.values()).sort((a, b) =>
-      a.toolkit.localeCompare(b.toolkit),
-    );
+    // Decorate with logo/name from the cached toolkit catalog so the
+    // rail can render real icons. Catalog miss → row keeps a bare slug
+    // and the rail falls back to the first-letter chip.
+    const rows = Array.from(byToolkit.values());
+    if (rows.length > 0) {
+      const catalog = await listToolkits();
+      const meta = new Map(catalog.map((t) => [t.slug.toLowerCase(), t]));
+      for (const r of rows) {
+        const m = meta.get(r.toolkit.toLowerCase());
+        if (m) {
+          r.name = m.name;
+          r.logo = m.logo || undefined;
+        }
+      }
+    }
+    return rows.sort((a, b) => a.toolkit.localeCompare(b.toolkit));
   } catch (err) {
     console.error("[connections] list failed:", err);
     return [];
@@ -177,7 +197,8 @@ export async function initiateConnection(
     return { redirectUrl: conn.redirectUrl ?? "" };
   } catch (err) {
     return {
-      error: err instanceof Error ? err.message : "Could not initiate connection",
+      error:
+        err instanceof Error ? err.message : "Could not initiate connection",
     };
   }
 }
@@ -199,13 +220,7 @@ export async function cancelPendingConnections(
     const pending = await c.connectedAccounts.list({
       userIds: [userId],
       toolkitSlugs: [toolkit],
-      statuses: [
-        "INITIALIZING",
-        "INITIATED",
-        "EXPIRED",
-        "FAILED",
-        "INACTIVE",
-      ],
+      statuses: ["INITIALIZING", "INITIATED", "EXPIRED", "FAILED", "INACTIVE"],
       limit: 25,
     });
     let cancelled = 0;

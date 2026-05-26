@@ -5,12 +5,25 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 
+export type ChatAttachment = {
+  storageId: string;
+  name: string;
+  contentType?: string;
+  size?: number;
+};
+
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
   streaming?: boolean;
   status?: "streaming" | "complete" | "failed" | "canceled";
+  /** ISO timestamp the row was inserted into Convex. Surfaced for
+   *  hover-revealed timestamps and CTA-timing logic. */
+  createdAt: string;
+  /** Files attached when the operator sent this message. Empty/absent
+   *  for assistant rows and user rows sent without attachments. */
+  attachments?: ChatAttachment[];
 };
 
 export type ChatStatus = "idle" | "streaming" | "error";
@@ -65,9 +78,7 @@ export function useHermesChat({
 
   const active = useQuery(
     api.agentTurns.activeFor,
-    conversationId && actorSlug
-      ? { conversation_id: conversationId, actor_slug: actorSlug }
-      : "skip",
+    conversationId ? { conversation_id: conversationId } : "skip",
   ) as ActiveTurn | null | undefined;
 
   // sendMessage's own error (network failure on POST). Server-side
@@ -105,8 +116,7 @@ export function useHermesChat({
           byId.set(ev.tool_call_id, {
             ...prev,
             status: ok ? "done" : "error",
-            durationMs:
-              new Date(ev.created_at).getTime() - prev.startedAt,
+            durationMs: new Date(ev.created_at).getTime() - prev.startedAt,
           });
         }
       }
@@ -125,7 +135,10 @@ export function useHermesChat({
 
   // Derive client status from the turn row.
   const status: ChatStatus = useMemo(() => {
-    if (active && (active.turn.status === "queued" || active.turn.status === "running")) {
+    if (
+      active &&
+      (active.turn.status === "queued" || active.turn.status === "running")
+    ) {
       return "streaming";
     }
     if (active && active.turn.status === "failed") return "error";
@@ -137,7 +150,7 @@ export function useHermesChat({
   const error =
     sendError ??
     (active && active.turn.status === "failed"
-      ? active.turn.error ?? "Turn failed."
+      ? (active.turn.error ?? "Turn failed.")
       : null);
 
   // Build the visible message list. History rows are canonical;
@@ -147,14 +160,11 @@ export function useHermesChat({
   const messages = useMemo<ChatMessage[]>(() => {
     const rows = historyRaw ?? [];
     return rows.map((m) => {
-      const isStreaming =
-        m.role === "assistant" && m.status === "streaming";
+      const isStreaming = m.role === "assistant" && m.status === "streaming";
       // For streaming assistant, prefer the live chunks aggregate over
       // m.text (which is "" until snapshot lands on complete).
       const liveText =
-        isStreaming &&
-        active &&
-        active.turn.assistant_message_id === m._id
+        isStreaming && active && active.turn.assistant_message_id === m._id
           ? streamingText
           : m.text;
       return {
@@ -163,14 +173,34 @@ export function useHermesChat({
         text: liveText,
         streaming: isStreaming,
         status: m.status,
+        createdAt: m.created_at,
+        attachments: (m as { attachments?: ChatAttachment[] }).attachments,
       };
     });
   }, [historyRaw, active, streamingText]);
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (
+      text: string,
+      attachments?: Array<{
+        storageId: string;
+        name: string;
+        contentType?: string;
+        size?: number;
+      }>,
+    ) => {
       const trimmed = text.trim();
-      if (!trimmed || sending || !actorSlug || !conversationId) return;
+      const hasAttachments = !!(attachments && attachments.length > 0);
+      // Allow sending if there's text OR attachments — operator can
+      // attach a file without typing anything (e.g. "summarize this").
+      if (
+        (!trimmed && !hasAttachments) ||
+        sending ||
+        !actorSlug ||
+        !conversationId
+      ) {
+        return;
+      }
       if (active) return; // a turn is already running on this conversation
       setSending(true);
       setSendError(null);
@@ -179,9 +209,9 @@ export function useHermesChat({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            actorSlug,
             conversationId,
-            text: trimmed,
+            text: trimmed || "(see attached files)",
+            attachments,
           }),
         });
         if (!res.ok) {
@@ -213,7 +243,6 @@ export function useHermesChat({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          actorSlug,
           turnId: active.turn._id,
         }),
       });
@@ -222,12 +251,44 @@ export function useHermesChat({
     }
   }, [active, actorSlug]);
 
+  // Regenerate = re-run the latest assistant turn for the conversation.
+  // Server deletes the old assistant message + chunks + tool events,
+  // creates a fresh queued turn pointing at the same user message, and
+  // kicks Railway off again — so the agent re-answers with the same
+  // memory but a different sampling.
+  const [regenerating, setRegenerating] = useState(false);
+  const regenerate = useCallback(async () => {
+    if (regenerating || !conversationId || active) return;
+    setRegenerating(true);
+    setSendError(null);
+    try {
+      const res = await fetch("/api/agent/regenerate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        throw new Error(
+          (detail as { error?: string }).error ??
+            `Regenerate route failed: ${res.status}`,
+        );
+      }
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : "Regenerate failed.");
+    } finally {
+      setRegenerating(false);
+    }
+  }, [conversationId, regenerating, active]);
+
   return {
     messages,
     status,
     error,
     sendMessage,
     stop,
+    regenerate,
+    canRegenerate: !active && messages.some((m) => m.role === "assistant"),
     thought,
     tools,
   };
