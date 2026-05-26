@@ -59,7 +59,7 @@ export function MrrChart({ points }: { points: MrrPoint[] }) {
           </div>
           <div className="text-[11px] text-ink-3 mt-1">today</div>
           <div className="mt-3 text-[12px] text-ink-2">
-            {delta >= 0 ? "+" : ""}
+            {delta >= 0 ? "+" : "-"}
             <span className="num">{formatUsdCompact(Math.abs(delta))}</span>
             {deltaPct !== null && (
               <span className="text-ink-3 ml-1">

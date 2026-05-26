@@ -14,7 +14,7 @@ export function TemplateOverview({
 }) {
   const ranked = templatesByMostReused(usage).slice(0, limit);
   const cById = new Map(customers.map((c) => [c.id, c]));
-  const totalReuses = usage.reduce((s, u) => s + u.customerCount, 0);
+  const totalReuses = usage.reduce((s, u) => s + u.reuseCount, 0);
 
   return (
     <div className="rounded-lg bg-surface border border-line overflow-hidden">
@@ -56,7 +56,7 @@ export function TemplateOverview({
                   </span>
                 </div>
                 <div className="mt-1 text-[12px] text-ink-3">
-                  <span className="num text-ink-2">{u.customerCount}</span> reuses
+                  <span className="num text-ink-2">{u.reuseCount}</span> reuses
                   {origin && (
                     <span className="ml-1">from {origin.name}</span>
                   )}
