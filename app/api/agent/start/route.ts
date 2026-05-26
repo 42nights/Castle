@@ -39,9 +39,11 @@ type StartBody = {
  */
 export async function POST(req: Request) {
   const body = (await req.json()) as StartBody;
-  if (!body.conversationId || !body.text?.trim()) {
+  const hasText = typeof body.text === "string" && body.text.trim().length > 0;
+  const hasAttachments = Array.isArray(body.attachments) && body.attachments.length > 0;
+  if (!body.conversationId || (!hasText && !hasAttachments)) {
     return Response.json(
-      { error: "conversationId + text required" },
+      { error: "conversationId and text or attachments required" },
       { status: 400 },
     );
   }

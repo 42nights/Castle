@@ -244,7 +244,7 @@ export function ChatLanding() {
 
   const submit = () => {
     const text = draft.trim();
-    if ((!text && pendingAttachments.length === 0) || status === "streaming") {
+    if ((!text && pendingAttachments.length === 0) || status === "streaming" || uploadingCount > 0) {
       return;
     }
     sendMessage(

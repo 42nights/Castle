@@ -21,15 +21,13 @@ export default async function TemplateDetail({
 }) {
   const { slug } = await params;
   const { isOperator } = await requireSignedIn();
-  const { templates, customers, deployments, engagements, patternExtractions } =
+  const { templates, customers, deployments, engagements, patternExtractions, fdes } =
     await loadTemplateData();
   const tpl = templates.find((t) => t.id === slug);
   if (!tpl) notFound();
-  // Author + origin links used to live in the header description as
-  // static text. Now they're TemplateAuthorSelect / TemplateOriginSelect
-  // which pull their own options from useQuery. Keep the lookup
-  // commented-out hint in case other panels want them later.
   const cById = new Map(customers.map((c) => [c.id, c]));
+  const authorFde = fdes.find((f) => f.id === tpl.authored_by_fde_id);
+  const originCustomer = cById.get(tpl.origin_customer_id);
   const deps = deployments.filter((d) => d.template_id === tpl.id);
   const customerCount = new Set(deps.map((d) => d.customer_id)).size;
   const relatedExtractions = patternExtractions.filter(
@@ -68,11 +66,13 @@ export default async function TemplateDetail({
             <TemplateAuthorSelect
               templateSlug={tpl.id}
               currentFdeSlug={tpl.authored_by_fde_id}
+              currentName={authorFde?.name}
             />
             from work with
             <TemplateOriginSelect
               templateSlug={tpl.id}
               currentCustomerSlug={tpl.origin_customer_id}
+              currentName={originCustomer?.name}
             />
           </span>
         }

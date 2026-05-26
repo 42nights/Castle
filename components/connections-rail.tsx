@@ -26,6 +26,8 @@ export function ConnectionsRail() {
       setRows([]);
       return;
     }
+    setLoaded(false);
+    setRows([]);
     let cancelled = false;
     listConnections(actorSlug).then((r) => {
       if (!cancelled) {

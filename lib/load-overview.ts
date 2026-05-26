@@ -2,6 +2,7 @@ import "server-only";
 
 import { fetchQuery } from "convex/nextjs";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { api } from "@/convex/_generated/api";
 import { adaptOverview, type ConvexOverview } from "@/lib/adapters";
 import { loadAll as loadJson } from "@/lib/data";
@@ -43,8 +44,9 @@ export async function requireSignedIn(): Promise<{ isOperator: boolean }> {
   try {
     const { fetchAuthQuery } = await import("@/lib/auth-server");
     user = await fetchAuthQuery(api.auth.getCurrentUser, {});
-  } catch {
-    redirect("/sign-in");
+  } catch (err) {
+    if (isRedirectError(err)) throw err;
+    throw err;
   }
   if (!user) redirect("/sign-in");
   return { isOperator: user.isOperator ?? false };
@@ -61,8 +63,9 @@ export async function requireOperator(): Promise<void> {
   try {
     const { fetchAuthQuery } = await import("@/lib/auth-server");
     user = await fetchAuthQuery(api.auth.getCurrentUser, {});
-  } catch {
-    redirect("/sign-in");
+  } catch (err) {
+    if (isRedirectError(err)) throw err;
+    throw err;
   }
   if (!user) redirect("/sign-in");
   if (!user.isOperator) redirect("/templates");

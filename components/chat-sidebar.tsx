@@ -63,7 +63,10 @@ export function ChatSidebar({
   const [draftTitle, setDraftTitle] = useState("");
 
   const allConversations = useMemo(
-    () => [...(personal ?? []), ...(shared ?? [])],
+    () =>
+      [...(personal ?? []), ...(shared ?? [])].sort(
+        (a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""),
+      ),
     [personal, shared],
   );
 

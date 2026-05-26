@@ -196,7 +196,6 @@ export function useHermesChat({
       if (
         (!trimmed && !hasAttachments) ||
         sending ||
-        !actorSlug ||
         !conversationId
       ) {
         return;
@@ -229,7 +228,7 @@ export function useHermesChat({
         setSending(false);
       }
     },
-    [actorSlug, conversationId, sending, active],
+    [conversationId, sending, active],
   );
 
   // Stop = POST /api/agent/cancel with the active turn id. The wrapper
@@ -237,7 +236,7 @@ export function useHermesChat({
   // direct cancel HTTP) and aborts its asyncio task. The reactive
   // query flips the UI to idle.
   const stop = useCallback(async () => {
-    if (!active || !actorSlug) return;
+    if (!active) return;
     try {
       await fetch("/api/agent/cancel", {
         method: "POST",
@@ -249,7 +248,7 @@ export function useHermesChat({
     } catch (err) {
       console.error("[chat] cancel failed:", err);
     }
-  }, [active, actorSlug]);
+  }, [active]);
 
   // Regenerate = re-run the latest assistant turn for the conversation.
   // Server deletes the old assistant message + chunks + tool events,

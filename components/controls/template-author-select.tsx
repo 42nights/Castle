@@ -19,19 +19,22 @@ type FdeRow = { _id: string; slug: string; name: string };
 export function TemplateAuthorSelect({
   templateSlug,
   currentFdeSlug,
+  currentName,
 }: {
   templateSlug: string;
   currentFdeSlug: string;
+  currentName?: string;
 }) {
   const op = useIsOperator();
   const [actorSlug] = useActorSlug();
-  const template = useQuery(api.templates.getBySlug, {
-    slug: templateSlug,
-  }) as { _id: string } | null | undefined;
-  const fdes = useQuery(api.fdes.list, {}) as FdeRow[] | undefined;
+  const template = useQuery(
+    api.templates.getBySlug,
+    op ? { slug: templateSlug } : "skip",
+  ) as { _id: string } | null | undefined;
+  const fdes = useQuery(api.fdes.list, op ? {} : "skip") as FdeRow[] | undefined;
   const actorFde = useQuery(
     api.fdes.getBySlug,
-    actorSlug ? { slug: actorSlug } : "skip",
+    op && actorSlug ? { slug: actorSlug } : "skip",
   ) as { _id: string } | null | undefined;
   const run = useRunMutation(api.templates.update);
   const [pending, setPending] = useState(false);
@@ -59,10 +62,9 @@ export function TemplateAuthorSelect({
   };
 
   if (!op) {
-    const currentFde = (fdes ?? []).find((f) => f.slug === currentFdeSlug);
     return (
       <span className="h-7 inline-flex items-center rounded-sm text-[12.5px] px-2 text-ink">
-        {currentFde?.name ?? currentFdeSlug}
+        {currentName ?? currentFdeSlug}
       </span>
     );
   }

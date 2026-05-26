@@ -350,6 +350,13 @@ export const regenerateLast = mutation({
     // Fetch the original user message text for the route to forward to
     // Hermes (mirrors what `/api/agent/start` passes).
     const userMsg = await ctx.db.get(latest.user_message_id);
+    const attachment_links: Array<{ name: string; url: string; contentType?: string }> = [];
+    if (userMsg?.attachments) {
+      for (const a of userMsg.attachments) {
+        const url = await ctx.storage.getUrl(a.storageId);
+        if (url) attachment_links.push({ name: a.name, url, contentType: a.contentType });
+      }
+    }
     return {
       turn_id: newTurnId,
       user_message_id: latest.user_message_id,
@@ -358,6 +365,7 @@ export const regenerateLast = mutation({
       visibility: conv.visibility ?? "personal",
       actor_slug: user.slug ?? conv.actor_slug,
       user_text: userMsg?.text ?? "",
+      attachment_links,
     };
   },
 });
