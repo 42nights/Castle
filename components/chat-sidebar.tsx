@@ -45,17 +45,8 @@ export function ChatSidebar({
   const create = useMutation(api.agentMessages.createConversation);
   const rename = useMutation(api.agentMessages.renameConversation);
   const remove = useMutation(api.agentMessages.deleteConversation);
-  const claim = useMutation(api.migrations.claimMyUnownedConversations);
-
-  // Opportunistic migration: claim any legacy unowned conversations
-  // whose actor_slug matches the caller's slug. Idempotent — no-op once
-  // every row is stamped. Fires once per actor mount; failures are
-  // silent (legacy access still works via the actor_slug fallback in
-  // conversationAuth.ts).
-  useEffect(() => {
-    if (!actorSlug) return;
-    claim({}).catch(() => {});
-  }, [actorSlug, claim]);
+  // (Opportunistic claim of legacy conversations is now driven from
+  // `lib/chat-context.tsx` so it fires on every page, not just `/`.)
 
   const [renaming, setRenaming] = useState<Id<"agent_conversations"> | null>(
     null,

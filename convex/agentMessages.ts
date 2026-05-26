@@ -191,6 +191,27 @@ export const deleteConversation = mutation({
         throw new Error("only the original owner may delete a shared chat");
       }
     }
+    // Cascade: turns → chunks + tool events → messages → conversation.
+    // Without this, deleting a conversation left orphan rows in
+    // agent_turns, agent_message_chunks, and agent_tool_events that
+    // grow unbounded.
+    const turns = await ctx.db
+      .query("agent_turns")
+      .withIndex("by_conversation", (q) => q.eq("conversation_id", id))
+      .collect();
+    for (const t of turns) {
+      const chunks = await ctx.db
+        .query("agent_message_chunks")
+        .withIndex("by_turn_seq", (q) => q.eq("turn_id", t._id))
+        .collect();
+      for (const c of chunks) await ctx.db.delete(c._id);
+      const events = await ctx.db
+        .query("agent_tool_events")
+        .withIndex("by_turn_seq", (q) => q.eq("turn_id", t._id))
+        .collect();
+      for (const e of events) await ctx.db.delete(e._id);
+      await ctx.db.delete(t._id);
+    }
     const msgs = await ctx.db
       .query("agent_messages")
       .withIndex("by_conversation_time", (q) => q.eq("conversation_id", id))
@@ -202,7 +223,14 @@ export const deleteConversation = mutation({
 
 /** Flip personal ↔ shared. Re-mints `hermes_session` so the two memory
  *  stores never bleed together. Only the owner may flip; flipping a
- *  shared chat back to personal sets the caller as owner. */
+ *  shared chat back to personal sets the caller as owner.
+ *
+ *  Refuses while a turn is in flight: the running Hermes task is
+ *  bound to the OLD session via the kickoff payload; if we re-mint
+ *  here, its assistant text still streams into the conversation but
+ *  was generated against the prior visibility's memory store.
+ *  Personal-memory leakage into a now-shared thread is the worst
+ *  case. Operator must stop or wait for the turn first. */
 export const setVisibility = mutation({
   args: {
     id: v.id("agent_conversations"),
@@ -218,24 +246,20 @@ export const setVisibility = mutation({
     if (!isShared && conv.owner_user_id && conv.owner_user_id !== user._id) {
       throw new Error("only the owner may share or unshare this chat");
     }
-
-    // Reject visibility flips while a turn is active
-    const activeTurns = await ctx.db
+    // Reject mid-turn flips. Take the 5 most recent turns rather than
+    // .collect()ing all history — even a chat with hundreds of turns
+    // can have at most one in-flight (the per-session lock enforces
+    // it), so an unbounded scan is wasteful.
+    const turns = await ctx.db
       .query("agent_turns")
       .withIndex("by_conversation", (q) => q.eq("conversation_id", id))
       .order("desc")
-      .collect();
-    const activeNow = activeTurns.find(
-      (t) =>
-        t.status === "queued" ||
-        t.status === "running",
-    );
-    if (activeNow) {
+      .take(5);
+    if (turns.some((t) => t.status === "queued" || t.status === "running")) {
       throw new Error(
-        "cannot change visibility while a turn is active; cancel or wait for it to finish",
+        "a turn is in flight; stop or wait for it before changing visibility",
       );
     }
-
     const newOwner =
       visibility === "personal" ? user._id : (conv.owner_user_id ?? user._id);
     const newSession = hermesSessionName(visibility, newOwner);
@@ -322,15 +346,32 @@ export const generateAttachmentUploadUrl = mutation({
 
 /** Resolve a storage id to a (signed) URL — used by the chat renderer
  *  to display attachment chips with click-to-download links. Returns
- *  null for missing/expired ids. Requires the caller to pass the
- *  conversation_id so we can re-check access before minting the URL. */
+ *  null when the message can't be accessed (deleted, not visible to
+ *  caller) or the storageId isn't actually attached to that message.
+ *
+ *  Access model: caller passes the `message_id` whose attachments they
+ *  want to render; we re-resolve the conversation and run it through
+ *  `tryConversation` so a previously-shared chat that's been demoted
+ *  to personal stops serving its files to the broader operator group,
+ *  and so that holders of an orphan storageId can't mint URLs at all.
+ *  (CodeRabbit's auto-fix took conversation_id directly — we tightened
+ *  it to message_id so a caller with access to convo A can't pass A's
+ *  id but ask for convo B's storageId.)
+ */
 export const attachmentUrl = query({
   args: {
+    message_id: v.id("agent_messages"),
     storageId: v.id("_storage"),
-    conversation_id: v.id("agent_conversations"),
   },
-  handler: async (ctx, { storageId, conversation_id }) => {
-    await requireConversation(ctx, conversation_id);
+  handler: async (ctx, { message_id, storageId }) => {
+    const msg = await ctx.db.get(message_id);
+    if (!msg) return null;
+    const access = await tryConversation(ctx, msg.conversation_id);
+    if (!access) return null;
+    const onMessage = (msg.attachments ?? []).some(
+      (a) => a.storageId === storageId,
+    );
+    if (!onMessage) return null;
     return await ctx.storage.getUrl(storageId);
   },
 });

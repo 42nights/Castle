@@ -47,9 +47,9 @@ export async function POST(req: Request) {
   let me: { email?: string } | null = null;
   if (!cron) {
     try {
-      me = (await fetchAuthQuery(api.auth.getCurrentUser, {})) as
-        | { email?: string }
-        | null;
+      me = (await fetchAuthQuery(api.auth.getCurrentUser, {})) as {
+        email?: string;
+      } | null;
     } catch {
       return Response.json({ error: "unauthenticated" }, { status: 401 });
     }
@@ -63,7 +63,10 @@ export async function POST(req: Request) {
 
   const c = composio();
   if (!c) {
-    return Response.json({ error: "COMPOSIO_API_KEY not set" }, { status: 500 });
+    return Response.json(
+      { error: "COMPOSIO_API_KEY not set" },
+      { status: 500 },
+    );
   }
 
   // Resolve the actor whose GitHub connection we'll borrow. Prefer a
@@ -72,7 +75,7 @@ export async function POST(req: Request) {
   // env var (there's no caller identity to fall back to).
   const callerSlug =
     me?.email && typeof me.email === "string"
-      ? me.email.split("@")[0]?.toLowerCase() ?? null
+      ? (me.email.split("@")[0]?.toLowerCase() ?? null)
       : null;
   const actor = process.env.CASTLE_SYSTEM_ACTOR_SLUG || callerSlug;
   if (!actor) {
@@ -86,8 +89,7 @@ export async function POST(req: Request) {
   }
 
   // Fetch repos via Composio. Action slug is the canonical Composio
-  // GitHub "list repos for org" tool; we fall back to direct REST if
-  // the SDK execute path errors.
+  // GitHub "list repos for org" tool.
   let repos: Repo[] = [];
   try {
     const result = (await c.tools.execute(
@@ -96,18 +98,28 @@ export async function POST(req: Request) {
         userId: actor,
         arguments: { org: ORG, per_page: 100 },
       },
-    )) as { successful?: boolean; data?: { items?: Repo[] } | Repo[] };
-
-    // Check result.successful and fail the sync if false or missing expected data
-    if (result.successful === false) {
+    )) as {
+      successful?: boolean;
+      error?: string;
+      data?: { items?: Repo[]; error?: string } | Repo[];
+    };
+    // Composio uses `successful: false` for tool-level failures (e.g.
+    // missing connection, GitHub 403). Without this check, an
+    // `{ successful: false, data: { error: "..." } }` payload would
+    // silently produce repos=[] and the route would report
+    // `found: 0, inserted: 0` as if everything was fine.
+    if (result?.successful === false) {
+      const dataMsg =
+        !Array.isArray(result.data) && result.data?.error
+          ? `: ${result.data.error}`
+          : result.error
+            ? `: ${result.error}`
+            : "";
       return Response.json(
-        {
-          error: `Composio GitHub list-repos returned unsuccessful: ${JSON.stringify(result)}`,
-        },
+        { error: `Composio GitHub list-repos failed${dataMsg}` },
         { status: 502 },
       );
     }
-
     const data = result?.data;
     if (!data) {
       return Response.json(
@@ -160,10 +172,10 @@ export async function POST(req: Request) {
         description: r.description ?? undefined,
       };
       const res = cron
-        ? ((await cx!.mutation(
-            api.templates.upsertGithubCandidate,
-            args,
-          )) as { id: string | null; inserted: boolean })
+        ? ((await cx!.mutation(api.templates.upsertGithubCandidate, args)) as {
+            id: string | null;
+            inserted: boolean;
+          })
         : ((await fetchAuthMutation(
             api.templates.upsertGithubCandidate,
             args,

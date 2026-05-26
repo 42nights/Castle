@@ -22,10 +22,15 @@ import { requireUser } from "./lib/conversationAuth";
  *      first time a signed-in user loads their list, or operators can
  *      trigger it manually.
  *
- * Until a row is claimed, the access check in
- * `convex/lib/conversationAuth.ts` falls back to matching
- * `actor_slug → caller.slug`, so existing chats remain accessible to
- * their original users mid-migration.
+ * Recovery: until the row is claimed,
+ * `canAccess` returns false for every unowned personal row (no
+ * actor_slug fallback — that fallback was removed to prevent
+ * same-local-part operators from reading each other's pre-migration
+ * chats). The sidebar mounts `claimMyUnownedConversations` on first
+ * render and the reactive query then re-runs to show the rows. If an
+ * operator deep-links to a conversation before the sidebar has had a
+ * chance to claim (rare; sidebar is on `/`), they will see a "not
+ * found" until they hit `/` once.
  *
  * Run from CLI:
  *   npx convex run migrations:stampDefaultsForConversations

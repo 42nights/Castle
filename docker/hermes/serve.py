@@ -644,11 +644,15 @@ async def agent_start(req: Request) -> JSONResponse:
     attachments = body.get("attachments") or []
     write_token = body.get("writeToken")
     convex_url = body.get("convexUrl")
-    # hermes_session can be an empty string (first turn), _run_turn_to_convex will mint a new session
+    # hermes_session is allowed to be empty/None — _run_turn_to_convex
+    # treats that as "mint a new session and bindSession back to
+    # Convex." Rejecting empty here would break the very first turn of
+    # any brand-new conversation whose Convex row was created without a
+    # session prefilled.
     if not all([turn_id, conversation_id, actor_slug, write_token, convex_url]):
         raise HTTPException(400, "missing required fields")
-    if hermes_session is None:
-        raise HTTPException(400, "hermesSession must be present (may be empty string)")
+    if hermes_session is not None and not isinstance(hermes_session, str):
+        raise HTTPException(400, "hermesSession must be a string when present")
 
     # Verify the kickoff token from the X-Castle-Kickoff header.
     kickoff_token = req.headers.get("X-Castle-Kickoff", "")

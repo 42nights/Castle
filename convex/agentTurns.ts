@@ -347,25 +347,26 @@ export const regenerateLast = mutation({
       last_heartbeat_at: now,
     });
     await ctx.db.patch(newAssistantId, { turn_id: newTurnId });
-    // Fetch the original user message text + attachments for the route
-    // to forward to Hermes (mirrors what `/api/agent/start` passes).
+    // Fetch the original user message text + attachments for the
+    // route to forward to Hermes (mirrors what `/api/agent/start`
+    // passes via attachment_links). Without this, regenerating a
+    // turn whose user message had files attached would re-prompt
+    // Hermes with text only — and an attachments-only turn would
+    // degrade into an empty re-run.
     const userMsg = await ctx.db.get(latest.user_message_id);
-    // Resolve attachment URLs for the route (same logic as startTurn)
     const attachment_links: Array<{
       name: string;
       url: string;
       contentType?: string;
     }> = [];
-    if (userMsg?.attachments) {
-      for (const a of userMsg.attachments) {
-        const url = await ctx.storage.getUrl(a.storageId);
-        if (url) {
-          attachment_links.push({
-            name: a.name,
-            url,
-            contentType: a.contentType,
-          });
-        }
+    for (const a of userMsg?.attachments ?? []) {
+      const url = await ctx.storage.getUrl(a.storageId);
+      if (url) {
+        attachment_links.push({
+          name: a.name,
+          url,
+          contentType: a.contentType,
+        });
       }
     }
     return {

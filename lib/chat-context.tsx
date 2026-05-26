@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { useMutation } from "convex/react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useActorSlug } from "@/lib/use-actor";
 import {
@@ -60,6 +68,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [conversationId, setConversationId] =
     useState<Id<"agent_conversations"> | null>(null);
   const chat = useHermesChat({ actorSlug, conversationId });
+
+  // Opportunistic migration: stamp `owner_user_id` on any legacy
+  // unowned conversations whose `actor_slug` matches the caller's
+  // slug. Runs once per signed-in actor regardless of which page
+  // mounted first — without this, a user who deep-links to a
+  // non-`/` page would never claim their legacy chats and see them
+  // missing from the slide-out panel. Idempotent; failures are
+  // silent (subsequent navigation will retry).
+  const claim = useMutation(api.migrations.claimMyUnownedConversations);
+  useEffect(() => {
+    if (!actorSlug) return;
+    claim({}).catch(() => {});
+  }, [actorSlug, claim]);
+
   return (
     <Ctx.Provider
       value={{

@@ -62,9 +62,7 @@ export function TemplateGithubCandidates() {
       <div className="flex items-baseline justify-between mb-2">
         <h2 className="t-h2 text-ink">
           GitHub candidates
-          <span className="t-caption num ml-2">
-            {candidates?.length ?? 0}
-          </span>
+          <span className="t-caption num ml-2">{candidates?.length ?? 0}</span>
         </h2>
         <button
           onClick={sync}
@@ -78,8 +76,9 @@ export function TemplateGithubCandidates() {
         <p className="text-[12px] text-ink-3">Loading…</p>
       ) : empty ? (
         <p className="text-[12px] text-ink-3 leading-snug">
-          Nothing pending. Click <span className="text-ink">sync from GitHub</span>{" "}
-          to scan the 42nights org for new repos.
+          Nothing pending. Click{" "}
+          <span className="text-ink">sync from GitHub</span> to scan the
+          42nights org for new repos.
         </p>
       ) : (
         <ul className="border border-line rounded-sm divide-y divide-line">

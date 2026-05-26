@@ -40,6 +40,11 @@ export async function POST(req: Request) {
     visibility: "personal" | "shared";
     actor_slug: string;
     user_text: string;
+    attachment_links: Array<{
+      name: string;
+      url: string;
+      contentType?: string;
+    }>;
   };
   try {
     started = (await fetchAuthMutation(api.agentTurns.regenerateLast, {
@@ -65,6 +70,7 @@ export async function POST(req: Request) {
     hermesSession: started.hermes_session,
     visibility: started.visibility,
     text: started.user_text,
+    attachments: started.attachment_links,
     writeToken,
     convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL,
   };

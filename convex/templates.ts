@@ -3,6 +3,22 @@ import { mutation, query } from "./_generated/server";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
 import { requireUser } from "./lib/conversationAuth";
 
+/** Normalise a github_repo input to a canonical, lower-case
+ *  "<owner>/<repo>" form. Both the candidate upsert and the manual
+ *  `setGithubRepo` mutation must share this — otherwise a template
+ *  saved as `Owner/Repo` could miss the candidate dedupe lookup
+ *  (which is lower-cased) and the daily sync would recreate a row
+ *  for a repo that's already linked. */
+function normalizeGithubRepo(input: string): string {
+  return input
+    .trim()
+    .replace(/^https?:\/\/(www\.)?github\.com\//i, "")
+    .replace(/^github\.com\//i, "")
+    .replace(/\.git$/i, "")
+    .replace(/\/$/, "")
+    .toLowerCase();
+}
+
 const category = v.union(
   v.literal("GTM"),
   v.literal("Ops"),
@@ -24,6 +40,9 @@ export const list = query({
 export const listGithubCandidates = query({
   args: {},
   handler: async (ctx) => {
+    // Auth gate: NEXT_PUBLIC_CONVEX_URL is public, so an anonymous
+    // caller could otherwise enumerate every staged candidate by
+    // hitting the bare URL.
     await requireUser(ctx);
     const rows = await ctx.db
       .query("template_github_candidates")
@@ -45,8 +64,11 @@ export const upsertGithubCandidate = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireUser(ctx);
-    const repo = args.github_repo.toLowerCase();
+    // No `requireUser` here: the Vercel cron path calls this without
+    // an operator identity (just the CRON_SECRET bearer at the HTTP
+    // route layer). Auth on the candidate read/dismiss/mark mutations
+    // is enough to keep clients out.
+    const repo = normalizeGithubRepo(args.github_repo);
     const existing = await ctx.db
       .query("template_github_candidates")
       .withIndex("by_repo", (q) => q.eq("github_repo", repo))
@@ -71,6 +93,8 @@ export const upsertGithubCandidate = mutation({
 export const dismissGithubCandidate = mutation({
   args: { id: v.id("template_github_candidates") },
   handler: async (ctx, { id }) => {
+    // Auth gate: without it, anyone with a Convex URL could loop over
+    // candidate ids and silently dismiss every staged repo.
     await requireUser(ctx);
     await ctx.db.patch(id, { dismissed_at: nowIso() });
   },
@@ -82,6 +106,8 @@ export const markCandidatePromoted = mutation({
     template_id: v.id("templates"),
   },
   handler: async (ctx, { id, template_id }) => {
+    // Auth gate: same risk as dismiss — unauth callers could mark
+    // candidates promoted against fabricated template ids.
     await requireUser(ctx);
     await ctx.db.patch(id, { promoted_to_template_id: template_id });
   },
@@ -190,12 +216,7 @@ export const setGithubRepo = mutation({
   handler: async (ctx, { id, repo, actor_fde_id }) => {
     let normalized: string | null = null;
     if (repo) {
-      const m = repo
-        .trim()
-        .replace(/^https?:\/\/(www\.)?github\.com\//, "")
-        .replace(/^github\.com\//, "")
-        .replace(/\.git$/, "")
-        .replace(/\/$/, "");
+      const m = normalizeGithubRepo(repo);
       if (!/^[\w.-]+\/[\w.-]+$/.test(m)) {
         throw new Error("Expected '<owner>/<repo>' or a github.com URL");
       }
