@@ -26,7 +26,7 @@ const guestLinks = [
 export function TopNav() {
   const pathname = usePathname();
   const user = useQuery(api.auth.getCurrentUser);
-  const isOp = user?.isOperator ?? true;
+  const isOp = user?.isOperator ?? false;
   const links = isOp ? operatorLinks : guestLinks;
 
   return (
