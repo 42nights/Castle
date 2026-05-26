@@ -16,6 +16,73 @@ export const list = query({
   handler: async (ctx) => ctx.db.query("templates").collect(),
 });
 
+// ────────────────────── GitHub candidates ──────────────────────────
+
+/** Active candidates — discovered repos that haven't been promoted to
+ *  a real template or dismissed yet. The /templates page surfaces
+ *  these so an operator can decide which to turn into templates. */
+export const listGithubCandidates = query({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db
+      .query("template_github_candidates")
+      .withIndex("by_discovered")
+      .order("desc")
+      .collect();
+    return rows.filter((r) => !r.dismissed_at && !r.promoted_to_template_id);
+  },
+});
+
+/** Idempotent upsert: insert a candidate if its github_repo isn't
+ *  already on file (active OR resolved), no-op otherwise. Returns the
+ *  resulting row id and a flag for whether it was newly inserted.
+ *  Called by the GitHub sync route on each repo. */
+export const upsertGithubCandidate = mutation({
+  args: {
+    github_repo: v.string(),
+    name: v.string(),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const repo = args.github_repo.toLowerCase();
+    const existing = await ctx.db
+      .query("template_github_candidates")
+      .withIndex("by_repo", (q) => q.eq("github_repo", repo))
+      .first();
+    if (existing) return { id: existing._id, inserted: false };
+    // Also skip if a template already links to this repo.
+    const linkedTemplate = await ctx.db
+      .query("templates")
+      .filter((q) => q.eq(q.field("github_repo"), repo))
+      .first();
+    if (linkedTemplate) return { id: null, inserted: false } as const;
+    const id = await ctx.db.insert("template_github_candidates", {
+      github_repo: repo,
+      name: args.name,
+      description: args.description,
+      discovered_at: nowIso(),
+    });
+    return { id, inserted: true };
+  },
+});
+
+export const dismissGithubCandidate = mutation({
+  args: { id: v.id("template_github_candidates") },
+  handler: async (ctx, { id }) => {
+    await ctx.db.patch(id, { dismissed_at: nowIso() });
+  },
+});
+
+export const markCandidatePromoted = mutation({
+  args: {
+    id: v.id("template_github_candidates"),
+    template_id: v.id("templates"),
+  },
+  handler: async (ctx, { id, template_id }) => {
+    await ctx.db.patch(id, { promoted_to_template_id: template_id });
+  },
+});
+
 export const listCapabilities = query({
   args: { template_id: v.id("templates") },
   handler: async (ctx, { template_id }) =>

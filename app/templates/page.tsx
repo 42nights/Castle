@@ -1,5 +1,6 @@
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { NewTemplateButton } from "@/components/ctas";
+import { TemplateGithubCandidates } from "@/components/template-github-candidates";
 import { loadTemplateData, requireSignedIn } from "@/lib/load-overview";
 import { RoleProvider } from "@/lib/role-context";
 import { templateUsage } from "@/lib/derive";
@@ -20,6 +21,7 @@ export default async function TemplatesPage() {
           description="Each template is a real customer workflow we kept building. Reuse count is the productization story."
           actions={isOperator ? <NewTemplateButton /> : undefined}
         />
+        {isOperator && <TemplateGithubCandidates />}
         <TemplateGrid usage={usage} customers={customers} fdes={fdes} />
       </PageShell>
     </RoleProvider>
