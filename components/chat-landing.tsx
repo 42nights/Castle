@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -492,15 +492,20 @@ function ChatHeader({
 }: {
   conversationId: Id<"agent_conversations">;
 }) {
-  // Pull both lists; whichever contains this conversation is the
-  // source of truth for visibility. Cheap — both are already cached.
-  const personal = useQuery(api.agentMessages.listPersonal, {}) as
+  const { isAuthenticated } = useConvexAuth();
+  const personal = useQuery(
+    api.agentMessages.listPersonal,
+    isAuthenticated ? {} : "skip",
+  ) as
     | Array<{
         _id: Id<"agent_conversations">;
         visibility?: "personal" | "shared";
       }>
     | undefined;
-  const shared = useQuery(api.agentMessages.listShared, {}) as
+  const shared = useQuery(
+    api.agentMessages.listShared,
+    isAuthenticated ? {} : "skip",
+  ) as
     | Array<{
         _id: Id<"agent_conversations">;
         visibility?: "personal" | "shared";
