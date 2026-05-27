@@ -25,6 +25,7 @@ import type * as engagements from "../engagements.js";
 import type * as fdes from "../fdes.js";
 import type * as founderHours from "../founderHours.js";
 import type * as http from "../http.js";
+import type * as lib_assertOperator from "../lib/assertOperator.js";
 import type * as lib_audit from "../lib/audit.js";
 import type * as lib_bounds from "../lib/bounds.js";
 import type * as lib_conversationAuth from "../lib/conversationAuth.js";
@@ -60,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   fdes: typeof fdes;
   founderHours: typeof founderHours;
   http: typeof http;
+  "lib/assertOperator": typeof lib_assertOperator;
   "lib/audit": typeof lib_audit;
   "lib/bounds": typeof lib_bounds;
   "lib/conversationAuth": typeof lib_conversationAuth;
