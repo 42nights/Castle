@@ -30,6 +30,6 @@ export const config = {
    *  - common public assets (extensions whitelisted)
    */
   matcher: [
-    "/((?!sign-in|api/auth|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|css|js|map|woff2?)$).*)",
+    "/((?!sign-in|api/auth|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|css|js|map|woff2?)$).+)",
   ],
 };

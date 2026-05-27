@@ -1,11 +1,22 @@
 import { redirect } from "next/navigation";
 import { ChatLanding } from "@/components/chat-landing";
-import { requireSignedIn } from "@/lib/load-overview";
+import { WelcomeLanding } from "@/components/welcome-landing";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const { isOperator } = await requireSignedIn();
-  if (!isOperator) redirect("/templates");
+  if (!process.env.NEXT_PUBLIC_CONVEX_URL) return <ChatLanding />;
+
+  let user: { isOperator?: boolean } | null = null;
+  try {
+    const { fetchAuthQuery } = await import("@/lib/auth-server");
+    const { api } = await import("@/convex/_generated/api");
+    user = await fetchAuthQuery(api.auth.getCurrentUser, {});
+  } catch {
+    // No session or Convex unreachable — show welcome
+  }
+
+  if (!user) return <WelcomeLanding />;
+  if (!user.isOperator) redirect("/templates");
   return <ChatLanding />;
 }
