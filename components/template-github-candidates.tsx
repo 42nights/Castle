@@ -1,10 +1,11 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { InsertCandidateDialog } from "@/components/dialogs/insert-candidate-dialog";
 
 type Candidate = {
   _id: Id<"template_github_candidates">;
@@ -14,19 +15,25 @@ type Candidate = {
   discovered_at: string;
 };
 
-/**
- * "Pending review" rail at the top of /templates. Lists GitHub
- * candidates discovered by the sync job (manual or cron). Each row
- * links out to the repo and offers a one-click dismiss; promoting a
- * candidate into a real template still goes through the existing
- * `+ new template` dialog (operator picks a customer + author).
- */
 export function TemplateGithubCandidates() {
   const candidates = useQuery(api.templates.listGithubCandidates, {}) as
     | Candidate[]
     | undefined;
   const dismiss = useMutation(api.templates.dismissGithubCandidate);
   const [syncing, setSyncing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Candidate | null>(null);
+
+  const filtered = useMemo(() => {
+    if (!candidates) return undefined;
+    if (!search.trim()) return candidates;
+    const q = search.toLowerCase();
+    return candidates.filter(
+      (c) =>
+        c.github_repo.toLowerCase().includes(q) ||
+        (c.description ?? "").toLowerCase().includes(q),
+    );
+  }, [candidates, search]);
 
   const sync = async () => {
     if (syncing) return;
@@ -78,46 +85,76 @@ export function TemplateGithubCandidates() {
         <p className="text-[12px] text-ink-3">Loading…</p>
       ) : empty ? (
         <p className="text-[12px] text-ink-3 leading-snug">
-          Nothing pending. Click <span className="text-ink">sync from GitHub</span>{" "}
-          to scan the 42nights org for new repos.
+          Nothing pending. Click{" "}
+          <span className="text-ink">sync from GitHub</span> to scan the
+          42nights org for new repos.
         </p>
       ) : (
-        <ul className="border border-line rounded-sm divide-y divide-line">
-          {candidates.map((c) => (
-            <li key={c._id} className="px-3 py-2 flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 text-[13px] text-ink">
-                  <a
-                    href={`https://github.com/${c.github_repo}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:underline underline-offset-2 decoration-line"
+        <>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search candidates…"
+            aria-label="Search GitHub candidates"
+            className="w-full h-8 rounded-sm border border-line bg-page px-2.5 text-[13px] text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-ink mb-2"
+          />
+          <div className="max-h-[360px] overflow-y-auto border border-line rounded-sm">
+            <ul className="divide-y divide-line">
+              {(filtered ?? []).map((c) => (
+                <li key={c._id} className="px-3 py-2 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 text-[13px] text-ink">
+                      <a
+                        href={`https://github.com/${c.github_repo}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="hover:underline underline-offset-2 decoration-line"
+                      >
+                        {c.github_repo}
+                      </a>
+                    </div>
+                    {c.description && (
+                      <p className="text-[12px] text-ink-3 truncate leading-snug">
+                        {c.description}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setSelected(c)}
+                    className="text-[11px] text-ink-2 hover:text-ink"
                   >
-                    {c.github_repo}
-                  </a>
-                </div>
-                {c.description && (
-                  <p className="text-[12px] text-ink-3 truncate leading-snug">
-                    {c.description}
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={async () => {
-                  try {
-                    await dismiss({ id: c._id });
-                    toast.success("Dismissed.");
-                  } catch {
-                    toast.error("Failed to dismiss.");
-                  }
-                }}
-                className="text-[11px] text-ink-3 hover:text-accent"
-              >
-                dismiss
-              </button>
-            </li>
-          ))}
-        </ul>
+                    insert
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await dismiss({ id: c._id });
+                        toast.success("Dismissed.");
+                      } catch {
+                        toast.error("Failed to dismiss.");
+                      }
+                    }}
+                    className="text-[11px] text-ink-3 hover:text-accent"
+                  >
+                    dismiss
+                  </button>
+                </li>
+              ))}
+              {filtered && filtered.length === 0 && (
+                <li className="px-3 py-4 text-[12px] text-ink-3">
+                  No matches.
+                </li>
+              )}
+            </ul>
+          </div>
+        </>
+      )}
+
+      {selected && (
+        <InsertCandidateDialog
+          candidate={selected}
+          onClose={() => setSelected(null)}
+        />
       )}
     </section>
   );
