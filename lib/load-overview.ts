@@ -53,6 +53,21 @@ export async function requireSignedIn(): Promise<{ isOperator: boolean }> {
 }
 
 /**
+ * Like requireSignedIn but never redirects. Returns { isOperator: false }
+ * for unauthenticated visitors so public pages can render in guest mode.
+ */
+export async function trySignedIn(): Promise<{ isOperator: boolean }> {
+  if (!process.env.NEXT_PUBLIC_CONVEX_URL) return { isOperator: true };
+  try {
+    const { fetchAuthQuery } = await import("@/lib/auth-server");
+    const user = await fetchAuthQuery(api.auth.getCurrentUser, {});
+    return { isOperator: user?.isOperator ?? false };
+  } catch {
+    return { isOperator: false };
+  }
+}
+
+/**
  * Requires an allowlisted operator session. Guests get redirected to
  * /templates (the one area they can access). Unauthenticated users
  * go to /sign-in.
@@ -76,10 +91,9 @@ export type TemplateData = Omit<LoadedOverview, "founderHours">;
 /**
  * Narrower loader for guest-accessible template pages. Returns only
  * the entities templates reference (no founder-hours or other
- * operator-only aggregates). Requires a valid session but not operator.
+ * operator-only aggregates). Works for unauthenticated visitors too.
  */
 export async function loadTemplateData(): Promise<TemplateData> {
-  await requireSignedIn();
   const full = await loadOverviewUnchecked();
   const { founderHours: _, ...rest } = full;
   return rest;

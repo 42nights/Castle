@@ -10,7 +10,7 @@ import { InlineName } from "@/components/controls/inline-name";
 import { LiveUrlInput } from "@/components/controls/live-url-input";
 import { TemplateTagsInput } from "@/components/controls/template-tags-input";
 import { PageHeader, PageShell } from "@/components/page-shell";
-import { loadTemplateData, requireSignedIn } from "@/lib/load-overview";
+import { loadTemplateData, trySignedIn } from "@/lib/load-overview";
 import { RoleProvider } from "@/lib/role-context";
 import { formatDate, formatHours } from "@/lib/format";
 
@@ -20,7 +20,7 @@ export default async function TemplateDetail({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const { isOperator } = await requireSignedIn();
+  const { isOperator } = await trySignedIn();
   const { templates, customers, deployments, engagements, patternExtractions, fdes } =
     await loadTemplateData();
   const tpl = templates.find((t) => t.id === slug);

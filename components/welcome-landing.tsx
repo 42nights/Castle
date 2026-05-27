@@ -1,6 +1,7 @@
 "use client";
 
 import { Castle as CastleIcon } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 
@@ -13,7 +14,7 @@ export function WelcomeLanding() {
       await authClient.signIn.social({
         provider: "github",
         callbackURL: "/",
-        errorCallbackURL: "/sign-in?error=access_denied",
+        errorCallbackURL: "/?error=auth",
       });
     } catch (err) {
       console.error("[welcome] github sign-in failed:", err);
@@ -38,13 +39,21 @@ export function WelcomeLanding() {
             or browse templates as a guest.
           </p>
         </div>
-        <button
-          onClick={signIn}
-          disabled={busy}
-          className="w-full h-10 rounded-md bg-ink text-page text-[14px] inline-flex items-center justify-center gap-2 disabled:opacity-60"
-        >
-          {busy ? "Redirecting…" : "Continue with GitHub"}
-        </button>
+        <div className="w-full flex flex-col gap-2">
+          <button
+            onClick={signIn}
+            disabled={busy}
+            className="w-full h-10 rounded-md bg-ink text-page text-[14px] inline-flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            {busy ? "Redirecting…" : "Continue with GitHub"}
+          </button>
+          <Link
+            href="/templates"
+            className="w-full h-10 rounded-md border border-line text-ink-2 text-[14px] inline-flex items-center justify-center gap-2 hover:text-ink hover:border-line-strong transition-colors"
+          >
+            Browse templates as guest
+          </Link>
+        </div>
       </div>
     </main>
   );
