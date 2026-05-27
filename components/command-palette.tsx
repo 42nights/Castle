@@ -139,22 +139,30 @@ export function CommandPalette() {
         </ul>
       </Dialog>
 
-      <CreateEngagementDialog
-        open={showCreate}
-        onClose={() => setShowCreate(false)}
-      />
-      <LogFounderMonthDialog
-        open={showLog}
-        onClose={() => setShowLog(false)}
-      />
-      <ExtractPatternDialog
-        open={showExtract}
-        onClose={() => setShowExtract(false)}
-      />
-      <ManualAttentionDialog
-        open={showReminder}
-        onClose={() => setShowReminder(false)}
-      />
+      {showCreate && (
+        <CreateEngagementDialog
+          open={showCreate}
+          onClose={() => setShowCreate(false)}
+        />
+      )}
+      {showLog && (
+        <LogFounderMonthDialog
+          open={showLog}
+          onClose={() => setShowLog(false)}
+        />
+      )}
+      {showExtract && (
+        <ExtractPatternDialog
+          open={showExtract}
+          onClose={() => setShowExtract(false)}
+        />
+      )}
+      {showReminder && (
+        <ManualAttentionDialog
+          open={showReminder}
+          onClose={() => setShowReminder(false)}
+        />
+      )}
     </>
   );
 }
