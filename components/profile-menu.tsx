@@ -50,19 +50,15 @@ export function ProfileMenu() {
   const name = user.name ?? user.email ?? "operator";
   const email = user.email ?? "";
 
-  const signOut = async () => {
+  const signOut = () => {
     setPending(true);
-    try {
-      await authClient.signOut();
-      // Hard navigation so every component unmounts before Convex
-      // re-runs queries without auth. A client-side router.replace
-      // keeps the tree alive long enough for auth-requiring queries
-      // to throw "unauthenticated."
-      window.location.href = "/sign-in";
-    } catch (err) {
-      setPending(false);
-      toast.error(err instanceof Error ? err.message : "sign-out failed");
-    }
+    // Fire-and-forget: start clearing the session cookie but navigate
+    // immediately. Awaiting signOut lets React re-render with the
+    // cleared session, which re-runs Convex queries without auth and
+    // crashes every page. The cookie is cleared by the time /sign-in
+    // finishes loading.
+    authClient.signOut();
+    window.location.href = "/sign-in";
   };
 
   return (
