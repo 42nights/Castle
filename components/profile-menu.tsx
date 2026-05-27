@@ -53,11 +53,15 @@ export function ProfileMenu() {
   const signOut = async () => {
     setPending(true);
     try {
-      await authClient.signOut();
-      router.replace("/sign-in");
-    } catch (err) {
+      // Clear the session cookie server-side WITHOUT going through
+      // authClient.signOut(). The auth client's signOut() synchronously
+      // updates React state, which triggers Convex to re-run every
+      // auth-requiring query before navigation can happen — crashing
+      // the page. A raw POST bypasses the React hooks entirely.
+      await fetch("/api/auth/sign-out", { method: "POST" });
+      window.location.href = "/sign-in";
+    } catch {
       setPending(false);
-      toast.error(err instanceof Error ? err.message : "sign-out failed");
     }
   };
 
