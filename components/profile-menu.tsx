@@ -54,7 +54,11 @@ export function ProfileMenu() {
     setPending(true);
     try {
       await authClient.signOut();
-      router.replace("/sign-in");
+      // Hard navigation so every component unmounts before Convex
+      // re-runs queries without auth. A client-side router.replace
+      // keeps the tree alive long enough for auth-requiring queries
+      // to throw "unauthenticated."
+      window.location.href = "/sign-in";
     } catch (err) {
       setPending(false);
       toast.error(err instanceof Error ? err.message : "sign-out failed");
