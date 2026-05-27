@@ -50,15 +50,19 @@ export function ProfileMenu() {
   const name = user.name ?? user.email ?? "operator";
   const email = user.email ?? "";
 
-  const signOut = () => {
+  const signOut = async () => {
     setPending(true);
-    // Fire-and-forget: start clearing the session cookie but navigate
-    // immediately. Awaiting signOut lets React re-render with the
-    // cleared session, which re-runs Convex queries without auth and
-    // crashes every page. The cookie is cleared by the time /sign-in
-    // finishes loading.
-    authClient.signOut();
-    window.location.href = "/sign-in";
+    try {
+      // Clear the session cookie server-side WITHOUT going through
+      // authClient.signOut(). The auth client's signOut() synchronously
+      // updates React state, which triggers Convex to re-run every
+      // auth-requiring query before navigation can happen — crashing
+      // the page. A raw POST bypasses the React hooks entirely.
+      await fetch("/api/auth/sign-out", { method: "POST" });
+      window.location.href = "/sign-in";
+    } catch {
+      setPending(false);
+    }
   };
 
   return (
