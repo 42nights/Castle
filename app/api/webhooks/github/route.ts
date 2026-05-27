@@ -27,7 +27,11 @@ async function verifySignature(
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
 
-  return sig === expected;
+  // Use constant-time comparison to prevent timing attacks
+  const { timingSafeEqual } = await import("node:crypto");
+  const sigBuf = Buffer.from(sig);
+  const expBuf = Buffer.from(expected);
+  return sigBuf.length === expBuf.length && timingSafeEqual(sigBuf, expBuf);
 }
 
 function convexClient(): ConvexHttpClient | null {
