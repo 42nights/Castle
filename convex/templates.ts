@@ -86,6 +86,37 @@ export const markCandidatePromoted = mutation({
   },
 });
 
+export const createFromCandidate = mutation({
+  args: {
+    candidate_id: v.id("template_github_candidates"),
+    name: v.string(),
+    category,
+    origin_customer_id: v.id("customers"),
+    authored_by_fde_id: v.id("fdes"),
+    actor_fde_id: v.union(v.id("fdes"), v.null()),
+  },
+  handler: async (ctx, args) => {
+    await assertOperator(ctx);
+    const candidate = await ctx.db.get(args.candidate_id);
+    if (!candidate) throw new Error("candidate not found");
+    const slug = await uniqueSlug(ctx, "templates", slugify(args.name));
+    const now = nowIso();
+    const id = await ctx.db.insert("templates", {
+      name: args.name,
+      category: args.category,
+      origin_customer_id: args.origin_customer_id,
+      authored_by_fde_id: args.authored_by_fde_id,
+      github_repo: candidate.github_repo,
+      slug,
+      created_at: now,
+      updated_at: now,
+      updated_by_fde_id: args.actor_fde_id,
+    });
+    await ctx.db.patch(args.candidate_id, { promoted_to_template_id: id });
+    return { id, slug };
+  },
+});
+
 export const listCapabilities = query({
   args: { template_id: v.id("templates") },
   handler: async (ctx, { template_id }) =>

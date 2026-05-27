@@ -51,9 +51,7 @@ export function InsertCandidateDialog({
     actorSlug ? { slug: actorSlug } : "skip",
   ) as { _id: string } | null | undefined;
 
-  const create = useRunMutation(api.templates.create);
-  const setGithubRepo = useRunMutation(api.templates.setGithubRepo);
-  const markPromoted = useRunMutation(api.templates.markCandidatePromoted);
+  const createFromCandidate = useRunMutation(api.templates.createFromCandidate);
 
   const [name, setName] = useState(titleCase(candidate.name));
   const [category, setCategory] = useState<Category>("Ops");
@@ -68,11 +66,11 @@ export function InsertCandidateDialog({
       return;
     }
     setPending(true);
-    const created = (await create(
+    const created = (await createFromCandidate(
       {
+        candidate_id: candidate._id as never,
         name: name.trim(),
         category,
-        capabilities: [],
         origin_customer_id: originId as never,
         authored_by_fde_id: authorId as never,
         actor_fde_id: (actor?._id ?? null) as never,
@@ -80,22 +78,7 @@ export function InsertCandidateDialog({
       { success: "Template created" },
     )) as { id: string; slug: string } | undefined;
 
-    if (created?.id) {
-      await setGithubRepo(
-        {
-          id: created.id as never,
-          repo: candidate.github_repo as never,
-          actor_fde_id: (actor?._id ?? null) as never,
-        },
-        {},
-      );
-      await markPromoted(
-        {
-          id: candidate._id as never,
-          template_id: created.id as never,
-        },
-        {},
-      );
+    if (created?.slug) {
       onClose();
       router.push(`/templates/${created.slug}`);
     } else {

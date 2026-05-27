@@ -95,6 +95,7 @@ export function TemplateGithubCandidates() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search candidates…"
+            aria-label="Search GitHub candidates"
             className="w-full h-8 rounded-sm border border-line bg-page px-2.5 text-[13px] text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-ink mb-2"
           />
           <div className="max-h-[360px] overflow-y-auto border border-line rounded-sm">
