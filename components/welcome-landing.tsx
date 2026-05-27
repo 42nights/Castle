@@ -17,6 +17,7 @@ export function WelcomeLanding() {
       });
     } catch (err) {
       console.error("[welcome] github sign-in failed:", err);
+    } finally {
       setBusy(false);
     }
   };

@@ -12,8 +12,8 @@ export default async function Home() {
     const { fetchAuthQuery } = await import("@/lib/auth-server");
     const { api } = await import("@/convex/_generated/api");
     user = await fetchAuthQuery(api.auth.getCurrentUser, {});
-  } catch {
-    // No session or Convex unreachable — show welcome
+  } catch (err) {
+    console.error("[home] auth check failed:", err);
   }
 
   if (!user) return <WelcomeLanding />;
