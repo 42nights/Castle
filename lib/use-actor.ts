@@ -7,23 +7,31 @@ import { authClient } from "@/lib/auth-client";
  * Current operator identity. Used to be a localStorage picker; now
  * the actor is derived from the signed-in Better Auth user.
  *
- * Slug shape: the email's local-part, lowercased.
- *   `jerry.x0930@gmail.com` → `jerry.x0930`
- *   `ayaan@xiao.sh`         → `ayaan`
+ * Slug shape: the email's local-part, lowercased — UNLESS the email
+ * has a known mapping below, in which case the mapped slug wins.
+ *   `jerry.x0930@gmail.com` → `jerry`           (mapped)
+ *   `ayaan@xiao.sh`         → `ayaan`           (derived)
  *
- * Castle MCP on Railway is still pinned to a single actor via
- * `CASTLE_ACTOR_SLUG` (single-tenant Phase-A state). Anything the
- * chat agent writes via MCP — `agent_actions`, mutation `actor_fde_id`
- * lookups — uses that pinned slug. Until per-user threading lands
- * (Phase B), keep a fallback that matches the MCP's env so the chat
- * UI stays in sync when the session is loading OR the email's local
- * part doesn't match.
+ * The mapping exists because Castle MCP on Railway pins to a single
+ * actor (`CASTLE_ACTOR_SLUG=jerry`) and writes that slug onto
+ * `agent_actions` / audit fields, but the matching FDE row in Convex
+ * has slug `jerry`, not `jerry.x0930`. Without the mapping the chat
+ * UI's `agentActions.listOpen` query would filter by `jerry.x0930`
+ * and miss the row, so the inline connect button never renders.
+ * When per-user FDE binding lands, replace this with a Convex lookup.
  */
+const KNOWN_SLUG_MAP: Record<string, string> = {
+  "jerry.x0930@gmail.com": "jerry",
+};
+
 export function useActorSlug(): [string | null, (slug: string | null) => void] {
   const { data: session } = authClient.useSession();
   const email = (session as { user?: { email?: string } } | null)?.user?.email;
-  const slug = email
-    ? email.split("@")[0]?.toLowerCase().replace(/[^a-z0-9._-]/g, "-") ?? null
+  const normalized = email?.trim().toLowerCase() ?? null;
+  const slug = normalized
+    ? KNOWN_SLUG_MAP[normalized] ??
+      normalized.split("@")[0]?.replace(/[^a-z0-9._-]/g, "-") ??
+      null
     : null;
 
   const set = useCallback((_next: string | null) => {
