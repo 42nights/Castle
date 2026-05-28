@@ -5,17 +5,24 @@ import { isEmailAllowedAgainst } from "../../lib/auth-allowlist";
 export async function isOperator(
   ctx: QueryCtx | MutationCtx,
 ): Promise<string | null> {
-  const me = await authComponent.safeGetAuthUser(ctx);
-  let email = me?.email;
-  if (!email) {
-    // No Better Auth session — fall back to the raw Convex identity.
-    // This is how admin-auth callers (deploy key + actingAs identity)
-    // authenticate, e.g. castle-mcp running on Railway. The allowlist
-    // check still applies, so a deploy-key holder can only impersonate
-    // identities whose email is on the allowlist.
-    const identity = await ctx.auth.getUserIdentity();
-    email = identity?.email;
+  const identity = await ctx.auth.getUserIdentity();
+
+  // Admin-auth path (deploy key + actingAs identity) — e.g. castle-mcp
+  // running on Railway. These identities don't carry a Better Auth
+  // `sessionId`, and calling safeGetAuthUser with a missing sessionId
+  // makes Better Auth's adapter ArgumentValidationError on `value:
+  // undefined`. Short-circuit: trust the impersonated email after the
+  // same allowlist check the web-user path uses.
+  if (identity && !identity.sessionId && identity.email) {
+    const dynamic = (await ctx.db.query("email_allowlist").collect()).map(
+      (r) => r.pattern,
+    );
+    return isEmailAllowedAgainst(identity.email, dynamic) ? identity.email : null;
   }
+
+  // Normal Better Auth web-user path.
+  const me = await authComponent.safeGetAuthUser(ctx);
+  const email = me?.email;
   if (!email) return null;
   const dynamic = (await ctx.db.query("email_allowlist").collect()).map(
     (r) => r.pattern,
