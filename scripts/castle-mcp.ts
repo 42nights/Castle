@@ -48,6 +48,39 @@ if (!url) {
 const actorSlug = process.env.CASTLE_ACTOR_SLUG ?? null;
 const convex = new ConvexHttpClient(url);
 
+// Castle-mcp is server-side internal infrastructure (trusted on the
+// Railway private network) — but operator-gated Convex queries reject
+// it because there's no Better Auth session. Use admin auth (deploy
+// key) + actingAs identity: the deploy key proves castle-mcp is
+// authorized, and the actingAs email is what assertOperator sees via
+// `ctx.auth.getUserIdentity()`. The email must be on the allowlist —
+// the default `castle-mcp@42nights.dev` matches the rescue pattern.
+const convexDeployKey = process.env.CONVEX_DEPLOY_KEY;
+if (convexDeployKey) {
+  const serviceEmail =
+    process.env.CASTLE_SERVICE_EMAIL ?? "castle-mcp@42nights.dev";
+  // setAdminAuth is internal to ConvexHttpClient (not in the .d.ts) but
+  // ships in the runtime. Cast through unknown to bypass the type gate.
+  (
+    convex as unknown as {
+      setAdminAuth: (
+        key: string,
+        actingAs: {
+          subject: string;
+          issuer: string;
+          email: string;
+          name?: string;
+        },
+      ) => void;
+    }
+  ).setAdminAuth(convexDeployKey, {
+    subject: `service:castle-mcp:${actorSlug ?? "anon"}`,
+    issuer: "https://castle-mcp.internal",
+    email: serviceEmail,
+    name: "Castle MCP service",
+  });
+}
+
 let actorIdCache: string | null | undefined;
 async function actorId(): Promise<string | null> {
   if (actorIdCache !== undefined) return actorIdCache;
