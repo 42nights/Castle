@@ -85,23 +85,17 @@ export async function POST(req: Request) {
     );
   }
 
-  // Fetch repos via Composio. Action slug is the canonical Composio
-  // GitHub "list repos for org" tool; we fall back to direct REST if
-  // the SDK execute path errors.
+  // Fetch repos via Composio session.execute — the recommended v3
+  // pattern. Sessions resolve toolkit versions automatically, so we
+  // don't have to chase dated version strings.
   let repos: Repo[] = [];
   try {
-    const result = (await c.tools.execute(
-      "GITHUB_LIST_ORGANIZATION_REPOSITORIES",
-      {
-        userId: actor,
-        arguments: { org: ORG, per_page: 100 },
-        // Composio v3 refuses "latest" without an explicit opt-in; we
-        // don't pin a dated version because the API surface is stable
-        // and we don't want to chase upgrades. TODO(phase-B): switch
-        // to `composio.create(userId).tools()` and drop this flag.
-        dangerouslySkipVersionCheck: true,
-      },
-    )) as { successful?: boolean; data?: { items?: Repo[] } | Repo[] };
+    const session = await c.create(actor);
+    const result = (await session.execute("GITHUB_LIST_ORGANIZATION_REPOSITORIES", {
+      org: ORG,
+      per_page: 100,
+    })) as { data?: { items?: Repo[] } | Repo[]; error?: string | null };
+    if (result.error) throw new Error(result.error);
     const data = result?.data;
     repos = Array.isArray(data) ? data : (data?.items ?? []);
   } catch (err) {

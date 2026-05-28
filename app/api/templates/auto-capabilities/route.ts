@@ -76,16 +76,22 @@ export async function POST(req: Request) {
 
   const [owner, repo] = body.github_repo.split("/");
 
+  // One session per request — covers the three GitHub reads below
+  // (README + root tree + package.json). session.execute handles
+  // toolkit-version resolution automatically.
+  const session = await c.create(composioActor);
+
   // README is required — capabilities are derived from it.
   let readme: string;
   try {
-    const res = (await c.tools.execute("GITHUB_GET_A_REPOSITORY_README", {
-      userId: composioActor,
-      arguments: { owner, repo },
-      dangerouslySkipVersionCheck: true,
+    const res = (await session.execute("GITHUB_GET_A_REPOSITORY_README", {
+      owner,
+      repo,
     })) as unknown as {
       data?: { content?: string; encoding?: string };
+      error?: string | null;
     };
+    if (res.error) throw new Error(res.error);
     const content = res?.data?.content;
     if (!content) throw new Error("empty README content");
     readme = res.data?.encoding === "base64"
@@ -106,10 +112,10 @@ export async function POST(req: Request) {
   // structure (frameworks, scripts, config). Don't fail if it errors.
   let rootListing = "";
   try {
-    const res = (await c.tools.execute("GITHUB_GET_REPOSITORY_CONTENT", {
-      userId: composioActor,
-      arguments: { owner, repo, path: "" },
-      dangerouslySkipVersionCheck: true,
+    const res = (await session.execute("GITHUB_GET_REPOSITORY_CONTENT", {
+      owner,
+      repo,
+      path: "",
     })) as unknown as {
       data?:
         | Array<{ name: string; type: string }>
@@ -126,10 +132,10 @@ export async function POST(req: Request) {
   // Best-effort: package.json gives dependencies + scripts.
   let pkgJson = "";
   try {
-    const res = (await c.tools.execute("GITHUB_GET_REPOSITORY_CONTENT", {
-      userId: composioActor,
-      arguments: { owner, repo, path: "package.json" },
-      dangerouslySkipVersionCheck: true,
+    const res = (await session.execute("GITHUB_GET_REPOSITORY_CONTENT", {
+      owner,
+      repo,
+      path: "package.json",
     })) as unknown as {
       data?: { content?: string; encoding?: string };
     };
