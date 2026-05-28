@@ -95,6 +95,11 @@ export async function POST(req: Request) {
       {
         userId: actor,
         arguments: { org: ORG, per_page: 100 },
+        // Composio v3 refuses "latest" without an explicit opt-in; we
+        // don't pin a dated version because the API surface is stable
+        // and we don't want to chase upgrades. TODO(phase-B): switch
+        // to `composio.create(userId).tools()` and drop this flag.
+        dangerouslySkipVersionCheck: true,
       },
     )) as { successful?: boolean; data?: { items?: Repo[] } | Repo[] };
     const data = result?.data;
