@@ -1,7 +1,6 @@
-# Hermes config — templated at boot from CASTLE_MCP_URL and
-# (optionally) COMPOSIO_MCP_URL. The composio block is appended by
-# entrypoint.sh when COMPOSIO_MCP_URL is set, so the URL doesn't have
-# to live in the image. See docker/hermes/entrypoint.sh.
+# Hermes config — CASTLE_MCP_URL is templated in by entrypoint.sh.
+# Composio MCP isn't listed here; it's registered per-session in
+# serve.py via the v3 SDK (`composio.create(user_id).mcp.url`).
 model:
   default: claude-opus-4-7
   provider: anthropic

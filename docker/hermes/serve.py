@@ -21,8 +21,9 @@ import logging
 import os
 import sys
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Optional
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -45,6 +46,43 @@ HERMES_CWD = os.environ.get("HERMES_CWD") or "/tmp"
 # but the per-session enabled-toolsets list still has to mention each MCP
 # explicitly, which session/new does via mcpServers. So we pass both Castle
 # + Composio URLs here for every session we mint.
+
+# Composio sessions are minted via the SDK (`composio.create(user_id)`)
+# instead of a long-lived hosted UUID URL. Sessions are cached per
+# user_id — `composio.create()` is a network call and the URL is stable
+# for the session's lifetime. If `composio.use(session_id)` becomes
+# necessary for multi-turn, store sessionId here too.
+_composio_sessions: dict[str, Any] = {}
+_composio_client: Any = None
+
+
+def _composio_session_for(user_id: str) -> Any | None:
+    """Lazily mint or reuse a Composio session for `user_id`. Returns None
+    if the SDK isn't installed or `COMPOSIO_API_KEY` is unset — the agent
+    then just runs without Composio tools, same as the pre-SDK behavior."""
+    global _composio_client
+    cached = _composio_sessions.get(user_id)
+    if cached is not None:
+        return cached
+    if not os.environ.get("COMPOSIO_API_KEY"):
+        return None
+    try:
+        if _composio_client is None:
+            from composio import Composio  # type: ignore
+
+            _composio_client = Composio()
+        session = _composio_client.create(user_id=user_id)
+    except Exception as err:  # noqa: BLE001
+        logger.warning(
+            "composio.create(user_id=%r) failed; running without composio tools: %s",
+            user_id,
+            err,
+        )
+        return None
+    _composio_sessions[user_id] = session
+    return session
+
+
 def _mcp_servers() -> list[dict]:
     """ACP's NewSessionRequest expects HttpMcpServer entries with an explicit
     `type: "http"` discriminator — the bare {name, url, headers} shape fails
@@ -53,25 +91,28 @@ def _mcp_servers() -> list[dict]:
     castle = os.environ.get("CASTLE_MCP_URL")
     if castle:
         servers.append({"type": "http", "name": "castle", "url": castle, "headers": []})
-    composio = os.environ.get("COMPOSIO_MCP_URL")
-    if composio:
-        # Composio's hosted MCP endpoint refuses requests without an API
-        # key in the headers — 401 with "API key or valid JWT Bearer
-        # token is required in headers for security reasons". Without
-        # this header the connection fails at handshake and the agent
-        # has no Composio tools.
-        composio_headers: list[dict] = []
-        api_key = os.environ.get("COMPOSIO_API_KEY")
-        if api_key:
-            composio_headers.append({"name": "x-api-key", "value": api_key})
-        servers.append(
-            {
-                "type": "http",
-                "name": "composio",
-                "url": composio,
-                "headers": composio_headers,
-            }
-        )
+    user_id = os.environ.get("CASTLE_ACTOR_SLUG") or "jerry"
+    session = _composio_session_for(user_id)
+    if session is not None:
+        mcp = getattr(session, "mcp", None)
+        url = getattr(mcp, "url", None) if mcp is not None else None
+        raw_headers = getattr(mcp, "headers", None) if mcp is not None else None
+        if url:
+            # SDK returns headers as a dict; ACP expects a list of
+            # {name, value}. Normalize so both shapes work.
+            headers: list[dict] = []
+            if isinstance(raw_headers, dict):
+                headers = [{"name": k, "value": v} for k, v in raw_headers.items()]
+            elif isinstance(raw_headers, list):
+                headers = raw_headers
+            servers.append(
+                {
+                    "type": "http",
+                    "name": "composio",
+                    "url": url,
+                    "headers": headers,
+                }
+            )
     return servers
 
 
@@ -89,7 +130,7 @@ class HermesACP:
     """
 
     def __init__(self) -> None:
-        self._proc: Optional[asyncio.subprocess.Process] = None
+        self._proc: asyncio.subprocess.Process | None = None
         self._writer_lock = asyncio.Lock()
         self._spawn_lock = asyncio.Lock()
         self._next_id = 1
@@ -103,8 +144,8 @@ class HermesACP:
         # "Queued for the next turn. (1 queued)" instead of running
         # the new prompt fresh.
         self._session_prompt_locks: dict[str, asyncio.Lock] = {}
-        self._reader_task: Optional[asyncio.Task] = None
-        self._stderr_task: Optional[asyncio.Task] = None
+        self._reader_task: asyncio.Task | None = None
+        self._stderr_task: asyncio.Task | None = None
         self._initialized = False
 
     def _prompt_lock(self, session_id: str) -> asyncio.Lock:
@@ -382,7 +423,7 @@ class HermesACP:
         await lock.acquire()
         q: asyncio.Queue = asyncio.Queue()
         self._session_queues[session_id] = q
-        fut: Optional[asyncio.Future] = None
+        fut: asyncio.Future | None = None
         try:
             req_id = self._next_id
             self._next_id += 1
@@ -484,7 +525,7 @@ def _content_text(content: Any) -> str:
     return ""
 
 
-def _map_update(upd: dict) -> Optional[dict]:
+def _map_update(upd: dict) -> dict | None:
     """Translate an ACP session/update payload to Castle's NDJSON shape."""
     kind = upd.get("sessionUpdate")
     if kind == "agent_message_chunk":
@@ -860,7 +901,7 @@ async def _run_turn_to_convex(
             return False
 
     # ─── Main loop: run the ACP prompt, route updates to Convex ───
-    actual_session_id: Optional[str] = None
+    actual_session_id: str | None = None
     try:
         # session resolution mirrors _stream() at line ~511. New session
         # if hermes_session doesn't resolve.

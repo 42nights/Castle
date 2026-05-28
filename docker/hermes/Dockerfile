@@ -20,7 +20,13 @@ RUN curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/
 
 # FastAPI wrapper deps. httpx is for outbound calls to Convex from the
 # new long-running streaming path (agentTurns / agentMessageChunks).
-RUN pip install --no-cache-dir fastapi==0.115.0 "uvicorn[standard]==0.30.0" httpx==0.28.1
+# composio (v3 SDK) mints per-user MCP sessions in serve.py — replaces
+# the deprecated long-lived hosted-MCP UUID URL.
+RUN pip install --no-cache-dir \
+      fastapi==0.115.0 \
+      "uvicorn[standard]==0.30.0" \
+      httpx==0.28.1 \
+      composio
 
 # Templates live OUTSIDE the volume mount path so they survive when
 # Railway overlays /root/.hermes with the persistent volume. Entrypoint
