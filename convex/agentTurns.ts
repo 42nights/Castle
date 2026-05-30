@@ -433,16 +433,22 @@ export const sweepStuck = mutation({
     const now = Date.now();
     const STALE_QUEUED_MS = 60_000;
     const STALE_RUNNING_MS = 90_000;
-    const candidates: Array<Doc<"agent_turns">> = await ctx.db
-      .query("agent_turns")
-      .withIndex("by_status_heartbeat")
-      .filter((q) =>
-        q.or(
-          q.eq(q.field("status"), "queued"),
-          q.eq(q.field("status"), "running"),
-        ),
-      )
-      .collect();
+    // Query ONLY queued + running rows via the index — never a full
+    // table scan. `.withIndex(name)` with no `.eq` reads the entire
+    // table and filters after, which (at a 30s cron) burned hundreds of
+    // MB of read bandwidth. Most turns are complete/failed/canceled, so
+    // two narrow index lookups read almost nothing.
+    const [queued, running] = await Promise.all([
+      ctx.db
+        .query("agent_turns")
+        .withIndex("by_status_heartbeat", (q) => q.eq("status", "queued"))
+        .collect(),
+      ctx.db
+        .query("agent_turns")
+        .withIndex("by_status_heartbeat", (q) => q.eq("status", "running"))
+        .collect(),
+    ]);
+    const candidates: Array<Doc<"agent_turns">> = [...queued, ...running];
     const failed: Array<Id<"agent_turns">> = [];
     for (const t of candidates) {
       const heartbeatMs = new Date(t.last_heartbeat_at).getTime();
@@ -459,10 +465,17 @@ export const sweepStuck = mutation({
         error: reason,
         last_heartbeat_at: nowIsoStr,
       });
-      await ctx.db.patch(t.assistant_message_id, {
-        status: "failed",
-        updated_at: nowIsoStr,
-      });
+      // Guard: the assistant placeholder may have been deleted (cleared
+      // transcript). Patching a nonexistent id throws and rolls back the
+      // WHOLE mutation — which left the stuck turn queued/running and
+      // made this cron crash-loop every 30s forever. Skip if gone.
+      const assistant = await ctx.db.get(t.assistant_message_id);
+      if (assistant) {
+        await ctx.db.patch(t.assistant_message_id, {
+          status: "failed",
+          updated_at: nowIsoStr,
+        });
+      }
       failed.push(t._id);
     }
     return { failed };
