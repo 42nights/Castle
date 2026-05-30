@@ -37,7 +37,10 @@ export const overview = query({
       engagements,
       assignments,
       deployments,
-      templates,
+      // Archived templates hidden from the snapshot feeding the grid
+      // (operators included). They surface only in the collapsed,
+      // operator-only Archived section (templates.listArchived).
+      templates: templates.filter((t) => !t.archived_at),
       capabilities,
       extractions,
       reuses,
