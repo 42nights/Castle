@@ -8,7 +8,7 @@ const crons = cronJobs();
 // for the thresholds.
 crons.interval(
   "agent-turns-stuck-sweep",
-  { seconds: 30 },
+  { seconds: 60 },
   api.agentTurns.sweepStuck,
   {},
 );
