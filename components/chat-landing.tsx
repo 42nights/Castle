@@ -305,19 +305,26 @@ export function ChatLanding() {
             ) : (
               <div className="flex flex-col gap-4">
                 {(() => {
-                  // Render messages. Attach pending CTAs to the latest
-                  // assistant message — but only once a user message
-                  // *preceding* the action exists, so a stale CTA
-                  // doesn't dangle under an unrelated earlier turn.
+                  // Render messages, attaching pending connect CTAs to
+                  // the last assistant message.
                   //
-                  // We compare against the latest USER message, not the
-                  // latest assistant message: the assistant row's
-                  // `createdAt` is stamped at the start of its turn,
-                  // BEFORE the tool runs, so `assistant.createdAt` is
-                  // always < `action.createdAt` for the same turn.
-                  // Comparing assistant timestamps hid the CTA on the
-                  // very turn that proposed it (the "agent says
-                  // 'button is up' but nothing renders" bug).
+                  // Gating is PER-ACTION, not on a single global
+                  // timestamp. An action belongs to the current turn iff
+                  // it was created AFTER the last user message — the
+                  // user prompt always precedes the tool call, while the
+                  // assistant row is stamped at turn START (before the
+                  // tool runs), so we can't compare against the
+                  // assistant timestamp. Per-action filtering means a
+                  // stale undismissed action from an earlier turn can't
+                  // (a) drag a global `min` back and hide the whole
+                  // block, nor (b) dangle under an unrelated later turn.
+                  //
+                  // We also require the last assistant message to belong
+                  // to the current turn (created >= last user msg) so a
+                  // fresh action doesn't briefly attach to a PREVIOUS
+                  // turn's assistant while the new assistant row is
+                  // still empty/streaming (filtered out below) — the
+                  // "connect button pop" jump.
                   const visible = messages.filter(
                     (m) => !(m.streaming && m.text === ""),
                   );
@@ -335,20 +342,21 @@ export function ChatLanding() {
                   }
                   const lastUser =
                     lastUserIdx >= 0 ? visible[lastUserIdx] : null;
-                  const earliestAction = open.length
-                    ? open.reduce(
-                        (min, a) => (a.created_at < min ? a.created_at : min),
-                        open[0].created_at,
-                      )
-                    : null;
+                  const lastAssistant =
+                    lastAssistantIdx >= 0 ? visible[lastAssistantIdx] : null;
+                  const lastUserAt = lastUser?.createdAt ?? null;
+                  const assistantIsCurrentTurn =
+                    lastAssistant !== null &&
+                    lastUserAt !== null &&
+                    lastAssistant.createdAt >= lastUserAt;
+                  const freshActions = lastUserAt
+                    ? open.filter((a) => a.created_at > lastUserAt)
+                    : [];
                   const showCtas =
-                    lastAssistantIdx >= 0 &&
-                    earliestAction !== null &&
-                    lastUser !== null &&
-                    lastUser.createdAt < earliestAction;
+                    assistantIsCurrentTurn && freshActions.length > 0;
                   return visible.map((m, i) => {
                     const attached =
-                      showCtas && i === lastAssistantIdx ? open : [];
+                      showCtas && i === lastAssistantIdx ? freshActions : [];
                     return (
                       <Turn
                         key={m.id}
