@@ -84,6 +84,7 @@ type ConvexTemplate = ConvexDoc<{
   github_repo?: string;
   live_url?: string;
   tags?: string[];
+  archived_at?: string;
 }>;
 
 type ConvexCapability = ConvexDoc<{
