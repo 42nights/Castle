@@ -306,27 +306,35 @@ export function ChatLanding() {
               <div className="flex flex-col gap-4">
                 {(() => {
                   // Render messages. Attach pending CTAs to the latest
-                  // assistant message ONLY IF that message was created
-                  // *after* the agent_action — otherwise the CTA would
-                  // dangle below the previous assistant message until
-                  // the new streaming response renders, then jump down
-                  // (the "connect button pop" bug). Holding the CTA
-                  // back until the new assistant turn exists means the
-                  // button lands directly under the message that
-                  // proposed it.
+                  // assistant message — but only once a user message
+                  // *preceding* the action exists, so a stale CTA
+                  // doesn't dangle under an unrelated earlier turn.
+                  //
+                  // We compare against the latest USER message, not the
+                  // latest assistant message: the assistant row's
+                  // `createdAt` is stamped at the start of its turn,
+                  // BEFORE the tool runs, so `assistant.createdAt` is
+                  // always < `action.createdAt` for the same turn.
+                  // Comparing assistant timestamps hid the CTA on the
+                  // very turn that proposed it (the "agent says
+                  // 'button is up' but nothing renders" bug).
                   const visible = messages.filter(
                     (m) => !(m.streaming && m.text === ""),
                   );
                   const open = proposed ?? [];
                   let lastAssistantIdx = -1;
+                  let lastUserIdx = -1;
                   for (let i = visible.length - 1; i >= 0; i--) {
-                    if (visible[i].role === "assistant") {
+                    if (lastAssistantIdx < 0 && visible[i].role === "assistant") {
                       lastAssistantIdx = i;
-                      break;
                     }
+                    if (lastUserIdx < 0 && visible[i].role === "user") {
+                      lastUserIdx = i;
+                    }
+                    if (lastAssistantIdx >= 0 && lastUserIdx >= 0) break;
                   }
-                  const last =
-                    lastAssistantIdx >= 0 ? visible[lastAssistantIdx] : null;
+                  const lastUser =
+                    lastUserIdx >= 0 ? visible[lastUserIdx] : null;
                   const earliestAction = open.length
                     ? open.reduce(
                         (min, a) => (a.created_at < min ? a.created_at : min),
@@ -334,9 +342,10 @@ export function ChatLanding() {
                       )
                     : null;
                   const showCtas =
-                    last !== null &&
+                    lastAssistantIdx >= 0 &&
                     earliestAction !== null &&
-                    last.createdAt >= earliestAction;
+                    lastUser !== null &&
+                    lastUser.createdAt < earliestAction;
                   return visible.map((m, i) => {
                     const attached =
                       showCtas && i === lastAssistantIdx ? open : [];
