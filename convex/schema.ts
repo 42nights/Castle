@@ -144,6 +144,11 @@ export default defineSchema({
      *  Independent of `category` (single enum) — surfaced on the grid
      *  card and detail header, autocomplete from union across templates. */
     tags: v.optional(v.array(v.string())),
+    /** Soft-delete. ISO timestamp when archived; absent = active.
+     *  Archived templates are hidden from ALL list views (operators
+     *  included) and from guest direct access; operators reach them via
+     *  the archived view (templates.listArchived) to restore. */
+    archived_at: v.optional(v.string()),
     created_at: v.string(),
     updated_at: v.string(),
     updated_by_fde_id: v.union(v.id("fdes"), v.null()),

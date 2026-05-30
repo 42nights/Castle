@@ -54,6 +54,8 @@ export type Template = {
   live_url?: string;
   /** Free-form discovery tags ("outreach", "github", "stargazer"). */
   tags: string[];
+  /** Soft-delete timestamp; present = archived (hidden from the grid). */
+  archived_at?: string;
 };
 
 export type CustomerStatus = "active" | "churned" | "paused";

@@ -223,6 +223,7 @@ export function adaptOverview(snapshot: ConvexOverview): AdaptedOverview {
       github_repo: t.github_repo,
       live_url: t.live_url,
       tags: t.tags ?? [],
+      archived_at: t.archived_at,
     })),
     deployments: snapshot.deployments.map((d) => ({
       id: d._id,

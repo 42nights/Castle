@@ -9,6 +9,7 @@ import { GithubRepoInput } from "@/components/controls/github-repo-input";
 import { InlineName } from "@/components/controls/inline-name";
 import { LiveUrlInput } from "@/components/controls/live-url-input";
 import { TemplateTagsInput } from "@/components/controls/template-tags-input";
+import { TemplateActionsMenu } from "./actions-menu";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { loadTemplateData, trySignedIn } from "@/lib/load-overview";
 import { RoleProvider } from "@/lib/role-context";
@@ -51,12 +52,19 @@ export default async function TemplateDetail({
           </Link>
         }
         title={
-          <InlineName
-            kind="template"
-            slug={tpl.id}
-            current={tpl.name}
-            className="t-h1 text-ink"
-          />
+          <span className="inline-flex items-center gap-2">
+            <InlineName
+              kind="template"
+              slug={tpl.id}
+              current={tpl.name}
+              className="t-h1 text-ink"
+            />
+            {tpl.archived_at && (
+              <span className="t-caption rounded-sm border border-line px-1.5 py-0.5 text-ink-3">
+                Archived
+              </span>
+            )}
+          </span>
         }
         description={
           <span className="inline-flex items-center gap-1.5 flex-wrap text-[12.5px] text-ink-2">
@@ -87,6 +95,7 @@ export default async function TemplateDetail({
               templateSlug={tpl.id}
               current={tpl.category}
             />
+            <TemplateActionsMenu slug={tpl.id} />
           </div>
         }
       />

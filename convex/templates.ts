@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { assertOperator, assertOperatorRead } from "./lib/assertOperator";
+import {
+  assertOperator,
+  assertOperatorRead,
+  isOperator,
+} from "./lib/assertOperator";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
 
 const category = v.union(
@@ -13,7 +17,23 @@ const category = v.union(
 
 export const list = query({
   args: {},
-  handler: async (ctx) => ctx.db.query("templates").collect(),
+  handler: async (ctx) => {
+    // Archived templates are hidden from the main list for EVERYONE,
+    // operators included. Operators restore them from the dedicated
+    // archived view (listArchived).
+    const all = await ctx.db.query("templates").collect();
+    return all.filter((t) => !t.archived_at);
+  },
+});
+
+/** Operator-only: the archived templates, for the restore view. */
+export const listArchived = query({
+  args: {},
+  handler: async (ctx) => {
+    await assertOperatorRead(ctx);
+    const all = await ctx.db.query("templates").collect();
+    return all.filter((t) => !!t.archived_at);
+  },
 });
 
 // ────────────────────── GitHub candidates ──────────────────────────
@@ -130,11 +150,19 @@ export const listCapabilities = query({
 
 export const getBySlug = query({
   args: { slug: v.string() },
-  handler: async (ctx, { slug }) =>
-    ctx.db
+  handler: async (ctx, { slug }) => {
+    const tpl = await ctx.db
       .query("templates")
       .withIndex("by_slug", (q) => q.eq("slug", slug))
-      .first(),
+      .first();
+    if (!tpl) return null;
+    // Hide archived templates from direct access for non-operators.
+    if (tpl.archived_at) {
+      const op = await isOperator(ctx);
+      if (!op) return null;
+    }
+    return tpl;
+  },
 });
 
 export const create = mutation({
@@ -458,6 +486,41 @@ export const removeCapability = mutation({
   },
 });
 
+/** Soft-delete: hide from guests, keep restorable. This is what "delete"
+ *  means in Castle — operators and the agent should archive, not purge. */
+export const archive = mutation({
+  args: {
+    id: v.id("templates"),
+    actor_fde_id: v.union(v.id("fdes"), v.null()),
+  },
+  handler: async (ctx, { id, actor_fde_id }) => {
+    await assertOperator(ctx);
+    await ctx.db.patch(id, {
+      archived_at: nowIso(),
+      updated_at: nowIso(),
+      updated_by_fde_id: actor_fde_id,
+    });
+  },
+});
+
+/** Restore an archived template back to active. */
+export const unarchive = mutation({
+  args: {
+    id: v.id("templates"),
+    actor_fde_id: v.union(v.id("fdes"), v.null()),
+  },
+  handler: async (ctx, { id, actor_fde_id }) => {
+    await assertOperator(ctx);
+    await ctx.db.patch(id, {
+      archived_at: undefined,
+      updated_at: nowIso(),
+      updated_by_fde_id: actor_fde_id,
+    });
+  },
+});
+
+/** Hard delete — irreversible, removes the row + capabilities. Reserved
+ *  for explicit "permanently delete"/"purge". Default to `archive`. */
 export const remove = mutation({
   args: { id: v.id("templates") },
   handler: async (ctx, { id }) => {

@@ -1,6 +1,7 @@
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { NewTemplateButton } from "@/components/ctas";
 import { TemplateGithubCandidates } from "@/components/template-github-candidates";
+import { ArchivedTemplates } from "@/components/archived-templates";
 import { loadTemplateData, trySignedIn } from "@/lib/load-overview";
 import { RoleProvider } from "@/lib/role-context";
 import { templateUsage } from "@/lib/derive";
@@ -23,6 +24,7 @@ export default async function TemplatesPage() {
         />
         {isOperator && <TemplateGithubCandidates />}
         <TemplateGrid usage={usage} customers={customers} fdes={fdes} />
+        {isOperator && <ArchivedTemplates />}
       </PageShell>
     </RoleProvider>
   );

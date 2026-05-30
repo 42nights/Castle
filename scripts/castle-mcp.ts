@@ -680,7 +680,54 @@ server.registerTool(
   "template_delete",
   {
     description:
-      "Delete a single template by slug. Cascades to template capabilities.",
+      "Archive a template by slug (soft-delete). In Castle, 'delete' means " +
+      "ARCHIVE: the template is hidden from the library for everyone but " +
+      "stays restorable by operators. Use this for any 'delete this template' " +
+      "request. Only use template_purge if the user explicitly says " +
+      "permanently/hard delete.",
+    inputSchema: { template_slug: z.string() },
+  },
+  async ({ template_slug }) => {
+    const tpl = (await convex.query(api.templates.getBySlug, {
+      slug: template_slug,
+    })) as { _id: string } | null;
+    if (!tpl) return text({ error: "template not found" });
+    const id = await actorId();
+    await convex.mutation(api.templates.archive, {
+      id: tpl._id as never,
+      actor_fde_id: id as never,
+    });
+    return text({ ok: true, archived: template_slug });
+  },
+);
+
+server.registerTool(
+  "template_unarchive",
+  {
+    description: "Restore a previously archived template by slug.",
+    inputSchema: { template_slug: z.string() },
+  },
+  async ({ template_slug }) => {
+    const tpl = (await convex.query(api.templates.getBySlug, {
+      slug: template_slug,
+    })) as { _id: string } | null;
+    if (!tpl) return text({ error: "template not found" });
+    const id = await actorId();
+    await convex.mutation(api.templates.unarchive, {
+      id: tpl._id as never,
+      actor_fde_id: id as never,
+    });
+    return text({ ok: true, unarchived: template_slug });
+  },
+);
+
+server.registerTool(
+  "template_purge",
+  {
+    description:
+      "PERMANENTLY delete a template and its capabilities — irreversible. " +
+      "Only use when the user explicitly asks to permanently/hard delete or " +
+      "purge. Default to template_delete (archive) otherwise.",
     inputSchema: { template_slug: z.string() },
   },
   async ({ template_slug }) => {
@@ -689,7 +736,7 @@ server.registerTool(
     })) as { _id: string } | null;
     if (!tpl) return text({ error: "template not found" });
     await convex.mutation(api.templates.remove, { id: tpl._id as never });
-    return text({ ok: true, deleted: template_slug });
+    return text({ ok: true, purged: template_slug });
   },
 );
 
