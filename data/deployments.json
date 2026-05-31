@@ -1,1 +1,26 @@
-[]
+[
+  { "id": "tessellate-otis", "customer_id": "tessellate", "engagement_id": "tessellate-eng", "template_id": "otis", "agent_name": "Tessellate Labs Otis", "deployed_at": "2026-04-12", "hours_replaced_per_week": 12, "customization_pct": 10 },
+  { "id": "northwind-otis", "customer_id": "northwind", "engagement_id": "northwind-eng", "template_id": "otis", "agent_name": "Northwind Logistics Otis", "deployed_at": "2026-04-20", "hours_replaced_per_week": 9, "customization_pct": 15 },
+  { "id": "arcadia-otis", "customer_id": "arcadia", "engagement_id": "arcadia-eng", "template_id": "otis", "agent_name": "Arcadia Robotics Otis", "deployed_at": "2026-05-04", "hours_replaced_per_week": 8, "customization_pct": 20 },
+
+  { "id": "tessellate-rook", "customer_id": "tessellate", "engagement_id": "tessellate-eng", "template_id": "rook", "agent_name": "Tessellate Labs Rook", "deployed_at": "2026-04-22", "hours_replaced_per_week": 6, "customization_pct": 10 },
+  { "id": "meridian-rook", "customer_id": "meridian", "engagement_id": "meridian-eng", "template_id": "rook", "agent_name": "Meridian Health Rook", "deployed_at": "2026-05-01", "hours_replaced_per_week": 7, "customization_pct": 25 },
+  { "id": "brightwell-rook", "customer_id": "brightwell", "engagement_id": "brightwell-eng", "template_id": "rook", "agent_name": "Brightwell Financial Rook", "deployed_at": "2026-05-06", "hours_replaced_per_week": 6, "customization_pct": 15 },
+
+  { "id": "tessellate-wiki", "customer_id": "tessellate", "engagement_id": "tessellate-eng", "template_id": "wiki", "agent_name": "Tessellate Labs Wiki", "deployed_at": "2026-05-16", "hours_replaced_per_week": 5, "customization_pct": 10 },
+  { "id": "arcadia-wiki", "customer_id": "arcadia", "engagement_id": "arcadia-eng", "template_id": "wiki", "agent_name": "Arcadia Robotics Wiki", "deployed_at": "2026-05-22", "hours_replaced_per_week": 4, "customization_pct": 15 },
+
+  { "id": "brightwell-dataroom", "customer_id": "brightwell", "engagement_id": "brightwell-eng", "template_id": "dataroom", "agent_name": "Brightwell Financial Dataroom", "deployed_at": "2026-03-30", "hours_replaced_per_week": 10, "customization_pct": 5 },
+  { "id": "meridian-dataroom", "customer_id": "meridian", "engagement_id": "meridian-eng", "template_id": "dataroom", "agent_name": "Meridian Health Dataroom", "deployed_at": "2026-04-15", "hours_replaced_per_week": 9, "customization_pct": 30 },
+  { "id": "northwind-dataroom", "customer_id": "northwind", "engagement_id": "northwind-eng", "template_id": "dataroom", "agent_name": "Northwind Logistics Dataroom", "deployed_at": "2026-04-28", "hours_replaced_per_week": 7, "customization_pct": 10 },
+  { "id": "lumen-dataroom", "customer_id": "lumen", "engagement_id": "lumen-eng", "template_id": "dataroom", "agent_name": "Lumen Education Dataroom", "deployed_at": "2026-05-12", "hours_replaced_per_week": 6, "customization_pct": 20 },
+
+  { "id": "42nights-web-brain", "customer_id": "42nights", "engagement_id": "42nights-eng", "template_id": "web-brain", "agent_name": "42nights Web Brain", "deployed_at": "2026-05-12", "hours_replaced_per_week": 3, "customization_pct": 5 },
+  { "id": "brightwell-web-brain", "customer_id": "brightwell", "engagement_id": "brightwell-eng", "template_id": "web-brain", "agent_name": "Brightwell Financial Web Brain", "deployed_at": "2026-05-20", "hours_replaced_per_week": 4, "customization_pct": 15 },
+
+  { "id": "cendol-company-number", "customer_id": "cendol", "engagement_id": "cendol-eng", "template_id": "company-number", "agent_name": "Cendol Commerce Company Number", "deployed_at": "2026-04-04", "hours_replaced_per_week": 14, "customization_pct": 10 },
+  { "id": "northwind-company-number", "customer_id": "northwind", "engagement_id": "northwind-eng", "template_id": "company-number", "agent_name": "Northwind Logistics Company Number", "deployed_at": "2026-04-19", "hours_replaced_per_week": 11, "customization_pct": 15 },
+  { "id": "arcadia-company-number", "customer_id": "arcadia", "engagement_id": "arcadia-eng", "template_id": "company-number", "agent_name": "Arcadia Robotics Company Number", "deployed_at": "2026-05-01", "hours_replaced_per_week": 10, "customization_pct": 20 },
+  { "id": "lumen-company-number", "customer_id": "lumen", "engagement_id": "lumen-eng", "template_id": "company-number", "agent_name": "Lumen Education Company Number", "deployed_at": "2026-05-15", "hours_replaced_per_week": 9, "customization_pct": 25 },
+  { "id": "meridian-company-number", "customer_id": "meridian", "engagement_id": "meridian-eng", "template_id": "company-number", "agent_name": "Meridian Health Company Number", "deployed_at": "2026-05-25", "hours_replaced_per_week": 8, "customization_pct": 30 }
+]

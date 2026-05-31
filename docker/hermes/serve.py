@@ -35,6 +35,97 @@ logging.basicConfig(
     stream=sys.stderr,
 )
 
+# Friendly display names for tool_start events.  Keys are raw MCP tool names
+# (with or without "castle." / "castle_" prefix).  The UI shows these in the
+# sidebar while the tool is running; tool_result carries the raw machine name.
+FRIENDLY_TOOL_NAMES: dict[str, str] = {
+    "list_customers": "Listed customers",
+    "list_attention": "Read attention queue",
+    "engagement_mark_touched": "Marked engagement touched",
+    "engagement_move_phase": "Moved engagement phase",
+    "engagement_create": "Created engagement",
+    "engagement_update": "Updated engagement",
+    "customer_get": "Fetched customer",
+    "customer_update": "Updated customer",
+    "note_create": "Created note",
+    "note_list": "Listed notes",
+    "task_create": "Created task",
+    "task_list": "Listed tasks",
+    "task_complete": "Completed task",
+    "send_email": "Sent email",
+    "search": "Searched",
+}
+
+
+def _raw_tool_name(upd: dict[str, Any]) -> str:
+    """Return the raw MCP tool name from a tool_call or tool_call_update ACP update.
+
+    ACP exposes the machine name via `toolName`, `name`, or `kind`, sometimes
+    prefixed with "castle." or "castle_".  We strip the prefix for consistency.
+    """
+    raw = upd.get("toolName") or upd.get("name") or upd.get("kind") or "tool"
+    for prefix in ("castle.", "castle_"):
+        if raw.startswith(prefix):
+            raw = raw[len(prefix):]
+            break
+    return raw
+
+
+def _friendly_name(raw: str) -> str:
+    """Return the human-readable display name, falling back to the raw name."""
+    return FRIENDLY_TOOL_NAMES.get(raw, raw)
+
+
+def _extract_tool_result(upd: dict[str, Any]) -> Any | None:
+    """Pull the best JSON-serializable payload from a completed tool_call_update.
+
+    ACP delivers results in `content`, which is either:
+      - a list of content blocks: [{"type": "content", "content": "<text>"}]
+      - a raw dict / list directly
+
+    Returns a parsed object if a JSON string is found, the raw object if it is
+    already structured, or None if there is nothing useful.
+    """
+    content = upd.get("content")
+    if content is None:
+        return None
+
+    # content is a list of blocks
+    if isinstance(content, list):
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            inner = block.get("content") or block.get("text") or block.get("value")
+            if isinstance(inner, str):
+                try:
+                    return json.loads(inner)
+                except (json.JSONDecodeError, ValueError):
+                    # Return the raw text as a single-key object so the UI still
+                    # gets something structured rather than nothing.
+                    if inner.strip():
+                        return {"text": inner}
+            elif inner is not None:
+                return inner
+            # Some blocks carry the payload at the top level under "data"
+            data = block.get("data")
+            if data is not None:
+                return data
+        return None
+
+    # content is already a dict or list — return directly
+    if isinstance(content, (dict, list)):
+        return content
+
+    # Scalar string at top level
+    if isinstance(content, str):
+        try:
+            return json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            if content.strip():
+                return {"text": content}
+
+    return None
+
 BEARER = os.environ.get("CASTLE_HERMES_TOKEN") or None
 PROTOCOL_VERSION = int(os.environ.get("ACP_PROTOCOL_VERSION", "1"))
 HERMES_CWD = os.environ.get("HERMES_CWD") or "/tmp"
@@ -804,6 +895,9 @@ async def _run_turn_to_convex(
     CANCEL_POLL_INTERVAL = 2.0
     last_cancel_poll = time.time()
     assistant_text_parts: list[str] = []  # accumulated for final snapshot
+    # Maps tool_call_id → raw machine tool name so tool_call_update can
+    # reference the same name without re-parsing.
+    tool_name_by_id: dict[str, str] = {}
 
     async def flush_text() -> None:
         nonlocal text_buffer, text_seq, text_bytes_pending, last_flush
@@ -1028,19 +1122,34 @@ async def _run_turn_to_convex(
                         if delta:
                             thought_buffer.append(delta)
                     elif kind == "tool_call":
+                        call_id = upd.get("toolCallId")
+                        raw_name = _raw_tool_name(upd)
+                        if call_id:
+                            tool_name_by_id[call_id] = raw_name
                         await append_tool_event(
                             "tool_start",
-                            tool_call_id=upd.get("toolCallId"),
-                            name=upd.get("title") or upd.get("kind") or "tool",
+                            tool_call_id=call_id,
+                            name=_friendly_name(raw_name),
                         )
                     elif kind == "tool_call_update":
                         status_ = upd.get("status")
                         if status_ in ("completed", "failed"):
+                            call_id = upd.get("toolCallId")
                             await append_tool_event(
                                 "tool_end",
-                                tool_call_id=upd.get("toolCallId"),
+                                tool_call_id=call_id,
                                 ok=(status_ == "completed"),
                             )
+                            if status_ == "completed":
+                                payload = _extract_tool_result(upd)
+                                if payload is not None:
+                                    raw_name = tool_name_by_id.get(call_id or "", "") or _raw_tool_name(upd)
+                                    await append_tool_event(
+                                        "tool_result",
+                                        tool_call_id=call_id,
+                                        name=raw_name,
+                                        result_json=json.dumps(payload)[:200000],
+                                    )
                 else:
                     drain_task.cancel()
 

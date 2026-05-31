@@ -26,6 +26,11 @@ export type AttentionItem = {
 
 const STALL_THRESHOLD_DAYS = 7;
 const LONG_DISCOVERY_DAYS = 21;
+const UNDERUTILIZED_THRESHOLD = 0.4;
+const UNDERUTILIZED_BENCH_DAYS = 14;
+const EXPIRING_ENGAGEMENT_DAYS = 7;
+const NO_RECENT_DEPLOYMENT_DAYS = 30;
+const UNANCHORED_TEMPLATE_DAYS = 60;
 
 const sevRank: Record<AttentionSeverity, number> = {
   critical: 0,
@@ -53,6 +58,9 @@ export const list = query({
     const engagements = await ctx.db.query("engagements").collect();
     const fdes = await ctx.db.query("fdes").collect();
     const assignments = await ctx.db.query("engagement_assignments").collect();
+    const deployments = await ctx.db.query("deployments").collect();
+    const templates = await ctx.db.query("templates").collect();
+    const extractions = await ctx.db.query("pattern_extractions").collect();
 
     const cById = new Map(customers.map((c) => [c._id, c]));
     const fById = new Map(fdes.map((f) => [f._id, f]));
@@ -177,6 +185,132 @@ export const list = query({
         });
       }
     }
+
+    // P31: Underutilized FDEs (non-founder, util <0.4, on bench >14d)
+    for (const f of fdes) {
+      if (f.is_founder) continue;
+      const myActive = assignments
+        .filter((a) => a.fde_id === f._id && a.removed_at === null)
+        .map((a) => engagements.find((e) => e._id === a.engagement_id))
+        .filter(Boolean) as Doc<"engagements">[];
+      const liveActive = myActive.filter((e) => {
+        const customer = cById.get(e.customer_id);
+        return !!customer && customer.status !== "churned";
+      });
+      const committed = liveActive.reduce((sum, e) => {
+        const team = assignments.filter(
+          (a) => a.engagement_id === e._id && a.removed_at === null,
+        ).length;
+        return sum + e.weekly_hours / Math.max(1, team);
+      }, 0);
+      const util = committed / Math.max(1, f.capacity_hours_per_week);
+      const benchDays = daysSince(f.start_date, nowMs);
+      if (util < UNDERUTILIZED_THRESHOLD && benchDays >= UNDERUTILIZED_BENCH_DAYS) {
+        items.push({
+          item_key: `underutilized-fde:${f.slug}`,
+          severity: "medium",
+          title: `${f.name} underutilized (${Math.round(util * 100)}%)`,
+          subtitle: `${f.name} is at ${Math.round(util * 100)}% — give them work or reassign capacity.`,
+          owner_fde_id: f._id,
+          related_customer_id: null,
+          related_engagement_id: null,
+          href: `/fdes/${f.slug}`,
+          source: "derived",
+        });
+      }
+    }
+
+    // P31: Expiring engagements (expected_end_date within 7d AND progress<90%)
+    for (const e of engagements) {
+      const customer = cById.get(e.customer_id);
+      if (!customer || customer.status === "churned") continue;
+      const ownerAssignment = assignments.find(
+        (a) => a.engagement_id === e._id && a.removed_at === null,
+      );
+      const owner = ownerAssignment ? fById.get(ownerAssignment.fde_id) : null;
+      const endMs = Date.parse(
+        e.expected_end_date.length === 10
+          ? `${e.expected_end_date}T00:00:00Z`
+          : e.expected_end_date,
+      );
+      const daysToEnd = Math.ceil((endMs - nowMs) / 86400000);
+      if (
+        daysToEnd >= 0 &&
+        daysToEnd <= EXPIRING_ENGAGEMENT_DAYS &&
+        e.progress_pct < 90
+      ) {
+        items.push({
+          item_key: `expiring-engagement:${e.slug}`,
+          severity: "high",
+          title: `${customer.name} engagement expires in ${daysToEnd}d at ${e.progress_pct}%`,
+          subtitle: `Expected to deliver in ${daysToEnd} days at ${e.progress_pct}% — push to close or extend the deadline.`,
+          owner_fde_id: owner?._id ?? null,
+          related_customer_id: customer._id,
+          related_engagement_id: e._id,
+          href: `/engagements/${e.slug}`,
+          source: "derived",
+        });
+      }
+    }
+
+    // P31: No recent deployment (active customer, no deployment in 30d)
+    for (const c of customers) {
+      if (c.status !== "active") continue;
+      const customerDeployments = deployments.filter(
+        (d) => d.customer_id === c._id,
+      );
+      if (customerDeployments.length === 0) continue; // no deployments at all = different signal
+      const latestDeployedAt = customerDeployments
+        .map((d) => d.deployed_at)
+        .sort()
+        .at(-1);
+      if (!latestDeployedAt) continue;
+      const daysSinceDeployment = daysSince(latestDeployedAt, nowMs);
+      if (daysSinceDeployment >= NO_RECENT_DEPLOYMENT_DAYS) {
+        items.push({
+          item_key: `no-recent-deployment:${c.slug}`,
+          severity: "medium",
+          title: `${c.name} — no deployment in ${daysSinceDeployment}d`,
+          subtitle: `Last deployment was ${daysSinceDeployment} days ago. Ship something or check engagement health.`,
+          owner_fde_id: null,
+          related_customer_id: c._id,
+          related_engagement_id: null,
+          href: `/customers/${c.slug}`,
+          source: "derived",
+        });
+      }
+    }
+
+    // P31: Unanchored templates (>60d old, 0 reuses, 0 deployments)
+    for (const tpl of templates) {
+      if (tpl.archived_at) continue;
+      const ageInDays = daysSince(tpl.created_at, nowMs);
+      if (ageInDays < UNANCHORED_TEMPLATE_DAYS) continue;
+      const reuses = extractions.filter(
+        (ex) => ex.extracted_into_template_id === tpl._id,
+      ).length;
+      const deploymentCount = deployments.filter(
+        (d) => d.template_id === tpl._id,
+      ).length;
+      if (reuses === 0 && deploymentCount === 0) {
+        items.push({
+          item_key: `unanchored-template:${tpl.slug}`,
+          severity: "medium",
+          title: `"${tpl.name}" never reused (${ageInDays}d old)`,
+          subtitle: `Pattern hasn't replicated — kill, fold, or pitch it to a new customer.`,
+          owner_fde_id: null,
+          related_customer_id: null,
+          related_engagement_id: null,
+          href: `/templates/${tpl.slug}`,
+          source: "derived",
+        });
+      }
+    }
+
+    // Note: `pending-connect` rule (INITIATED Composio connections) is
+    // omitted — it requires a live Composio API call which would make
+    // the query non-deterministic and slow. This rule can be implemented
+    // separately as a scheduled job that writes manual attention items.
 
     // Apply dismissals
     const dismissals = await ctx.db.query("attention_dismissals").collect();

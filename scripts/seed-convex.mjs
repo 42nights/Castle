@@ -11,13 +11,17 @@
 // to it so we don't have to surface a server-side admin key here.
 
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const data = join(root, "data");
 const read = (f) => JSON.parse(readFileSync(join(data, f), "utf8"));
+const readOptional = (f) => {
+  const p = join(data, f);
+  return existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : [];
+};
 
 const payload = {
   fdes: read("fdes.json"),
@@ -27,6 +31,7 @@ const payload = {
   deployments: read("deployments.json"),
   extractions: read("pattern_extractions.json"),
   founderHours: read("founder_hours.json"),
+  manualAttention: readOptional("manualAttention.json"),
 };
 
 const args = { payloadJson: JSON.stringify(payload) };

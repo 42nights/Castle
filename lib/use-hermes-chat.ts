@@ -35,6 +35,8 @@ export type ToolActivity = {
   status: "running" | "done" | "error";
   startedAt: number;
   durationMs?: number;
+  /** Parsed result from a tool_result event, if present. */
+  result?: unknown;
 };
 
 type HistoryRow = Doc<"agent_messages">;
@@ -118,6 +120,17 @@ export function useHermesChat({
             status: ok ? "done" : "error",
             durationMs: new Date(ev.created_at).getTime() - prev.startedAt,
           });
+        }
+      } else if (ev.kind === "tool_result") {
+        const prev = byId.get(ev.tool_call_id);
+        if (prev && ev.result_json) {
+          let parsed: unknown = undefined;
+          try {
+            parsed = JSON.parse(ev.result_json);
+          } catch {
+            // parse failure — leave result undefined
+          }
+          byId.set(ev.tool_call_id, { ...prev, result: parsed });
         }
       }
     }

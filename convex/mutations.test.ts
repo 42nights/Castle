@@ -15,7 +15,11 @@ const modules = (
 ).glob("./**/*.{ts,js}");
 
 function setup() {
-  return convexTest(schema, modules);
+  // Operator-gated mutations call assertOperator → isOperator, which reads
+  // ctx.auth.getUserIdentity(). Bind a rescue-allowlisted identity (the
+  // admin-auth path: email present, no sessionId) so the harness clears the
+  // operator gate. "*@42nights.dev" is a hardcoded RESCUE_PATTERN.
+  return convexTest(schema, modules).withIdentity({ email: "ci@42nights.dev" });
 }
 
 async function seed(t: ReturnType<typeof setup>) {

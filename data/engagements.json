@@ -1,1 +1,106 @@
-[]
+[
+  {
+    "id": "tessellate-eng",
+    "customer_id": "tessellate",
+    "start_date": "2025-11-10",
+    "expected_end_date": "2026-08-10",
+    "last_update_at": "2026-05-29",
+    "phase": "support",
+    "progress_pct": 100,
+    "weekly_hours": 5,
+    "health": "green",
+    "notes": "First external customer. Running Otis, Rook, and Wiki against their monorepo. Origin engagement for the three engineering templates. Steady-state support — 1-2 questions per week, no active build.",
+    "fde_ids": ["idan", "ayaan"]
+  },
+  {
+    "id": "northwind-eng",
+    "customer_id": "northwind",
+    "start_date": "2025-12-15",
+    "expected_end_date": "2026-09-15",
+    "last_update_at": "2026-05-27",
+    "phase": "deployed",
+    "progress_pct": 82,
+    "weekly_hours": 6,
+    "health": "green",
+    "notes": "Logistics ops. Otis on the platform repo, Dataroom for carrier contracts, Company Number on the public site. Expanding scope to second repo next sprint.",
+    "fde_ids": ["idan", "marcus"]
+  },
+  {
+    "id": "brightwell-eng",
+    "customer_id": "brightwell",
+    "start_date": "2026-01-08",
+    "expected_end_date": "2026-09-08",
+    "last_update_at": "2026-05-30",
+    "phase": "deployed",
+    "progress_pct": 88,
+    "weekly_hours": 8,
+    "health": "green",
+    "notes": "Financial compliance. Dataroom origin engagement (contracts + Slack exports), plus Rook and the Web Brain feed. Compliance audit running monthly — clean last three runs.",
+    "fde_ids": ["priya", "idan"]
+  },
+  {
+    "id": "meridian-eng",
+    "customer_id": "meridian",
+    "start_date": "2026-02-14",
+    "expected_end_date": "2026-10-14",
+    "last_update_at": "2026-05-19",
+    "phase": "deployed",
+    "progress_pct": 75,
+    "weekly_hours": 7,
+    "health": "yellow",
+    "notes": "Regulated health, PE-backed. Local-option Rook + Dataroom on-prem; Company Number for the patient line. Last update was 12 days ago — no response to two check-in pings. Risk of churn if not touched this week.",
+    "fde_ids": ["priya"]
+  },
+  {
+    "id": "arcadia-eng",
+    "customer_id": "arcadia",
+    "start_date": "2026-03-01",
+    "expected_end_date": "2026-10-01",
+    "last_update_at": "2026-05-28",
+    "phase": "build",
+    "progress_pct": 60,
+    "weekly_hours": 9,
+    "health": "yellow",
+    "notes": "Robotics. Otis + Wiki for firmware codebase ramp, Company Number for inbound sales line. Build phase mid-sprint — Wiki indexing complete, Otis integration in progress.",
+    "fde_ids": ["priya", "marcus"]
+  },
+  {
+    "id": "lumen-eng",
+    "customer_id": "lumen",
+    "start_date": "2026-03-20",
+    "expected_end_date": "2026-10-20",
+    "last_update_at": "2026-05-26",
+    "phase": "build",
+    "progress_pct": 55,
+    "weekly_hours": 6,
+    "health": "yellow",
+    "notes": "Education. Dataroom for curriculum docs + Company Number for the admissions line. Rollout delayed two weeks — IT security review holding up GitHub App install.",
+    "fde_ids": ["marcus"]
+  },
+  {
+    "id": "cendol-eng",
+    "customer_id": "cendol",
+    "start_date": "2026-01-28",
+    "expected_end_date": "2026-09-28",
+    "last_update_at": "2026-05-09",
+    "phase": "support",
+    "progress_pct": 100,
+    "weekly_hours": 4,
+    "health": "red",
+    "notes": "Commerce. Company Number origin engagement — voice + iMessage on the storefront. Last update over three weeks ago. Customer flagged voice quality issues on two calls; no FDE follow-up logged. Attention item open.",
+    "fde_ids": ["marcus", "jerry"]
+  },
+  {
+    "id": "42nights-eng",
+    "customer_id": "42nights",
+    "start_date": "2025-09-01",
+    "expected_end_date": "2026-12-31",
+    "last_update_at": "2026-05-31",
+    "phase": "support",
+    "progress_pct": 100,
+    "weekly_hours": 3,
+    "health": "red",
+    "notes": "Internal dogfooding across all six products. Web Brain origin engagement — institutional memory of what the team reads. Marked red because we paused internal billing tracking last month and the MRR row needs cleanup.",
+    "fde_ids": ["idan", "ayaan"]
+  }
+]

@@ -1,1 +1,57 @@
-[]
+[
+  {
+    "id": "ayaan",
+    "name": "Ayaan Gazali",
+    "role": "Founder",
+    "is_founder": true,
+    "start_date": "2025-09-01",
+    "hours_this_week": 52,
+    "capacity_hours_per_week": 60,
+    "agents_shipped_total": 6,
+    "templates_authored": 3
+  },
+  {
+    "id": "jerry",
+    "name": "Jerry Lin",
+    "role": "Senior FDE",
+    "is_founder": true,
+    "start_date": "2025-09-01",
+    "hours_this_week": 47,
+    "capacity_hours_per_week": 50,
+    "agents_shipped_total": 5,
+    "templates_authored": 2
+  },
+  {
+    "id": "idan",
+    "name": "Idan Kestenbom",
+    "role": "Junior FDE",
+    "is_founder": false,
+    "start_date": "2026-01-06",
+    "hours_this_week": 38,
+    "capacity_hours_per_week": 30,
+    "agents_shipped_total": 2,
+    "templates_authored": 1
+  },
+  {
+    "id": "priya",
+    "name": "Priya Raman",
+    "role": "Senior FDE",
+    "is_founder": false,
+    "start_date": "2026-02-03",
+    "hours_this_week": 46,
+    "capacity_hours_per_week": 45,
+    "agents_shipped_total": 3,
+    "templates_authored": 1
+  },
+  {
+    "id": "marcus",
+    "name": "Marcus Webb",
+    "role": "FDE",
+    "is_founder": false,
+    "start_date": "2026-03-17",
+    "hours_this_week": 40,
+    "capacity_hours_per_week": 40,
+    "agents_shipped_total": 2,
+    "templates_authored": 0
+  }
+]

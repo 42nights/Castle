@@ -1,1 +1,120 @@
-[]
+[
+  {
+    "id": "dataroom",
+    "name": "Dataroom",
+    "category": "Research",
+    "origin_customer_id": "brightwell",
+    "authored_by_fde_id": "priya",
+    "created_at": "2026-03-22",
+    "github_repo": "42nights/dataroom",
+    "live_url": "https://demo.dataroom.42nights.dev",
+    "tags": ["rag", "documents", "citations", "compliance", "phi", "pii", "local-option", "verification-harness"],
+    "capabilities": [
+      "Ingests PDFs, DOCX, XLSX, CSV, JSON, MD into a citation-grounded RAG.",
+      "Returns 'I don't have that' before spending a token on unanswerable queries.",
+      "Drops any cited quote that doesn't appear verbatim in its chunk.",
+      "Auto-classifies every document for PHI / PII / PCI / financial / legal.",
+      "Scrubs API keys, PATs, AWS keys, JWTs before they touch the LLM.",
+      "Runs fully on-device in local mode for regulated customers.",
+      "Captures team browsing via the Web Brain extension as a new source."
+    ]
+  },
+  {
+    "id": "company-number",
+    "name": "Company Number",
+    "category": "GTM",
+    "origin_customer_id": "cendol",
+    "authored_by_fde_id": "marcus",
+    "created_at": "2026-04-02",
+    "github_repo": "42nights/company-number",
+    "live_url": "https://demo.company-number.42nights.dev",
+    "tags": ["voice", "messaging", "imessage", "elevenlabs", "linq", "rag", "verification-harness"],
+    "capabilities": [
+      "Provisions a Linq Blue number that handles iMessage, RCS, and SMS.",
+      "Provisions an ElevenLabs voice agent on a separate or same number.",
+      "Crawls the customer's website into a chunked, embedded corpus.",
+      "Answers messages and calls grounded only in that corpus.",
+      "Refuses verbally and in text when the question is off-topic.",
+      "Tapback-reacts to thanks and acks instead of replying with text.",
+      "Logs every interaction with the W3C trace ID for end-to-end debugging."
+    ]
+  },
+  {
+    "id": "otis",
+    "name": "Otis",
+    "category": "Ops",
+    "origin_customer_id": "tessellate",
+    "authored_by_fde_id": "idan",
+    "created_at": "2026-04-10",
+    "github_repo": "42nights/otis",
+    "live_url": "https://demo.otis.42nights.dev",
+    "tags": ["github", "code", "pr", "engineering", "verification-harness"],
+    "capabilities": [
+      "Reads GitHub issues labeled bot-please and ships a PR.",
+      "Verifies every diff against tests, mutation-light, and a critic.",
+      "Refuses cleanly when an issue is ambiguous or too risky.",
+      "Surfaces its own session as a watchable workspace.",
+      "Posts a transparent verification report on every PR.",
+      "Scans repos for issues to file and dedupes against existing ones."
+    ]
+  },
+  {
+    "id": "rook",
+    "name": "Rook",
+    "category": "Ops",
+    "origin_customer_id": "tessellate",
+    "authored_by_fde_id": "idan",
+    "created_at": "2026-04-18",
+    "github_repo": "42nights/rook",
+    "live_url": "https://demo.rook.42nights.dev",
+    "tags": ["github", "security", "vulnerabilities", "pr-commenter", "verification-harness", "local-option"],
+    "capabilities": [
+      "Scans every PR for ~22 vulnerability classes.",
+      "Proves each finding with a working HTTP exploit.",
+      "Posts inline review comments with a recommended diff.",
+      "Hands off failing exploits to Otis for a fix PR.",
+      "Caches threat models for sub-60s PR-focused scans.",
+      "Refuses to claim a finding without an actual proven exploit.",
+      "Runs fully on-device in local mode for regulated customers."
+    ]
+  },
+  {
+    "id": "web-brain",
+    "name": "Web Brain",
+    "category": "Research",
+    "origin_customer_id": "42nights",
+    "authored_by_fde_id": "idan",
+    "created_at": "2026-05-08",
+    "github_repo": "42nights/dataroom",
+    "live_url": "https://webbrain.42nights.dev",
+    "tags": ["browser-extension", "memory", "tiered-consolidation", "rag", "personal", "feeds-dataroom"],
+    "capabilities": [
+      "Captures readable text from pages you actually read.",
+      "Compresses captures with Llama-in-the-browser (privacy mode) or Anthropic Opus.",
+      "Consolidates real-time → daily → weekly → monthly via cron.",
+      "Drops any capture with >5 sensitive-data redactions.",
+      "Feeds captures into the Dataroom's same chunks table as a new source.",
+      "Surfaces chat over your own reading at /brain in the Dataroom dashboard."
+    ]
+  },
+  {
+    "id": "wiki",
+    "name": "Wiki",
+    "category": "Research",
+    "origin_customer_id": "tessellate",
+    "authored_by_fde_id": "idan",
+    "created_at": "2026-05-14",
+    "github_repo": "42nights/wiki",
+    "live_url": "https://demo.wiki.42nights.dev",
+    "tags": ["github", "codebase", "rag", "wiki", "messenger-ui", "local-option", "verification-harness"],
+    "capabilities": [
+      "Indexes any repo into a searchable codebase chat.",
+      "Generates a multi-page wiki with mermaid diagrams.",
+      "Cites every claim back to file:line in the source.",
+      "Refuses to answer without ≥1 citation valid against the chunk.",
+      "Surfaces each repo as a contact in a messenger-style left rail.",
+      "Runs fully on-device in local mode for regulated customers.",
+      "Exposes MCP tools (index_repo, ask_wiki) for Hermes."
+    ]
+  }
+]

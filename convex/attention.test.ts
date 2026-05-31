@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
+import type { AttentionItem } from "./attention";
 
 const modules = (
   import.meta as unknown as {
@@ -22,6 +23,12 @@ async function seedScene(t: ReturnType<typeof setup>) {
   // A small but representative graph for attention rules.
   return t.run(async (ctx) => {
     const now = "2026-05-11T12:00:00.000Z";
+    // attention.list derives staleness from the real server clock
+    // (Date.now(), per the P13 fix — see attention.ts), so fixtures whose
+    // staleness is asserted must be RELATIVE to now, not absolute literals,
+    // or they rot as the calendar advances past a hardcoded date.
+    const daysAgo = (n: number) =>
+      new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
 
     const jerry = await ctx.db.insert("fdes", {
       name: "Jerry X",
@@ -97,7 +104,7 @@ async function seedScene(t: ReturnType<typeof setup>) {
       customer_id: custB,
       start_date: "2026-04-21",
       expected_end_date: "2026-05-28",
-      last_update_at: "2026-05-10",
+      last_update_at: daysAgo(1), // fresh — must NOT be flagged stale
       phase: "build",
       progress_pct: 32,
       weekly_hours: 10,
@@ -122,7 +129,7 @@ async function seedScene(t: ReturnType<typeof setup>) {
       customer_id: eragon,
       start_date: "2026-03-22",
       expected_end_date: "2026-05-30",
-      last_update_at: "2026-05-01", // 10d stale from today
+      last_update_at: daysAgo(12), // >7d → must be flagged stale
       phase: "deployed",
       progress_pct: 100,
       weekly_hours: 6,
@@ -149,13 +156,15 @@ async function seedScene(t: ReturnType<typeof setup>) {
 const TODAY = new Date("2026-05-11T12:00:00.000Z");
 const NOW_BUCKET = bucket(TODAY);
 
+async function listItems(t: ReturnType<typeof setup>, bucket: number): Promise<AttentionItem[]> {
+  return (await t.query(api.attention.list, { nowBucket: bucket })) as AttentionItem[];
+}
+
 describe("attention.list — derivation", () => {
   it("surfaces churned customers as a 'high' attention row", async () => {
     const t = setup();
     await seedScene(t);
-    const items = await t.query(api.attention.list, {
-      nowBucket: NOW_BUCKET,
-    });
+    const items = await listItems(t, NOW_BUCKET);
     const churn = items.find((i) => i.item_key === "churn:uniquehuman");
     expect(churn).toBeDefined();
     expect(churn?.severity).toBe("high");
@@ -164,9 +173,7 @@ describe("attention.list — derivation", () => {
   it("surfaces red engagements as 'critical'", async () => {
     const t = setup();
     await seedScene(t);
-    const items = await t.query(api.attention.list, {
-      nowBucket: NOW_BUCKET,
-    });
+    const items = await listItems(t, NOW_BUCKET);
     const red = items.find((i) => i.item_key === "red-eng:eng-cust-b");
     expect(red).toBeDefined();
     expect(red?.severity).toBe("critical");
@@ -175,23 +182,19 @@ describe("attention.list — derivation", () => {
   it("surfaces stale-eng items only for non-support engagements past 7d", async () => {
     const t = setup();
     await seedScene(t);
-    const items = await t.query(api.attention.list, {
-      nowBucket: NOW_BUCKET,
-    });
-    // engStale is deployed (not support), last_update_at 2026-05-01 (10d).
+    const items = await listItems(t, NOW_BUCKET);
+    // engStale is deployed (not support), last_update_at 12d ago.
     // Should appear as a stale-eng item.
     const stale = items.find((i) => i.item_key === "stale-eng:eng-eragon");
     expect(stale).toBeDefined();
-    // Red engagement was last_update 2026-05-10 (1d), not stale.
+    // Red engagement was last_update 1d ago, not stale.
     expect(items.find((i) => i.item_key === "stale-eng:eng-cust-b")).toBeUndefined();
   });
 
   it("excludes engagements for churned customers entirely", async () => {
     const t = setup();
     await seedScene(t);
-    const items = await t.query(api.attention.list, {
-      nowBucket: NOW_BUCKET,
-    });
+    const items = await listItems(t, NOW_BUCKET);
     // No red-eng / stale-eng item for the churned UniqueHuman customer.
     expect(items.some((i) => i.item_key.includes("uniquehuman") &&
       i.source === "derived" && i.item_key.startsWith("red-eng:"))).toBe(false);
@@ -200,11 +203,9 @@ describe("attention.list — derivation", () => {
   it("sorts items by severity (critical < high < medium)", async () => {
     const t = setup();
     await seedScene(t);
-    const items = await t.query(api.attention.list, {
-      nowBucket: NOW_BUCKET,
-    });
+    const items = await listItems(t, NOW_BUCKET);
     const sevs = items.map((i) => i.severity);
-    const rank = { critical: 0, high: 1, medium: 2 };
+    const rank: Record<AttentionItem["severity"], number> = { critical: 0, high: 1, medium: 2 };
     for (let i = 1; i < sevs.length; i++) {
       expect(rank[sevs[i]]).toBeGreaterThanOrEqual(rank[sevs[i - 1]]);
     }
@@ -215,17 +216,17 @@ describe("attention.snooze + resolve", () => {
   it("drops a snoozed item until snooze_until passes", async () => {
     const t = setup();
     const { jerry } = await seedScene(t);
-    // Snooze the red engagement for 24h
-    const until = new Date(TODAY.getTime() + 24 * 3600 * 1000).toISOString();
+    // Snooze the red engagement for 24h. attention.list compares
+    // snooze_until against the real server clock, so the future bound must
+    // be relative to Date.now(), not the pinned TODAY.
+    const until = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
     await t.mutation(api.attention.snooze, {
       item_key: "red-eng:eng-cust-b",
       until,
       reason: "snoozed",
       actor_fde_id: jerry,
     });
-    let items = await t.query(api.attention.list, {
-      nowBucket: NOW_BUCKET,
-    });
+    let items = await listItems(t, NOW_BUCKET);
     expect(items.find((i) => i.item_key === "red-eng:eng-cust-b")).toBeUndefined();
 
     // 25h later → reappears
@@ -240,9 +241,7 @@ describe("attention.snooze + resolve", () => {
       reason: "snoozed",
       actor_fde_id: jerry,
     });
-    items = await t.query(api.attention.list, {
-      nowBucket: bucket(future),
-    });
+    items = await listItems(t, bucket(future));
     expect(items.find((i) => i.item_key === "red-eng:eng-cust-b")).toBeDefined();
   });
 
@@ -296,17 +295,13 @@ describe("attention.snooze + resolve", () => {
       actor_fde_id: jerry,
     });
     expect(
-      (
-        await t.query(api.attention.list, { nowBucket: NOW_BUCKET })
-      ).find((i) => i.item_key === "red-eng:eng-cust-b"),
+      (await listItems(t, NOW_BUCKET)).find((i) => i.item_key === "red-eng:eng-cust-b"),
     ).toBeUndefined();
     await t.mutation(api.attention.clearSnooze, {
       item_key: "red-eng:eng-cust-b",
     });
     expect(
-      (
-        await t.query(api.attention.list, { nowBucket: NOW_BUCKET })
-      ).find((i) => i.item_key === "red-eng:eng-cust-b"),
+      (await listItems(t, NOW_BUCKET)).find((i) => i.item_key === "red-eng:eng-cust-b"),
     ).toBeDefined();
   });
 });
@@ -325,14 +320,14 @@ describe("attention manual items", () => {
       href: "/",
       actor_fde_id: jerry,
     });
-    let items = await t.query(api.attention.list, { nowBucket: NOW_BUCKET });
+    let items = await listItems(t, NOW_BUCKET);
     expect(items.some((i) => i.title === "Call PE-H champion")).toBe(true);
 
     await t.mutation(api.attention.resolveManualItem, {
       id,
       actor_fde_id: jerry,
     });
-    items = await t.query(api.attention.list, { nowBucket: NOW_BUCKET });
+    items = await listItems(t, NOW_BUCKET);
     expect(items.some((i) => i.title === "Call PE-H champion")).toBe(false);
   });
 });
@@ -388,12 +383,12 @@ describe("seed.importPayload idempotency", () => {
   it("skips if fdes already populated", async () => {
     const t = setup();
     await t.mutation(
-      // @ts-expect-error internal mutation
+      // @ts-expect-error internal mutation is callable via the test harness
       api.seed.importPayload,
       { payloadJson: payload() },
     );
     const second = await t.mutation(
-      // @ts-expect-error internal mutation
+      // @ts-expect-error internal mutation is callable via the test harness
       api.seed.importPayload,
       { payloadJson: payload() },
     );
@@ -424,12 +419,380 @@ describe("seed.importPayload idempotency", () => {
       });
     });
     const res = await t.mutation(
-      // @ts-expect-error internal mutation
+      // @ts-expect-error internal mutation is callable via the test harness
       api.seed.importPayload,
       { payloadJson: payload() },
     );
     expect(res.skipped).toBe(true);
     expect(res.reason).toMatch(/customers already populated/);
+  });
+});
+
+// ─────────────── P31 — new attention rules ───────────────
+
+describe("attention P31 — underutilized-fde", () => {
+  it("surfaces a non-founder FDE with util <0.4 on bench >14d", async () => {
+    const t = setup();
+    await t.run(async (ctx) => {
+      const now = "2026-05-11T12:00:00.000Z";
+      // FDE started >14d ago, not a founder
+      await ctx.db.insert("fdes", {
+        name: "Alice FDE",
+        role: "FDE",
+        is_founder: false,
+        start_date: "2026-04-01", // >14d before 2026-05-11
+        hours_this_week: 4,
+        capacity_hours_per_week: 40,
+        agents_shipped_total: 0,
+        templates_authored: 0,
+        slug: "alice",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+    });
+    const items = await listItems(t, NOW_BUCKET);
+    const underutil = items.find((i) => i.item_key === "underutilized-fde:alice");
+    expect(underutil).toBeDefined();
+    expect(underutil?.severity).toBe("medium");
+  });
+
+  it("does NOT surface founders as underutilized", async () => {
+    const t = setup();
+    const { jerry } = await seedScene(t);
+    void jerry;
+    const items = await listItems(t, NOW_BUCKET);
+    // Jerry is a founder — should not appear as underutilized
+    expect(items.find((i) => i.item_key === "underutilized-fde:jerry")).toBeUndefined();
+  });
+});
+
+describe("attention P31 — expiring-engagement", () => {
+  // attention.list uses real Date.now() for calculations, so dates must be
+  // relative to the actual current date, not the pinned test fixture.
+  function inDays(n: number): string {
+    return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  }
+
+  it("surfaces an engagement expiring within 7d at <90% progress", async () => {
+    const t = setup();
+    await t.run(async (ctx) => {
+      const now = new Date().toISOString();
+      const jerry = await ctx.db.insert("fdes", {
+        name: "Jerry X",
+        role: "Founder",
+        is_founder: true,
+        start_date: "2026-04-01",
+        hours_this_week: 38,
+        capacity_hours_per_week: 45,
+        agents_shipped_total: 0,
+        templates_authored: 0,
+        slug: "jerry",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+      const cust = await ctx.db.insert("customers", {
+        name: "Expiring Co",
+        backed_by: [],
+        start_date: "2026-04-01",
+        status: "active",
+        current_mrr: 2000,
+        is_pe: false,
+        health: "green",
+        slug: "expiring-co",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+      // Ends 3 days from now, progress 60%
+      const eng = await ctx.db.insert("engagements", {
+        customer_id: cust,
+        start_date: "2026-04-01",
+        expected_end_date: inDays(3),
+        last_update_at: now,
+        phase: "build",
+        progress_pct: 60,
+        weekly_hours: 10,
+        health: "green",
+        notes_current: "On track.",
+        notes_version: 1,
+        slug: "eng-expiring-co",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+      await ctx.db.insert("engagement_assignments", {
+        engagement_id: eng,
+        fde_id: jerry,
+        assigned_at: now,
+        removed_at: null,
+        allocation_hours: null,
+      });
+    });
+    const items = await listItems(t, NOW_BUCKET);
+    const expiring = items.find((i) => i.item_key === "expiring-engagement:eng-expiring-co");
+    expect(expiring).toBeDefined();
+    expect(expiring?.severity).toBe("high");
+  });
+
+  it("does NOT surface an engagement with progress >=90%", async () => {
+    const t = setup();
+    await t.run(async (ctx) => {
+      const now = new Date().toISOString();
+      const jerry = await ctx.db.insert("fdes", {
+        name: "Jerry X",
+        role: "Founder",
+        is_founder: true,
+        start_date: "2026-04-01",
+        hours_this_week: 38,
+        capacity_hours_per_week: 45,
+        agents_shipped_total: 0,
+        templates_authored: 0,
+        slug: "jerry",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+      const cust = await ctx.db.insert("customers", {
+        name: "Done Co",
+        backed_by: [],
+        start_date: "2026-04-01",
+        status: "active",
+        current_mrr: 2000,
+        is_pe: false,
+        health: "green",
+        slug: "done-co",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+      const eng = await ctx.db.insert("engagements", {
+        customer_id: cust,
+        start_date: "2026-04-01",
+        expected_end_date: inDays(3), // within 7d but progress >=90 → no alert
+        last_update_at: now,
+        phase: "build",
+        progress_pct: 95,
+        weekly_hours: 10,
+        health: "green",
+        notes_current: "Almost done.",
+        notes_version: 1,
+        slug: "eng-done-co",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+      await ctx.db.insert("engagement_assignments", {
+        engagement_id: eng,
+        fde_id: jerry,
+        assigned_at: now,
+        removed_at: null,
+        allocation_hours: null,
+      });
+    });
+    const items = await listItems(t, NOW_BUCKET);
+    expect(items.find((i) => i.item_key === "expiring-engagement:eng-done-co")).toBeUndefined();
+  });
+});
+
+describe("attention P31 — no-recent-deployment", () => {
+  it("surfaces an active customer with a deployment >30d ago", async () => {
+    const t = setup();
+    await t.run(async (ctx) => {
+      const now = "2026-05-11T12:00:00.000Z";
+      const jerry = await ctx.db.insert("fdes", {
+        name: "Jerry X",
+        role: "Founder",
+        is_founder: true,
+        start_date: "2026-04-01",
+        hours_this_week: 38,
+        capacity_hours_per_week: 45,
+        agents_shipped_total: 0,
+        templates_authored: 0,
+        slug: "jerry",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+      const cust = await ctx.db.insert("customers", {
+        name: "Stale Deployer",
+        backed_by: [],
+        start_date: "2026-01-01",
+        status: "active",
+        current_mrr: 3000,
+        is_pe: false,
+        health: "green",
+        slug: "stale-deployer",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+      const eng = await ctx.db.insert("engagements", {
+        customer_id: cust,
+        start_date: "2026-01-01",
+        expected_end_date: "2026-12-31",
+        last_update_at: now,
+        phase: "deployed",
+        progress_pct: 100,
+        weekly_hours: 5,
+        health: "green",
+        notes_current: "Running.",
+        notes_version: 1,
+        slug: "eng-stale-deployer",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+      await ctx.db.insert("engagement_assignments", {
+        engagement_id: eng,
+        fde_id: jerry,
+        assigned_at: now,
+        removed_at: null,
+        allocation_hours: null,
+      });
+      // Deployment >30d ago (2026-04-01 is 40d before 2026-05-11)
+      await ctx.db.insert("deployments", {
+        customer_id: cust,
+        engagement_id: eng,
+        template_id: null,
+        agent_name: "Stale Agent",
+        deployed_at: "2026-04-01T00:00:00.000Z",
+        hours_replaced_per_week: 5,
+        customization_pct: 20,
+        created_at: now,
+        updated_at: now,
+      });
+    });
+    const items = await listItems(t, NOW_BUCKET);
+    const stale = items.find((i) => i.item_key === "no-recent-deployment:stale-deployer");
+    expect(stale).toBeDefined();
+    expect(stale?.severity).toBe("medium");
+  });
+});
+
+describe("attention P31 — unanchored-template", () => {
+  it("surfaces a template >60d old with 0 reuses and 0 deployments", async () => {
+    const t = setup();
+    await t.run(async (ctx) => {
+      const now = "2026-05-11T12:00:00.000Z";
+      const jerry = await ctx.db.insert("fdes", {
+        name: "Jerry X",
+        role: "Founder",
+        is_founder: true,
+        start_date: "2026-04-01",
+        hours_this_week: 38,
+        capacity_hours_per_week: 45,
+        agents_shipped_total: 0,
+        templates_authored: 0,
+        slug: "jerry",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+      const cust = await ctx.db.insert("customers", {
+        name: "Origin Co",
+        backed_by: [],
+        start_date: "2026-01-01",
+        status: "active",
+        current_mrr: 2000,
+        is_pe: false,
+        health: "green",
+        slug: "origin-co",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+      // Template created >60d ago (2026-03-01 is 71d before 2026-05-11)
+      await ctx.db.insert("templates", {
+        name: "Dusty Template",
+        category: "GTM",
+        origin_customer_id: cust,
+        authored_by_fde_id: jerry,
+        slug: "dusty-template",
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
+        updated_by_fde_id: null,
+      });
+    });
+    const items = await listItems(t, NOW_BUCKET);
+    const unanchored = items.find((i) => i.item_key === "unanchored-template:dusty-template");
+    expect(unanchored).toBeDefined();
+    expect(unanchored?.severity).toBe("medium");
+  });
+
+  it("does NOT surface a template that has been deployed", async () => {
+    const t = setup();
+    await t.run(async (ctx) => {
+      const now = "2026-05-11T12:00:00.000Z";
+      const jerry = await ctx.db.insert("fdes", {
+        name: "Jerry X",
+        role: "Founder",
+        is_founder: true,
+        start_date: "2026-04-01",
+        hours_this_week: 38,
+        capacity_hours_per_week: 45,
+        agents_shipped_total: 0,
+        templates_authored: 0,
+        slug: "jerry",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+      const cust = await ctx.db.insert("customers", {
+        name: "Active Co",
+        backed_by: [],
+        start_date: "2026-01-01",
+        status: "active",
+        current_mrr: 2000,
+        is_pe: false,
+        health: "green",
+        slug: "active-co",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+      const tpl = await ctx.db.insert("templates", {
+        name: "Used Template",
+        category: "GTM",
+        origin_customer_id: cust,
+        authored_by_fde_id: jerry,
+        slug: "used-template",
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
+        updated_by_fde_id: null,
+      });
+      const eng = await ctx.db.insert("engagements", {
+        customer_id: cust,
+        start_date: "2026-01-01",
+        expected_end_date: "2026-12-31",
+        last_update_at: now,
+        phase: "deployed",
+        progress_pct: 100,
+        weekly_hours: 5,
+        health: "green",
+        notes_current: "Running.",
+        notes_version: 1,
+        slug: "eng-active-co",
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+      });
+      // Has a deployment
+      await ctx.db.insert("deployments", {
+        customer_id: cust,
+        engagement_id: eng,
+        template_id: tpl,
+        agent_name: "Active Agent",
+        deployed_at: now,
+        hours_replaced_per_week: 5,
+        customization_pct: 10,
+        created_at: now,
+        updated_at: now,
+      });
+    });
+    const items = await listItems(t, NOW_BUCKET);
+    expect(items.find((i) => i.item_key === "unanchored-template:used-template")).toBeUndefined();
   });
 });
 

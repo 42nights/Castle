@@ -16,15 +16,17 @@ export const append = mutation({
       v.literal("thought"),
       v.literal("tool_start"),
       v.literal("tool_end"),
+      v.literal("tool_result"),
     ),
     tool_call_id: v.optional(v.string()),
     name: v.optional(v.string()),
     ok: v.optional(v.boolean()),
     delta: v.optional(v.string()),
+    result_json: v.optional(v.string()),
   },
   handler: async (
     ctx,
-    { turn_id, write_token, seq, kind, tool_call_id, name, ok, delta },
+    { turn_id, write_token, seq, kind, tool_call_id, name, ok, delta, result_json },
   ) => {
     await assertWriteToken({ token: write_token, turnId: turn_id });
     await ctx.db.insert("agent_tool_events", {
@@ -35,6 +37,7 @@ export const append = mutation({
       name,
       ok,
       delta,
+      result_json,
       created_at: nowIso(),
     });
     const turn = await ctx.db.get(turn_id);
