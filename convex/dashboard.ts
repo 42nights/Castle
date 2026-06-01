@@ -1,13 +1,18 @@
 import { query } from "./_generated/server";
+import { resolveOrgId, scopeToOrg } from "./lib/org";
 
 /**
  * Single aggregate query that returns one consistent snapshot of every table
  * the overview page needs. Better than nine separate preloadQuery calls,
  * which Convex doesn't guarantee to be drawn from the same DB snapshot.
+ *
+ * When CASTLE_MULTITENANT is off (default) resolveOrgId returns null and
+ * scopeToOrg is a no-op — behavior is byte-identical to before P33.
  */
 export const overview = query({
   args: {},
   handler: async (ctx) => {
+    const orgId = await resolveOrgId(ctx);
     const [
       fdes,
       customers,
@@ -32,19 +37,19 @@ export const overview = query({
       ctx.db.query("founder_hours").collect(),
     ]);
     return {
-      fdes,
-      customers,
-      engagements,
+      fdes: scopeToOrg(fdes, orgId),
+      customers: scopeToOrg(customers, orgId),
+      engagements: scopeToOrg(engagements, orgId),
       assignments,
-      deployments,
+      deployments: scopeToOrg(deployments, orgId),
       // Archived templates hidden from the snapshot feeding the grid
       // (operators included). They surface only in the collapsed,
       // operator-only Archived section (templates.listArchived).
-      templates: templates.filter((t) => !t.archived_at),
+      templates: scopeToOrg(templates, orgId).filter((t) => !t.archived_at),
       capabilities,
-      extractions,
+      extractions: scopeToOrg(extractions, orgId),
       reuses,
-      founderHours,
+      founderHours: scopeToOrg(founderHours, orgId),
     };
   },
 });

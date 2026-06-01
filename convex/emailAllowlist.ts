@@ -9,9 +9,11 @@ import { nowIso } from "./lib/util";
 import { assertOperator, assertOperatorRead } from "./lib/assertOperator";
 import {
   isEmailAllowedAgainst,
+  matchesPattern,
   RESCUE_ALLOWLIST,
   validatePattern,
 } from "../lib/auth-allowlist";
+import { resolveOrgId, scopeToOrg } from "./lib/org";
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -28,8 +30,9 @@ export const list = query({
   args: {},
   handler: async (ctx) => {
     await assertOperatorRead(ctx);
+    const orgId = await resolveOrgId(ctx);
     const rows = await ctx.db.query("email_allowlist").collect();
-    return rows
+    return scopeToOrg(rows, orgId)
       .map((r) => ({
         id: r._id,
         pattern: r.pattern,
@@ -88,6 +91,10 @@ export const patternsForCheck = internalQuery({
   },
 });
 
+/** Rate-limit constant: max adds per actor per 60s window. */
+const ADD_RATE_LIMIT = 20;
+const ADD_WINDOW_MS = 60_000;
+
 export const add = mutation({
   args: {
     pattern: v.string(),
@@ -96,6 +103,22 @@ export const add = mutation({
   handler: async (ctx, { pattern, note }) => {
     const { email } = await assertOperator(ctx);
     const cleaned = validatePattern(pattern);
+
+    // Rate-limit: count how many this actor added in the last 60s
+    const windowStart = new Date(Date.now() - ADD_WINDOW_MS).toISOString();
+    const recentAdds = await ctx.db
+      .query("email_allowlist_audit")
+      .withIndex("by_at")
+      .order("desc")
+      .collect();
+    const actorRecent = recentAdds.filter(
+      (r) => r.action === "add" && r.actor_email === email && r.at >= windowStart,
+    );
+    if (actorRecent.length >= ADD_RATE_LIMIT) {
+      throw new Error(
+        `Rate limit: you've added ${ADD_RATE_LIMIT} patterns in the last 60s. Wait before adding more.`,
+      );
+    }
 
     const existing = await ctx.db
       .query("email_allowlist")
@@ -108,22 +131,125 @@ export const add = mutation({
       throw new Error(`"${cleaned}" is already a hardcoded rescue entry.`);
     }
 
-    return ctx.db.insert("email_allowlist", {
+    const orgId = await resolveOrgId(ctx);
+    const id = await ctx.db.insert("email_allowlist", {
       pattern: cleaned,
       note: note?.trim() || undefined,
       created_at: nowIso(),
       created_by_email: email,
+      ...(orgId !== null ? { organization_id: orgId } : {}),
     });
+
+    // Audit
+    await ctx.db.insert("email_allowlist_audit", {
+      pattern: cleaned,
+      action: "add",
+      actor_email: email,
+      at: nowIso(),
+    });
+
+    return id;
   },
 });
 
 export const remove = mutation({
   args: { id: v.id("email_allowlist") },
   handler: async (ctx, { id }) => {
-    await assertOperator(ctx);
+    const { email } = await assertOperator(ctx);
     const row = await ctx.db.get(id);
     if (!row) throw new Error("Pattern already gone.");
+
+    // Audit before delete so we have the pattern
+    await ctx.db.insert("email_allowlist_audit", {
+      pattern: row.pattern,
+      action: "remove",
+      actor_email: email,
+      at: nowIso(),
+    });
+
     await ctx.db.delete(id);
+  },
+});
+
+/** Batch insert patterns. Silently skips duplicates (idempotent). */
+export const addBulk = mutation({
+  args: {
+    patterns: v.array(v.string()),
+  },
+  handler: async (ctx, { patterns }) => {
+    const { email } = await assertOperator(ctx);
+    const now = nowIso();
+    const orgId = await resolveOrgId(ctx);
+    let inserted = 0;
+    let skipped = 0;
+    for (const raw of patterns) {
+      let cleaned: string;
+      try {
+        cleaned = validatePattern(raw);
+      } catch {
+        skipped++;
+        continue;
+      }
+      if (RESCUE_ALLOWLIST.includes(cleaned)) {
+        skipped++;
+        continue;
+      }
+      const existing = await ctx.db
+        .query("email_allowlist")
+        .withIndex("by_pattern", (q) => q.eq("pattern", cleaned))
+        .unique();
+      if (existing) {
+        skipped++;
+        continue;
+      }
+      await ctx.db.insert("email_allowlist", {
+        pattern: cleaned,
+        created_at: now,
+        created_by_email: email,
+        ...(orgId !== null ? { organization_id: orgId } : {}),
+      });
+      await ctx.db.insert("email_allowlist_audit", {
+        pattern: cleaned,
+        action: "add",
+        actor_email: email,
+        at: now,
+      });
+      inserted++;
+    }
+    return { inserted, skipped };
+  },
+});
+
+/** Returns which pattern matches (dynamic OR rescue) for a given email, or null. */
+export const testEmail = query({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    await assertOperatorRead(ctx);
+    const dynamic = await ctx.db.query("email_allowlist").collect();
+    for (const row of dynamic) {
+      if (matchesPattern(email, row.pattern)) {
+        return { matched_pattern: row.pattern, source: "dynamic" as const };
+      }
+    }
+    for (const p of RESCUE_ALLOWLIST) {
+      if (matchesPattern(email, p)) {
+        return { matched_pattern: p, source: "rescue" as const };
+      }
+    }
+    return null;
+  },
+});
+
+/** Last 50 audit rows ordered newest first. */
+export const listAudit = query({
+  args: {},
+  handler: async (ctx) => {
+    await assertOperatorRead(ctx);
+    return ctx.db
+      .query("email_allowlist_audit")
+      .withIndex("by_at")
+      .order("desc")
+      .take(50);
   },
 });
 

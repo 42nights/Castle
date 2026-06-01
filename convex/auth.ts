@@ -2,8 +2,9 @@ import { betterAuth, type BetterAuthOptions } from "better-auth/minimal";
 import { createClient, GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { components, internal } from "./_generated/api";
-import { internalAction, query } from "./_generated/server";
+import { internalAction, mutation, query } from "./_generated/server";
 import { DataModel } from "./_generated/dataModel";
+import { v } from "convex/values";
 import authConfig from "./auth.config";
 import { isEmailAllowedAgainst } from "../lib/auth-allowlist";
 
@@ -88,20 +89,89 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
 
 export const { getAuthUser } = authComponent.clientApi();
 
-/** User object with operator/guest role. Returns null when not signed
- *  in (no session). Re-checks the allowlist on every read so that
- *  removing a pattern immediately downgrades to guest.
+/**
+ * Derive an FDE slug from a user's email. Checks KNOWN_SLUG_MAP first,
+ * then falls back to the email local-part with non-alnum chars replaced.
+ * This map covers cases where the FDE slug differs from the email local-part.
+ */
+const KNOWN_SLUG_MAP: Record<string, string> = {
+  "jerry.x0930@gmail.com": "jerry",
+};
+
+/** User object with operator/guest role + linked FDE info.
+ *  Returns null when not signed in (no session). Re-checks the allowlist
+ *  on every read so that removing a pattern immediately downgrades to guest.
  */
 export const getCurrentUser = query({
   args: {},
   handler: async (ctx) => {
+    // DEV-ONLY auto-operator bypass (see convex/lib/assertOperator.ts). Returns
+    // a synthetic operator linked to the seeded "idan" FDE so every gated page
+    // renders without GitHub OAuth. Inert unless CASTLE_DEV_AUTH=1 is set on the
+    // Convex deployment — LOCAL ONLY, never prod.
+    if (process.env.CASTLE_DEV_AUTH === "1") {
+      const devFde = await ctx.db
+        .query("fdes")
+        .withIndex("by_slug", (q) => q.eq("slug", "idan"))
+        .first();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return {
+        _id: "dev-operator",
+        email: "dev@42nights.dev",
+        name: "Dev Operator",
+        image: null,
+        isOperator: true,
+        fde_slug: devFde?.slug ?? "dev",
+        linked_fde_id: devFde?._id ?? null,
+      } as any;
+    }
+
     const user = await authComponent.safeGetAuthUser(ctx);
     if (!user) return null;
     const patterns = (await ctx.db
       .query("email_allowlist")
       .collect()).map((r) => r.pattern);
     const isOperator = isEmailAllowedAgainst(user.email, patterns);
-    return { ...user, isOperator };
+
+    // Resolve FDE slug: check known map first, then email local-part
+    const email = user.email?.trim().toLowerCase() ?? "";
+    const fde_slug =
+      KNOWN_SLUG_MAP[email] ??
+      (email.split("@")[0]?.replace(/[^a-z0-9._-]/g, "-") || null);
+
+    // Try to find linked FDE by slug
+    let linked_fde_id: string | null = null;
+    if (fde_slug) {
+      const fde = await ctx.db
+        .query("fdes")
+        .withIndex("by_slug", (q) => q.eq("slug", fde_slug))
+        .first();
+      if (fde) linked_fde_id = fde._id;
+    }
+
+    return { ...user, isOperator, fde_slug, linked_fde_id };
+  },
+});
+
+/** Manually link a Better Auth user to an FDE row. Operator-only. */
+export const linkFdeToUser = mutation({
+  args: {
+    fde_slug: v.string(),
+    target_email: v.string(),
+  },
+  handler: async (ctx, { fde_slug, target_email }) => {
+    // Verify caller is operator (reuse the allowlist check pattern)
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("unauthorized");
+    const fde = await ctx.db
+      .query("fdes")
+      .withIndex("by_slug", (q) => q.eq("slug", fde_slug))
+      .first();
+    if (!fde) throw new Error(`FDE with slug "${fde_slug}" not found`);
+    // The mapping is stored in the KNOWN_SLUG_MAP server-side; this
+    // mutation is here for the operator UI and future backfill scripts.
+    // The actual runtime link is resolved in getCurrentUser above.
+    return { fde_id: fde._id, fde_slug, target_email };
   },
 });
 

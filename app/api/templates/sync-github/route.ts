@@ -61,8 +61,49 @@ export async function POST(req: Request) {
     }
   }
 
+  const cx = convexClient();
+  if (!cx) {
+    return Response.json(
+      { error: "NEXT_PUBLIC_CONVEX_URL not set" },
+      { status: 500 },
+    );
+  }
+
+  // Acquire the CAS sync lock
+  let runId: string;
+  let lockToken: string;
+  try {
+    const lockResult = (
+      cron
+        ? await cx.mutation(api.templates.startSync, {
+            source: "cron",
+            actor_email: undefined,
+          })
+        : await fetchAuthMutation(api.templates.startSync, {
+            source: "manual",
+            actor_email: me?.email ?? undefined,
+          })
+    ) as { run_id: string; lock_token: string };
+    runId = lockResult.run_id;
+    lockToken = lockResult.lock_token;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "sync lock failed";
+    if (/already in progress/i.test(msg)) {
+      return Response.json({ error: "sync already in progress" }, { status: 409 });
+    }
+    return Response.json({ error: msg }, { status: 500 });
+  }
+
   const c = composio();
   if (!c) {
+    await cx.mutation(api.templates.finishSync, {
+      run_id: runId as never,
+      lock_token: lockToken,
+      count_seen: 0,
+      count_inserted: 0,
+      count_skipped: 0,
+      error: "COMPOSIO_API_KEY not set",
+    });
     return Response.json({ error: "COMPOSIO_API_KEY not set" }, { status: 500 });
   }
 
@@ -76,6 +117,14 @@ export async function POST(req: Request) {
       : null;
   const actor = process.env.CASTLE_SYSTEM_ACTOR_SLUG || callerSlug;
   if (!actor) {
+    await cx.mutation(api.templates.finishSync, {
+      run_id: runId as never,
+      lock_token: lockToken,
+      count_seen: 0,
+      count_inserted: 0,
+      count_skipped: 0,
+      error: "no GitHub actor resolvable — set CASTLE_SYSTEM_ACTOR_SLUG or sign in",
+    });
     return Response.json(
       {
         error:
@@ -99,14 +148,18 @@ export async function POST(req: Request) {
     const data = result?.data;
     repos = Array.isArray(data) ? data : (data?.items ?? []);
   } catch (err) {
-    return Response.json(
-      {
-        error: `Composio GitHub list-repos failed: ${
-          err instanceof Error ? err.message : "unknown"
-        }`,
-      },
-      { status: 502 },
-    );
+    const errMsg = `Composio GitHub list-repos failed: ${
+      err instanceof Error ? err.message : "unknown"
+    }`;
+    await cx.mutation(api.templates.finishSync, {
+      run_id: runId as never,
+      lock_token: lockToken,
+      count_seen: 0,
+      count_inserted: 0,
+      count_skipped: 0,
+      error: errMsg,
+    });
+    return Response.json({ error: errMsg }, { status: 502 });
   }
 
   // Upsert each non-archived repo as a candidate. Idempotent — repos
@@ -114,13 +167,6 @@ export async function POST(req: Request) {
   // table are no-ops on the mutation side. Use the unauth Convex client
   // on the cron path (no operator identity); use the auth-forwarded
   // helper on the manual path.
-  const cx = convexClient();
-  if (cron && !cx) {
-    return Response.json(
-      { error: "NEXT_PUBLIC_CONVEX_URL not set" },
-      { status: 500 },
-    );
-  }
   let inserted = 0;
   let skipped = 0;
   for (const r of repos) {
@@ -139,7 +185,7 @@ export async function POST(req: Request) {
         description: r.description ?? undefined,
       };
       const res = cron
-        ? ((await cx!.mutation(
+        ? ((await cx.mutation(
             api.templates.upsertGithubCandidate,
             args,
           )) as { id: string | null; inserted: boolean })
@@ -154,6 +200,15 @@ export async function POST(req: Request) {
       skipped++;
     }
   }
+
+  // Close the sync run
+  await cx.mutation(api.templates.finishSync, {
+    run_id: runId as never,
+    lock_token: lockToken,
+    count_seen: repos.length,
+    count_inserted: inserted,
+    count_skipped: skipped,
+  });
 
   return Response.json({ ok: true, found: repos.length, inserted, skipped });
 }

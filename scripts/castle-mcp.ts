@@ -1887,6 +1887,79 @@ server.registerTool(
   },
 );
 
+server.registerTool(
+  "propose_action",
+  {
+    description:
+      "Surface a confirmation card to the operator before executing a high-impact or " +
+      "irreversible Castle mutation. USE THIS instead of calling the mutation directly " +
+      "when the action is destructive, hard to undo, or changes data the operator should " +
+      "explicitly approve (e.g. marking an engagement touched, snoozing an alert, changing " +
+      "customer health). The operator sees the card with verb/target/reason/side-effects and " +
+      "clicks Accept — the server then runs the actual mutation. After accept a 10-second " +
+      "Undo chip appears. Do NOT use this for read-only queries or reversible low-impact " +
+      "changes — only for mutations where a human should confirm first.",
+    inputSchema: {
+      tool_name: z
+        .string()
+        .describe(
+          "The Castle MCP tool that should run on accept. One of: " +
+            "engagement_mark_touched, attention_snooze, attention_resolve, " +
+            "attention_resolve_manual, customer_set_health, engagement_set_phase.",
+        ),
+      verb: z.string().describe("Short human-readable action label, e.g. 'Mark touched'."),
+      target: z.string().describe("What the action applies to, e.g. 'Acme support engagement'."),
+      reason: z.string().describe("One-line rationale shown on the card."),
+      side_effects: z.array(z.string()).optional().describe("Bullet list of side-effects to warn the operator about."),
+      payload_json: z
+        .string()
+        .describe(
+          "JSON-stringified args for tool_name on accept. Must include all args the " +
+            "underlying mutation needs (e.g. engagement_id, actor_fde_id for mark_touched).",
+        ),
+      expires_in_sec: z
+        .number()
+        .optional()
+        .describe("How long before the card auto-expires (default 300s = 5min)."),
+    },
+  },
+  async ({
+    tool_name,
+    verb,
+    target,
+    reason,
+    side_effects,
+    payload_json,
+    expires_in_sec,
+  }) => {
+    const slug = actorSlug ?? "anon";
+    try {
+      const id = await convex.mutation(api.agentActions.propose, {
+        actor_slug: slug,
+        kind: "propose_mutation",
+        tool_name,
+        verb,
+        target,
+        reason,
+        side_effects,
+        payload_json,
+        expires_in_sec,
+      });
+      return text({
+        ok: true,
+        action_id: id,
+        message:
+          `Confirmation card proposed. The operator will see a '${verb}' card for '${target}'. ` +
+          `They must click Accept before the mutation runs.`,
+      });
+    } catch (err) {
+      return text({
+        error: err instanceof Error ? err.message : "propose_action failed",
+      });
+    }
+  },
+);
+
 function text(value: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(value) }] };
 }

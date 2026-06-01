@@ -11,6 +11,17 @@ import { getSessionCookie } from "better-auth/cookies";
  * through here. Their access is restricted server-side to templates only.
  */
 export function middleware(req: NextRequest) {
+  // DEV-ONLY auto-operator bypass: let every route through without a session
+  // cookie so operator pages render for the local demo-Loom smoke test. Double-
+  // gated — explicit CASTLE_DEV_AUTH=1 (gitignored .env.local) AND non-prod —
+  // so it can never trip in a production build even if the flag leaked.
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.CASTLE_DEV_AUTH === "1"
+  ) {
+    return NextResponse.next();
+  }
+
   const cookie = getSessionCookie(req);
   if (cookie) return NextResponse.next();
 

@@ -1,0 +1,20 @@
+[
+  {
+    "title": "Cendol voice quality regression — no owner logged",
+    "subtitle": "Customer flagged distorted audio on 3 calls this week. ElevenLabs agent not updated since deploy. Assign and patch before next call.",
+    "severity": "critical",
+    "owner_fde_id": "jerry",
+    "related_customer_id": "cendol",
+    "related_engagement_id": "cendol-eng",
+    "href": "/customers/cendol"
+  },
+  {
+    "title": "Meridian check-in overdue by 12 days",
+    "subtitle": "Last update 2026-05-19. Two unanswered pings. PE-backed account at churn risk — needs a call this week.",
+    "severity": "high",
+    "owner_fde_id": "priya",
+    "related_customer_id": "meridian",
+    "related_engagement_id": "meridian-eng",
+    "href": "/engagements/meridian-eng"
+  }
+]

@@ -28,7 +28,9 @@ describe("loadOverview fallback (no Convex env)", () => {
     const mod = await import("./load-overview");
     const result = await mod.loadOverview();
     expect(result.fdes.length).toBeGreaterThan(0);
-    expect(result.customers.some((c) => c.name === "Eragon")).toBe(true);
+    expect(result.customers.some((c) => c.name === "Tessellate Labs")).toBe(
+      true,
+    );
     expect(result.engagements.length).toBeGreaterThan(0);
     expect(result.convexIdBySlug).toEqual({});
   });
@@ -47,13 +49,17 @@ describe("loadOverview fallback (Convex unreachable)", () => {
     // Bypass the operator gate — this test is exercising the data-load
     // path, not the auth path.
     vi.doMock("./auth-server", () => ({
-      fetchAuthQuery: vi.fn(() => Promise.resolve({ _id: "stub" })),
+      fetchAuthQuery: vi.fn(() =>
+        Promise.resolve({ _id: "stub", isOperator: true }),
+      ),
     }));
 
     const mod = await import("./load-overview");
     const result = await mod.loadOverview();
-    // Same v0 customers as the no-env case
-    expect(result.customers.some((c) => c.name === "Eragon")).toBe(true);
+    // Same seed customers as the no-env case
+    expect(result.customers.some((c) => c.name === "Tessellate Labs")).toBe(
+      true,
+    );
     expect(result.convexIdBySlug).toEqual({});
   });
 });
@@ -107,7 +113,9 @@ describe("loadOverview happy path (Convex returns data)", () => {
       fetchQuery: vi.fn(() => Promise.resolve(snapshot)),
     }));
     vi.doMock("./auth-server", () => ({
-      fetchAuthQuery: vi.fn(() => Promise.resolve({ _id: "stub" })),
+      fetchAuthQuery: vi.fn(() =>
+        Promise.resolve({ _id: "stub", isOperator: true }),
+      ),
     }));
 
     const mod = await import("./load-overview");

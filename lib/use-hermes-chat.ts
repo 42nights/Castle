@@ -21,6 +21,9 @@ export type ChatMessage = {
   /** ISO timestamp the row was inserted into Convex. Surfaced for
    *  hover-revealed timestamps and CTA-timing logic. */
   createdAt: string;
+  /** The agent_turns row that produced this assistant message. Lets the
+   *  transcript re-render the turn's tool-result widgets in history. */
+  turnId?: string;
   /** Files attached when the operator sent this message. Empty/absent
    *  for assistant rows and user rows sent without attachments. */
   attachments?: ChatAttachment[];
@@ -35,6 +38,8 @@ export type ToolActivity = {
   status: "running" | "done" | "error";
   startedAt: number;
   durationMs?: number;
+  /** Parsed result from a tool_result event, if present. */
+  result?: unknown;
 };
 
 type HistoryRow = Doc<"agent_messages">;
@@ -119,6 +124,17 @@ export function useHermesChat({
             durationMs: new Date(ev.created_at).getTime() - prev.startedAt,
           });
         }
+      } else if (ev.kind === "tool_result") {
+        const prev = byId.get(ev.tool_call_id);
+        if (prev && ev.result_json) {
+          let parsed: unknown = undefined;
+          try {
+            parsed = JSON.parse(ev.result_json);
+          } catch {
+            // parse failure — leave result undefined
+          }
+          byId.set(ev.tool_call_id, { ...prev, result: parsed });
+        }
       }
     }
     return Array.from(byId.values());
@@ -174,6 +190,7 @@ export function useHermesChat({
         streaming: isStreaming,
         status: m.status,
         createdAt: m.created_at,
+        turnId: m.turn_id as string | undefined,
         attachments: (m as { attachments?: ChatAttachment[] }).attachments,
       };
     });

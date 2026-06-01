@@ -64,6 +64,11 @@ export const importPayload = internalMutation({
     ] as const) {
       requireArray(key, payload[key]);
     }
+    // manualAttention is optional — defaults to [] so existing callers
+    // that omit the field stay compatible.
+    if (payload.manualAttention !== undefined) {
+      requireArray("manualAttention", payload.manualAttention);
+    }
 
     const fdeIdByKey = new Map<string, Id<"fdes">>();
     for (const f of payload.fdes) {
@@ -145,7 +150,7 @@ export const importPayload = internalMutation({
       const origin = customerIdByKey.get(t.origin_customer_id);
       const author = fdeIdByKey.get(t.authored_by_fde_id);
       if (!origin || !author) throw new Error(`bad template refs ${t.id}`);
-      const newId = await ctx.db.insert("templates", {
+      const templateDoc: any = {
         name: t.name,
         category: t.category,
         origin_customer_id: origin,
@@ -154,7 +159,15 @@ export const importPayload = internalMutation({
         created_at: t.created_at,
         updated_at: now,
         updated_by_fde_id: null,
-      });
+      };
+      // The discovery surface (grid cards, deep-links) needs these three.
+      // They're optional in the schema, so only set them when present.
+      if (typeof t.github_repo === "string") {
+        templateDoc.github_repo = t.github_repo;
+      }
+      if (typeof t.live_url === "string") templateDoc.live_url = t.live_url;
+      if (Array.isArray(t.tags)) templateDoc.tags = t.tags;
+      const newId = await ctx.db.insert("templates", templateDoc);
       templateIdByKey.set(t.id, newId);
       for (let i = 0; i < t.capabilities.length; i++) {
         await ctx.db.insert("template_capabilities", {
@@ -230,6 +243,43 @@ export const importPayload = internalMutation({
         new_arr_dollars: h.new_arr_dollars,
         created_at: now,
         updated_at: now,
+      });
+    }
+
+    for (const m of payload.manualAttention ?? []) {
+      const ownerFde = m.owner_fde_id ? fdeIdByKey.get(m.owner_fde_id) : null;
+      if (m.owner_fde_id && !ownerFde) {
+        throw new Error(`bad fde ref ${m.owner_fde_id} on manualAttention`);
+      }
+      const relCustomer = m.related_customer_id
+        ? customerIdByKey.get(m.related_customer_id)
+        : null;
+      if (m.related_customer_id && !relCustomer) {
+        throw new Error(
+          `bad customer ref ${m.related_customer_id} on manualAttention`,
+        );
+      }
+      const relEngagement = m.related_engagement_id
+        ? engagementIdByKey.get(m.related_engagement_id)
+        : null;
+      if (m.related_engagement_id && !relEngagement) {
+        throw new Error(
+          `bad engagement ref ${m.related_engagement_id} on manualAttention`,
+        );
+      }
+      await ctx.db.insert("manual_attention_items", {
+        title: m.title,
+        subtitle: m.subtitle,
+        severity: m.severity,
+        owner_fde_id: ownerFde ?? null,
+        related_customer_id: relCustomer ?? null,
+        related_engagement_id: relEngagement ?? null,
+        href: m.href,
+        created_at: now,
+        updated_at: now,
+        updated_by_fde_id: null,
+        resolved_at: null,
+        resolved_by_fde_id: null,
       });
     }
 

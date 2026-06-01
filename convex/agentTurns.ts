@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { assertWriteToken } from "./lib/writeToken";
 import { nowIso } from "./lib/util";
@@ -426,12 +426,18 @@ export const activeFor = query({
  *     ("never started")
  *   - `running` heartbeat stale for 90s → failed
  *     ("wrapper unresponsive")
+ *
+ * For running turns with stale heartbeats (zombie), the partial text is
+ * assembled from chunks before marking failed.
  */
 export const sweepStuck = mutation({
   args: {},
   handler: async (ctx) => {
     const now = Date.now();
     const STALE_QUEUED_MS = 60_000;
+    // P30: zombie threshold raised to 300s (5min) for the sweepStuck path.
+    // reapZombies (below) handles the 5min window via a dedicated cron.
+    // sweepStuck still handles 90s "wrapper unresponsive" for quick failures.
     const STALE_RUNNING_MS = 90_000;
     // Query ONLY queued + running rows via the index — never a full
     // table scan. `.withIndex(name)` with no `.eq` reads the entire
@@ -471,7 +477,18 @@ export const sweepStuck = mutation({
       // made this cron crash-loop every 30s forever. Skip if gone.
       const assistant = await ctx.db.get(t.assistant_message_id);
       if (assistant) {
+        // For running turns, assemble partial text from chunks
+        let partialText = assistant.text ?? "";
+        if (t.status === "running" && !partialText) {
+          const chunks = await ctx.db
+            .query("agent_message_chunks")
+            .withIndex("by_turn_seq", (q) => q.eq("turn_id", t._id))
+            .order("asc")
+            .collect();
+          partialText = chunks.map((c) => c.delta).join("");
+        }
         await ctx.db.patch(t.assistant_message_id, {
+          text: partialText,
           status: "failed",
           updated_at: nowIsoStr,
         });
@@ -479,5 +496,116 @@ export const sweepStuck = mutation({
       failed.push(t._id);
     }
     return { failed };
+  },
+});
+
+/**
+ * Reap zombie turns: running turns with last_heartbeat_at >300s ago.
+ * Assembles partial text from chunks before marking failed.
+ * Runs every 1 minute via cron.
+ */
+export const reapZombies = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const ZOMBIE_THRESHOLD_MS = 300_000; // 5 minutes
+    const cutoff = new Date(Date.now() - ZOMBIE_THRESHOLD_MS).toISOString();
+    const running = await ctx.db
+      .query("agent_turns")
+      .withIndex("by_status_heartbeat", (q) => q.eq("status", "running"))
+      .collect();
+    const zombies = running.filter((t) => t.last_heartbeat_at < cutoff);
+    const nowIsoStr = new Date().toISOString();
+    const reaped: Array<Id<"agent_turns">> = [];
+    for (const t of zombies) {
+      // Assemble partial text from chunks
+      const chunks = await ctx.db
+        .query("agent_message_chunks")
+        .withIndex("by_turn_seq", (q) => q.eq("turn_id", t._id))
+        .order("asc")
+        .collect();
+      const partialText = chunks.map((c) => c.delta).join("");
+      await ctx.db.patch(t._id, {
+        status: "failed",
+        completed_at: nowIsoStr,
+        error: "zombie: no heartbeat 5min",
+        last_heartbeat_at: nowIsoStr,
+      });
+      const assistant = await ctx.db.get(t.assistant_message_id);
+      if (assistant) {
+        await ctx.db.patch(t.assistant_message_id, {
+          text: partialText || assistant.text,
+          status: "failed",
+          updated_at: nowIsoStr,
+        });
+      }
+      reaped.push(t._id);
+    }
+    return { reaped };
+  },
+});
+
+/**
+ * Retry a failed turn: create a fresh queued turn reusing the user_message_id.
+ * The failed turn is kept for audit. Returns the new turn data for kickoff.
+ */
+export const retry = mutation({
+  args: {
+    conversation_id: v.id("agent_conversations"),
+  },
+  handler: async (ctx, { conversation_id }) => {
+    const { conv, user } = await requireConversation(ctx, conversation_id);
+    // Find the most recent failed turn
+    const turns = await ctx.db
+      .query("agent_turns")
+      .withIndex("by_conversation", (q) =>
+        q.eq("conversation_id", conversation_id),
+      )
+      .order("desc")
+      .collect();
+    if (turns.length === 0) throw new Error("no turn to retry");
+    const latest = turns[0];
+    if (latest.status !== "failed") {
+      throw new Error(`cannot retry turn with status ${latest.status}`);
+    }
+    const now = nowIso();
+    const newAssistantId = await ctx.db.insert("agent_messages", {
+      conversation_id,
+      actor_slug: user.slug ?? conv.actor_slug,
+      role: "assistant",
+      text: "",
+      status: "streaming",
+      created_at: now,
+      updated_at: now,
+    });
+    const newTurnId = await ctx.db.insert("agent_turns", {
+      conversation_id,
+      actor_slug: user.slug ?? conv.actor_slug,
+      user_message_id: latest.user_message_id,
+      assistant_message_id: newAssistantId,
+      hermes_session: conv.hermes_session,
+      status: "queued",
+      started_at: now,
+      last_heartbeat_at: now,
+    });
+    await ctx.db.patch(newAssistantId, { turn_id: newTurnId });
+    // Fetch original user message for kickoff
+    const userMsg = await ctx.db.get(latest.user_message_id);
+    const attachment_links: Array<{ name: string; url: string; contentType?: string }> = [];
+    if (userMsg?.attachments) {
+      for (const a of userMsg.attachments) {
+        const url = await ctx.storage.getUrl(a.storageId);
+        if (url) attachment_links.push({ name: a.name, url, contentType: a.contentType });
+      }
+    }
+    return {
+      turn_id: newTurnId,
+      user_message_id: latest.user_message_id,
+      assistant_message_id: newAssistantId,
+      hermes_session: conv.hermes_session,
+      visibility: conv.visibility ?? "personal",
+      actor_slug: user.slug ?? conv.actor_slug,
+      user_text: userMsg?.text ?? "",
+      attachment_links,
+    };
   },
 });

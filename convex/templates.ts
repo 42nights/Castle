@@ -6,6 +6,11 @@ import {
   isOperator,
 } from "./lib/assertOperator";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
+import { resolveOrgId, scopeToOrg } from "./lib/org";
+
+/** Stale open-run window in ms (5 minutes). A run started more than
+ *  this long ago that's still open is considered crashed, not locked. */
+const SYNC_LOCK_WINDOW_MS = 5 * 60_000;
 
 const category = v.union(
   v.literal("GTM"),
@@ -21,8 +26,9 @@ export const list = query({
     // Archived templates are hidden from the main list for EVERYONE,
     // operators included. Operators restore them from the dedicated
     // archived view (listArchived).
+    const orgId = await resolveOrgId(ctx);
     const all = await ctx.db.query("templates").collect();
-    return all.filter((t) => !t.archived_at);
+    return scopeToOrg(all, orgId).filter((t) => !t.archived_at);
   },
 });
 
@@ -95,6 +101,144 @@ export const dismissGithubCandidate = mutation({
   },
 });
 
+export const unDismissCandidate = mutation({
+  args: { id: v.id("template_github_candidates") },
+  handler: async (ctx, { id }) => {
+    await assertOperator(ctx);
+    const row = await ctx.db.get(id);
+    if (!row) throw new Error("Candidate not found.");
+    await ctx.db.patch(id, { dismissed_at: undefined });
+  },
+});
+
+/** Called by the GitHub webhook when a repo is renamed. */
+export const renameGithubCandidate = mutation({
+  args: {
+    old_github_repo: v.string(),
+    new_github_repo: v.string(),
+    new_name: v.string(),
+  },
+  handler: async (ctx, { old_github_repo, new_github_repo, new_name }) => {
+    const existing = await ctx.db
+      .query("template_github_candidates")
+      .withIndex("by_repo", (q) => q.eq("github_repo", old_github_repo))
+      .first();
+    if (!existing) return { updated: false };
+    await ctx.db.patch(existing._id, {
+      github_repo: new_github_repo,
+      name: new_name,
+    });
+    return { updated: true };
+  },
+});
+
+/** Called by the GitHub webhook when a repo is archived — dismiss the candidate. */
+export const archiveGithubCandidate = mutation({
+  args: { github_repo: v.string() },
+  handler: async (ctx, { github_repo }) => {
+    const existing = await ctx.db
+      .query("template_github_candidates")
+      .withIndex("by_repo", (q) => q.eq("github_repo", github_repo))
+      .first();
+    if (!existing || existing.promoted_to_template_id) return { updated: false };
+    await ctx.db.patch(existing._id, { dismissed_at: nowIso() });
+    return { updated: true };
+  },
+});
+
+/** Called by the GitHub webhook when a repo is transferred out of the org. */
+export const removeGithubCandidate = mutation({
+  args: { github_repo: v.string() },
+  handler: async (ctx, { github_repo }) => {
+    const existing = await ctx.db
+      .query("template_github_candidates")
+      .withIndex("by_repo", (q) => q.eq("github_repo", github_repo))
+      .first();
+    if (!existing) return { removed: false };
+    // Only dismiss undecided rows; leave promoted ones intact (they have a real template)
+    if (!existing.promoted_to_template_id) {
+      await ctx.db.patch(existing._id, { dismissed_at: nowIso() });
+    }
+    return { removed: true };
+  },
+});
+
+// ────────────────────── Sync runs (P27 CAS lock) ────────────────────
+
+/** Start a sync run. CAS: throws if a recent open run already exists. */
+export const startSync = mutation({
+  args: {
+    source: v.union(v.literal("cron"), v.literal("manual"), v.literal("webhook")),
+    actor_email: v.optional(v.string()),
+  },
+  handler: async (ctx, { source, actor_email }) => {
+    // Check for an open run started within the lock window
+    const cutoff = new Date(Date.now() - SYNC_LOCK_WINDOW_MS).toISOString();
+    const openRuns = await ctx.db
+      .query("template_sync_runs")
+      .withIndex("by_open", (q) => q.eq("completed_at", null))
+      .collect();
+    const fresh = openRuns.filter((r) => r.started_at >= cutoff);
+    if (fresh.length > 0) {
+      throw new Error("sync already in progress");
+    }
+    const lock_token = Array.from(
+      crypto.getRandomValues(new Uint8Array(16)),
+    )
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const now = nowIso();
+    const id = await ctx.db.insert("template_sync_runs", {
+      started_at: now,
+      completed_at: null,
+      source,
+      actor_email,
+      count_seen: 0,
+      count_inserted: 0,
+      count_skipped: 0,
+      lock_token,
+    });
+    return { run_id: id, lock_token };
+  },
+});
+
+/** Close a sync run. Verifies lock_token to prevent races. */
+export const finishSync = mutation({
+  args: {
+    run_id: v.id("template_sync_runs"),
+    lock_token: v.string(),
+    count_seen: v.number(),
+    count_inserted: v.number(),
+    count_skipped: v.number(),
+    error: v.optional(v.string()),
+  },
+  handler: async (ctx, { run_id, lock_token, count_seen, count_inserted, count_skipped, error }) => {
+    const run = await ctx.db.get(run_id);
+    if (!run) throw new Error("sync run not found");
+    if (run.lock_token !== lock_token) throw new Error("lock_token mismatch");
+    await ctx.db.patch(run_id, {
+      completed_at: nowIso(),
+      count_seen,
+      count_inserted,
+      count_skipped,
+      error,
+    });
+  },
+});
+
+/** Last completed sync run — for the badge on /templates. */
+export const lastSync = query({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db
+      .query("template_sync_runs")
+      .withIndex("by_started")
+      .order("desc")
+      .collect();
+    return all.find((r) => r.completed_at !== null) ?? null;
+  },
+});
+
 export const markCandidatePromoted = mutation({
   args: {
     id: v.id("template_github_candidates"),
@@ -121,6 +265,7 @@ export const createFromCandidate = mutation({
     if (!candidate) throw new Error("candidate not found");
     const slug = await uniqueSlug(ctx, "templates", slugify(args.name));
     const now = nowIso();
+    const orgId = await resolveOrgId(ctx);
     const id = await ctx.db.insert("templates", {
       name: args.name,
       category: args.category,
@@ -131,6 +276,7 @@ export const createFromCandidate = mutation({
       created_at: now,
       updated_at: now,
       updated_by_fde_id: args.actor_fde_id,
+      ...(orgId !== null ? { organization_id: orgId } : {}),
     });
     await ctx.db.patch(args.candidate_id, { promoted_to_template_id: id });
     return { id, slug };
@@ -178,6 +324,7 @@ export const create = mutation({
     await assertOperator(ctx);
     const slug = await uniqueSlug(ctx, "templates", slugify(args.name));
     const now = nowIso();
+    const orgId = await resolveOrgId(ctx);
     const id = await ctx.db.insert("templates", {
       name: args.name,
       category: args.category,
@@ -187,6 +334,7 @@ export const create = mutation({
       created_at: now,
       updated_at: now,
       updated_by_fde_id: args.actor_fde_id,
+      ...(orgId !== null ? { organization_id: orgId } : {}),
     });
     for (let i = 0; i < args.capabilities.length; i++) {
       await ctx.db.insert("template_capabilities", {

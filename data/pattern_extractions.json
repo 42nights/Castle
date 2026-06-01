@@ -1,1 +1,56 @@
-[]
+[
+  {
+    "id": "otis-extraction",
+    "source_customer_id": "tessellate",
+    "source_engagement_id": "tessellate-eng",
+    "source_engagement_summary": "Tessellate Labs wanted issues triaged and fixed without an engineer in the loop. Built Otis: an autonomous coding agent that reads a labeled GitHub issue, plans, implements, verifies against an 8-check harness, and opens a PR — or refuses cleanly. Now packaged as a Castle template (Ops), surfaces at /templates/otis, deploys to https://demo.otis.42nights.dev.",
+    "extracted_into_template_id": "otis",
+    "extracted_at": "2026-04-12",
+    "reused_at_customer_ids": ["northwind", "arcadia"]
+  },
+  {
+    "id": "rook-extraction",
+    "source_customer_id": "tessellate",
+    "source_engagement_id": "tessellate-eng",
+    "source_engagement_summary": "Tessellate Labs needed PRs reviewed for vulns by an agent that doesn't lie. Built Rook: an AI red-teamer that reasons about attack paths and proves every finding with a working exploit before claiming it. The PR commenter posts inline review comments with a recommended fix and a one-click 'Have Otis fix this' link, closing the find-fix loop. Now packaged as a Castle template (Ops), surfaces at /templates/rook, deploys to https://demo.rook.42nights.dev.",
+    "extracted_into_template_id": "rook",
+    "extracted_at": "2026-04-22",
+    "reused_at_customer_ids": ["meridian", "brightwell"]
+  },
+  {
+    "id": "wiki-extraction",
+    "source_customer_id": "tessellate",
+    "source_engagement_id": "tessellate-eng",
+    "source_engagement_summary": "Tessellate Labs needed to ramp engineers on a codebase nobody fully knew. Built Wiki (originally Atlas; renamed): a local-first DeepWiki clone that indexes a repo, answers grounded questions with citation validation, and auto-generates a multi-page wiki with mermaid diagrams. The messenger-style UI puts each connected repo at the top of the left rail. Now packaged as a Castle template (Research), surfaces at /templates/wiki, deploys to https://demo.wiki.42nights.dev.",
+    "extracted_into_template_id": "wiki",
+    "extracted_at": "2026-05-16",
+    "reused_at_customer_ids": ["arcadia"]
+  },
+  {
+    "id": "dataroom-extraction",
+    "source_customer_id": "brightwell",
+    "source_engagement_id": "brightwell-eng",
+    "source_engagement_summary": "Brightwell Financial needed to drop contracts, transcripts, and Slack exports into one place and ask grounded questions. Built Dataroom: hand-rolled RAG with citation validation, an answerability gate, compliance classification (PHI/PII/PCI/financial/legal), and a server-side secret scrubber. Local-mode option for regulated customers. The Web Brain Chrome extension folds in as an ingestion source for team browsing history. Now packaged as a Castle template (Research), surfaces at /templates/dataroom, deploys to https://demo.dataroom.42nights.dev.",
+    "extracted_into_template_id": "dataroom",
+    "extracted_at": "2026-03-30",
+    "reused_at_customer_ids": ["meridian", "northwind", "lumen"]
+  },
+  {
+    "id": "web-brain-extraction",
+    "source_customer_id": "42nights",
+    "source_engagement_id": "42nights-eng",
+    "source_engagement_summary": "The 42nights team wanted institutional memory of what we'd read, not just what we'd written. Forked the shlawgathon/WebBrain hackathon project; gutted its Java backend and MongoDB; rebuilt the backend inside the Dataroom; added a server-side sensitive-info scrubber that drops captures with too many redactions; added tiered consolidation via cron. Folded into the Dataroom as a new ingestion source. Now packaged as a Castle template (Research) — installs from the Chrome Web Store, talks to the customer's Dataroom backend.",
+    "extracted_into_template_id": "web-brain",
+    "extracted_at": "2026-05-12",
+    "reused_at_customer_ids": ["brightwell"]
+  },
+  {
+    "id": "company-number-extraction",
+    "source_customer_id": "cendol",
+    "source_engagement_id": "cendol-eng",
+    "source_engagement_summary": "Cendol Commerce wanted one phone number for both voice and iMessage that answered questions about their website without an agent in the loop. Built Company Number: Linq Blue + ElevenLabs Conversational AI on top of the Dataroom's RAG core. Crawler indexes the customer site; messages and calls answer from that corpus with citation grounding. Refuses off-topic; tapback-reacts to thanks. Now packaged as a Castle template (GTM), surfaces at /templates/company-number, deploys to https://demo.company-number.42nights.dev.",
+    "extracted_into_template_id": "company-number",
+    "extracted_at": "2026-04-04",
+    "reused_at_customer_ids": ["northwind", "arcadia", "lumen", "meridian"]
+  }
+]

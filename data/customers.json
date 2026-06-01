@@ -1,1 +1,82 @@
-[]
+[
+  {
+    "id": "tessellate",
+    "name": "Tessellate Labs",
+    "backed_by": ["Sequoia", "YC"],
+    "start_date": "2025-11-10",
+    "status": "active",
+    "current_mrr": 4000,
+    "is_pe": false,
+    "health": "green"
+  },
+  {
+    "id": "northwind",
+    "name": "Northwind Logistics",
+    "backed_by": ["Bessemer"],
+    "start_date": "2025-12-15",
+    "status": "active",
+    "current_mrr": 6000,
+    "is_pe": false,
+    "health": "green"
+  },
+  {
+    "id": "brightwell",
+    "name": "Brightwell Financial",
+    "backed_by": ["Thoma Bravo"],
+    "start_date": "2026-01-08",
+    "status": "active",
+    "current_mrr": 12000,
+    "is_pe": true,
+    "health": "green"
+  },
+  {
+    "id": "meridian",
+    "name": "Meridian Health",
+    "backed_by": ["General Catalyst", "GV"],
+    "start_date": "2026-02-14",
+    "status": "active",
+    "current_mrr": 9000,
+    "is_pe": true,
+    "health": "yellow"
+  },
+  {
+    "id": "arcadia",
+    "name": "Arcadia Robotics",
+    "backed_by": ["Lux Capital"],
+    "start_date": "2026-03-01",
+    "status": "active",
+    "current_mrr": 5000,
+    "is_pe": false,
+    "health": "yellow"
+  },
+  {
+    "id": "lumen",
+    "name": "Lumen Education",
+    "backed_by": ["Reach Capital", "Owl Ventures"],
+    "start_date": "2026-03-20",
+    "status": "active",
+    "current_mrr": 3500,
+    "is_pe": false,
+    "health": "yellow"
+  },
+  {
+    "id": "cendol",
+    "name": "Cendol Commerce",
+    "backed_by": ["Index Ventures"],
+    "start_date": "2026-01-28",
+    "status": "active",
+    "current_mrr": 7000,
+    "is_pe": false,
+    "health": "red"
+  },
+  {
+    "id": "42nights",
+    "name": "42nights Inc",
+    "backed_by": [],
+    "start_date": "2025-09-01",
+    "status": "paused",
+    "current_mrr": 0,
+    "is_pe": false,
+    "health": "red"
+  }
+]

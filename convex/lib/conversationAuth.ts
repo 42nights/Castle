@@ -41,6 +41,12 @@ export type AuthUser = {
 export async function requireUser(
   ctx: QueryCtx | MutationCtx,
 ): Promise<AuthUser> {
+  // DEV-ONLY auto-operator bypass (see convex/lib/assertOperator.ts). Returns a
+  // synthetic dev user so chat/conversation queries don't throw "unauthenticated"
+  // without GitHub OAuth. Inert unless CASTLE_DEV_AUTH=1 (local backend only).
+  if (process.env.CASTLE_DEV_AUTH === "1") {
+    return { _id: "dev-operator", email: "dev@42nights.dev", slug: "idan" };
+  }
   const user = await authComponent.safeGetAuthUser(ctx);
   if (!user) throw new Error("unauthenticated");
   const u = user as { _id?: string; userId?: string; email?: string | null };
@@ -86,6 +92,14 @@ export async function tryConversation(
   ctx: QueryCtx | MutationCtx,
   id: Id<"agent_conversations">,
 ): Promise<{ conv: Doc<"agent_conversations">; user: AuthUser } | null> {
+  // DEV-ONLY auto-operator bypass (see convex/lib/assertOperator.ts): the dev
+  // operator can read any conversation so the chat transcript renders without
+  // GitHub OAuth. Inert unless CASTLE_DEV_AUTH=1 (local backend only).
+  if (process.env.CASTLE_DEV_AUTH === "1") {
+    const conv = await ctx.db.get(id);
+    if (!conv) return null;
+    return { conv, user: { _id: "dev-operator", email: "dev@42nights.dev", slug: "idan" } };
+  }
   const user = await authComponent.safeGetAuthUser(ctx);
   if (!user) return null;
   const u = user as { _id?: string; userId?: string; email?: string | null };
