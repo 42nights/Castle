@@ -6,6 +6,7 @@ import {
   isOperator,
 } from "./lib/assertOperator";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
+import { resolveOrgId, scopeToOrg } from "./lib/org";
 
 /** Stale open-run window in ms (5 minutes). A run started more than
  *  this long ago that's still open is considered crashed, not locked. */
@@ -25,8 +26,9 @@ export const list = query({
     // Archived templates are hidden from the main list for EVERYONE,
     // operators included. Operators restore them from the dedicated
     // archived view (listArchived).
+    const orgId = await resolveOrgId(ctx);
     const all = await ctx.db.query("templates").collect();
-    return all.filter((t) => !t.archived_at);
+    return scopeToOrg(all, orgId).filter((t) => !t.archived_at);
   },
 });
 
@@ -263,6 +265,7 @@ export const createFromCandidate = mutation({
     if (!candidate) throw new Error("candidate not found");
     const slug = await uniqueSlug(ctx, "templates", slugify(args.name));
     const now = nowIso();
+    const orgId = await resolveOrgId(ctx);
     const id = await ctx.db.insert("templates", {
       name: args.name,
       category: args.category,
@@ -273,6 +276,7 @@ export const createFromCandidate = mutation({
       created_at: now,
       updated_at: now,
       updated_by_fde_id: args.actor_fde_id,
+      ...(orgId !== null ? { organization_id: orgId } : {}),
     });
     await ctx.db.patch(args.candidate_id, { promoted_to_template_id: id });
     return { id, slug };
@@ -320,6 +324,7 @@ export const create = mutation({
     await assertOperator(ctx);
     const slug = await uniqueSlug(ctx, "templates", slugify(args.name));
     const now = nowIso();
+    const orgId = await resolveOrgId(ctx);
     const id = await ctx.db.insert("templates", {
       name: args.name,
       category: args.category,
@@ -329,6 +334,7 @@ export const create = mutation({
       created_at: now,
       updated_at: now,
       updated_by_fde_id: args.actor_fde_id,
+      ...(orgId !== null ? { organization_id: orgId } : {}),
     });
     for (let i = 0; i < args.capabilities.length; i++) {
       await ctx.db.insert("template_capabilities", {

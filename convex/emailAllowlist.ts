@@ -13,6 +13,7 @@ import {
   RESCUE_ALLOWLIST,
   validatePattern,
 } from "../lib/auth-allowlist";
+import { resolveOrgId, scopeToOrg } from "./lib/org";
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -29,8 +30,9 @@ export const list = query({
   args: {},
   handler: async (ctx) => {
     await assertOperatorRead(ctx);
+    const orgId = await resolveOrgId(ctx);
     const rows = await ctx.db.query("email_allowlist").collect();
-    return rows
+    return scopeToOrg(rows, orgId)
       .map((r) => ({
         id: r._id,
         pattern: r.pattern,
@@ -129,11 +131,13 @@ export const add = mutation({
       throw new Error(`"${cleaned}" is already a hardcoded rescue entry.`);
     }
 
+    const orgId = await resolveOrgId(ctx);
     const id = await ctx.db.insert("email_allowlist", {
       pattern: cleaned,
       note: note?.trim() || undefined,
       created_at: nowIso(),
       created_by_email: email,
+      ...(orgId !== null ? { organization_id: orgId } : {}),
     });
 
     // Audit
@@ -175,6 +179,7 @@ export const addBulk = mutation({
   handler: async (ctx, { patterns }) => {
     const { email } = await assertOperator(ctx);
     const now = nowIso();
+    const orgId = await resolveOrgId(ctx);
     let inserted = 0;
     let skipped = 0;
     for (const raw of patterns) {
@@ -201,6 +206,7 @@ export const addBulk = mutation({
         pattern: cleaned,
         created_at: now,
         created_by_email: email,
+        ...(orgId !== null ? { organization_id: orgId } : {}),
       });
       await ctx.db.insert("email_allowlist_audit", {
         pattern: cleaned,

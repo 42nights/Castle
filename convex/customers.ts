@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { assertOperatorRead } from "./lib/assertOperator";
 import { checkNonNegative } from "./lib/bounds";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
+import { resolveOrgId, scopeToOrg } from "./lib/org";
 
 const status = v.union(
   v.literal("active"),
@@ -19,7 +20,9 @@ export const list = query({
   args: {},
   handler: async (ctx) => {
     await assertOperatorRead(ctx);
-    return ctx.db.query("customers").collect();
+    const orgId = await resolveOrgId(ctx);
+    const rows = await ctx.db.query("customers").collect();
+    return scopeToOrg(rows, orgId);
   },
 });
 
@@ -47,6 +50,7 @@ export const create = mutation({
     checkNonNegative("current_mrr", args.current_mrr);
     const slug = await uniqueSlug(ctx, "customers", slugify(args.name));
     const now = nowIso();
+    const orgId = await resolveOrgId(ctx);
     const id = await ctx.db.insert("customers", {
       name: args.name,
       backed_by: args.backed_by,
@@ -59,6 +63,7 @@ export const create = mutation({
       created_at: now,
       updated_at: now,
       updated_by_fde_id: args.actor_fde_id,
+      ...(orgId !== null ? { organization_id: orgId } : {}),
     });
     // Return the minted slug too — uniqueSlug may have appended "-2"
     // etc. on collision, so callers (especially MCP wrappers) can't

@@ -2,6 +2,9 @@ import { mutation } from "./_generated/server";
 import { authComponent } from "./auth";
 import { isEmailAllowedAgainst } from "../lib/auth-allowlist";
 import { requireUser } from "./lib/conversationAuth";
+import { nowIso } from "./lib/util";
+import { DEFAULT_ORG_SLUG } from "./lib/org";
+import { isOperator } from "./lib/assertOperator";
 
 /**
  * One-shot conversation visibility/ownership backfill.
@@ -52,6 +55,74 @@ export const stampDefaultsForConversations = mutation({
       stamped++;
     }
     return { stamped };
+  },
+});
+
+/**
+ * P33 backfill — idempotent, safe to re-run.
+ *
+ * 1. Creates the "42nights-default" organization if it doesn't exist.
+ * 2. Stamps every operational row that's missing organization_id with the
+ *    default org id.
+ * 3. Creates organization_members rows for every existing Better Auth user
+ *    who is on the email allowlist (the operator set).
+ *
+ * Run from CLI:
+ *   npx convex run migrations:stampDefaultOrg
+ */
+export const stampDefaultOrg = mutation({
+  args: {},
+  handler: async (ctx) => {
+    // Operator gate — mirrors assertOperator but as mutation-safe version
+    const email = await isOperator(ctx);
+    if (!email) throw new Error("unauthorized: must be an allowlisted operator");
+
+    const now = nowIso();
+
+    // 1. Ensure the default org exists.
+    let defaultOrg = await ctx.db
+      .query("organizations")
+      .withIndex("by_slug", (q) => q.eq("slug", DEFAULT_ORG_SLUG))
+      .first();
+    if (!defaultOrg) {
+      const orgId = await ctx.db.insert("organizations", {
+        name: "42nights",
+        slug: DEFAULT_ORG_SLUG,
+        created_at: now,
+      });
+      defaultOrg = (await ctx.db.get(orgId))!;
+    }
+    const orgId = defaultOrg._id;
+
+    // 2. Stamp operational tables. Skip rows that already have organization_id.
+    const tables = [
+      "fdes",
+      "customers",
+      "engagements",
+      "deployments",
+      "templates",
+      "pattern_extractions",
+      "founder_hours",
+      "email_allowlist",
+    ] as const;
+
+    let stamped = 0;
+    for (const table of tables) {
+      for await (const row of ctx.db.query(table)) {
+        if (row.organization_id) continue;
+        await ctx.db.patch(row._id, { organization_id: orgId });
+        stamped++;
+      }
+    }
+
+    // 3. Organization members for Better Auth users are created lazily: on
+    // first request resolveOrgId falls back to the default org for users
+    // with no membership row. Use organizations.addMember or
+    // organizations.createOrgWithMembers to explicitly assign users after
+    // this migration runs.
+    const membersAdded = 0;
+
+    return { orgId, stamped, membersAdded };
   },
 });
 

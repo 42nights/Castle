@@ -2,10 +2,15 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { nowIso } from "./lib/util";
 import { assertOperator } from "./lib/assertOperator";
+import { resolveOrgId, scopeToOrg } from "./lib/org";
 
 export const list = query({
   args: {},
-  handler: async (ctx) => ctx.db.query("founder_hours").collect(),
+  handler: async (ctx) => {
+    const orgId = await resolveOrgId(ctx);
+    const rows = await ctx.db.query("founder_hours").collect();
+    return scopeToOrg(rows, orgId);
+  },
 });
 
 export const upsertMonth = mutation({
@@ -36,6 +41,7 @@ export const upsertMonth = mutation({
     const hoursDelta = founder_hours_total - prevHours;
     const arrDelta = new_arr_dollars - prevArr;
 
+    const orgId = await resolveOrgId(ctx);
     let id: string;
     if (existing) {
       await ctx.db.patch(existing._id, {
@@ -51,6 +57,7 @@ export const upsertMonth = mutation({
         new_arr_dollars,
         created_at: now,
         updated_at: now,
+        ...(orgId !== null ? { organization_id: orgId } : {}),
       });
     }
 

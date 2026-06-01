@@ -42,6 +42,27 @@ const severity = v.union(
 );
 
 export default defineSchema({
+  // ─────────────────────────────────────────────────────────────────────
+  //  P33 — Multi-tenant org model. Both tables are additive; all
+  //  operational tables carry an optional organization_id so existing
+  //  rows validate unchanged. The feature is inert until
+  //  CASTLE_MULTITENANT=1 is set — see convex/lib/org.ts.
+  // ─────────────────────────────────────────────────────────────────────
+  organizations: defineTable({
+    name: v.string(),
+    slug: v.string(),
+    created_at: v.string(),
+  }).index("by_slug", ["slug"]),
+
+  organization_members: defineTable({
+    organization_id: v.id("organizations"),
+    user_id: v.string(),
+    role: v.union(v.literal("operator"), v.literal("admin")),
+    created_at: v.string(),
+  })
+    .index("by_user", ["user_id"])
+    .index("by_org", ["organization_id"]),
+
   fdes: defineTable({
     name: v.string(),
     role,
@@ -60,7 +81,10 @@ export default defineSchema({
     created_at: v.string(),
     updated_at: v.string(),
     updated_by_fde_id: v.union(v.id("fdes"), v.null()),
-  }).index("by_slug", ["slug"]),
+    organization_id: v.optional(v.id("organizations")),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_org", ["organization_id"]),
 
   customers: defineTable({
     name: v.string(),
@@ -74,10 +98,12 @@ export default defineSchema({
     created_at: v.string(),
     updated_at: v.string(),
     updated_by_fde_id: v.union(v.id("fdes"), v.null()),
+    organization_id: v.optional(v.id("organizations")),
   })
     .index("by_slug", ["slug"])
     .index("by_status", ["status"])
-    .index("by_health", ["health"]),
+    .index("by_health", ["health"])
+    .index("by_org", ["organization_id"]),
 
   engagements: defineTable({
     customer_id: v.id("customers"),
@@ -94,12 +120,14 @@ export default defineSchema({
     created_at: v.string(),
     updated_at: v.string(),
     updated_by_fde_id: v.union(v.id("fdes"), v.null()),
+    organization_id: v.optional(v.id("organizations")),
   })
     .index("by_slug", ["slug"])
     .index("by_customer", ["customer_id"])
     .index("by_phase", ["phase"])
     .index("by_health", ["health"])
-    .index("by_last_update", ["last_update_at"]),
+    .index("by_last_update", ["last_update_at"])
+    .index("by_org", ["organization_id"]),
 
   engagement_assignments: defineTable({
     engagement_id: v.id("engagements"),
@@ -122,10 +150,12 @@ export default defineSchema({
     customization_pct: v.number(),
     created_at: v.string(),
     updated_at: v.string(),
+    organization_id: v.optional(v.id("organizations")),
   })
     .index("by_customer", ["customer_id"])
     .index("by_engagement", ["engagement_id"])
-    .index("by_template", ["template_id"]),
+    .index("by_template", ["template_id"])
+    .index("by_org", ["organization_id"]),
 
   templates: defineTable({
     name: v.string(),
@@ -152,9 +182,11 @@ export default defineSchema({
     created_at: v.string(),
     updated_at: v.string(),
     updated_by_fde_id: v.union(v.id("fdes"), v.null()),
+    organization_id: v.optional(v.id("organizations")),
   })
     .index("by_slug", ["slug"])
-    .index("by_category", ["category"]),
+    .index("by_category", ["category"])
+    .index("by_org", ["organization_id"]),
 
   /** Repositories discovered in the 42nights GitHub org via the
    *  Composio sync job, but not yet promoted to a real template. Each
@@ -192,9 +224,11 @@ export default defineSchema({
     extracted_at: v.string(),
     created_at: v.string(),
     updated_at: v.string(),
+    organization_id: v.optional(v.id("organizations")),
   })
     .index("by_template", ["extracted_into_template_id"])
-    .index("by_source_engagement", ["source_engagement_id"]),
+    .index("by_source_engagement", ["source_engagement_id"])
+    .index("by_org", ["organization_id"]),
 
   pattern_extraction_reuses: defineTable({
     extraction_id: v.id("pattern_extractions"),
@@ -210,7 +244,10 @@ export default defineSchema({
     new_arr_dollars: v.number(),
     created_at: v.string(),
     updated_at: v.string(),
-  }).index("by_month", ["month"]),
+    organization_id: v.optional(v.id("organizations")),
+  })
+    .index("by_month", ["month"])
+    .index("by_org", ["organization_id"]),
 
   engagement_updates: defineTable({
     engagement_id: v.id("engagements"),
@@ -457,7 +494,10 @@ export default defineSchema({
     note: v.optional(v.string()),
     created_at: v.string(),
     created_by_email: v.optional(v.string()),
-  }).index("by_pattern", ["pattern"]),
+    organization_id: v.optional(v.id("organizations")),
+  })
+    .index("by_pattern", ["pattern"])
+    .index("by_org", ["organization_id"]),
 
   /** Rejected sign-in attempts. Better Auth's user.create.before hook
    *  logs every denied attempt here so an operator can see the exact

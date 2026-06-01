@@ -2,10 +2,15 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { checkNonNegative, checkPercent } from "./lib/bounds";
 import { nowIso } from "./lib/util";
+import { resolveOrgId, scopeToOrg } from "./lib/org";
 
 export const list = query({
   args: {},
-  handler: async (ctx) => ctx.db.query("deployments").collect(),
+  handler: async (ctx) => {
+    const orgId = await resolveOrgId(ctx);
+    const rows = await ctx.db.query("deployments").collect();
+    return scopeToOrg(rows, orgId);
+  },
 });
 
 export const listByEngagement = query({
@@ -40,10 +45,12 @@ export const create = mutation({
     checkNonNegative("hours_replaced_per_week", args.hours_replaced_per_week);
     checkPercent("customization_pct", args.customization_pct);
     const now = nowIso();
+    const orgId = await resolveOrgId(ctx);
     return ctx.db.insert("deployments", {
       ...args,
       created_at: now,
       updated_at: now,
+      ...(orgId !== null ? { organization_id: orgId } : {}),
     });
   },
 });

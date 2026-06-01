@@ -4,6 +4,7 @@ import type { Id } from "./_generated/dataModel";
 import { logEngagementUpdate } from "./lib/audit";
 import { checkNonNegative, checkPercent } from "./lib/bounds";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
+import { resolveOrgId, scopeToOrg } from "./lib/org";
 
 const phase = v.union(
   v.literal("discovery"),
@@ -19,7 +20,11 @@ const health = v.union(
 
 export const list = query({
   args: {},
-  handler: async (ctx) => ctx.db.query("engagements").collect(),
+  handler: async (ctx) => {
+    const orgId = await resolveOrgId(ctx);
+    const rows = await ctx.db.query("engagements").collect();
+    return scopeToOrg(rows, orgId);
+  },
 });
 
 export const getBySlug = query({
@@ -104,6 +109,7 @@ export const create = mutation({
     const base = slugify(`${customer.slug}-${args.phase}`);
     const slug = await uniqueSlug(ctx, "engagements", base);
     const now = nowIso();
+    const orgId = await resolveOrgId(ctx);
     const id = await ctx.db.insert("engagements", {
       customer_id: args.customer_id,
       start_date: args.start_date,
@@ -122,6 +128,7 @@ export const create = mutation({
       created_at: now,
       updated_at: now,
       updated_by_fde_id: args.actor_fde_id,
+      ...(orgId !== null ? { organization_id: orgId } : {}),
     });
     for (const fde_id of args.fde_ids) {
       await ctx.db.insert("engagement_assignments", {

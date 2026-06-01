@@ -3,12 +3,15 @@ import { mutation, query } from "./_generated/server";
 import { assertOperatorRead } from "./lib/assertOperator";
 import { checkNonNegative } from "./lib/bounds";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
+import { resolveOrgId, scopeToOrg } from "./lib/org";
 
 export const list = query({
   args: {},
   handler: async (ctx) => {
     await assertOperatorRead(ctx);
-    return ctx.db.query("fdes").collect();
+    const orgId = await resolveOrgId(ctx);
+    const rows = await ctx.db.query("fdes").collect();
+    return scopeToOrg(rows, orgId);
   },
 });
 
@@ -39,6 +42,7 @@ export const create = mutation({
     checkNonNegative("capacity_hours_per_week", args.capacity_hours_per_week);
     const slug = await uniqueSlug(ctx, "fdes", slugify(args.name));
     const now = nowIso();
+    const orgId = await resolveOrgId(ctx);
     const id = await ctx.db.insert("fdes", {
       name: args.name,
       role: args.role,
@@ -52,6 +56,7 @@ export const create = mutation({
       created_at: now,
       updated_at: now,
       updated_by_fde_id: args.actor_fde_id,
+      ...(orgId !== null ? { organization_id: orgId } : {}),
     });
     return { id, slug };
   },

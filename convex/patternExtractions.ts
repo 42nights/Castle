@@ -2,10 +2,15 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { assertOperator } from "./lib/assertOperator";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
+import { resolveOrgId, scopeToOrg } from "./lib/org";
 
 export const list = query({
   args: {},
-  handler: async (ctx) => ctx.db.query("pattern_extractions").collect(),
+  handler: async (ctx) => {
+    const orgId = await resolveOrgId(ctx);
+    const rows = await ctx.db.query("pattern_extractions").collect();
+    return scopeToOrg(rows, orgId);
+  },
 });
 
 export const listByTemplate = query({
@@ -63,6 +68,7 @@ export const extract = mutation({
     const eng = await ctx.db.get(args.source_engagement_id);
     if (!eng) throw new Error("source engagement not found");
     const now = nowIso();
+    const orgId = await resolveOrgId(ctx);
 
     let template_id = args.target_template_id;
     // Track whether we minted a fresh template so the caller (esp. MCP
@@ -84,6 +90,7 @@ export const extract = mutation({
         created_at: now,
         updated_at: now,
         updated_by_fde_id: args.actor_fde_id,
+        ...(orgId !== null ? { organization_id: orgId } : {}),
       });
       minted_template_slug = slug;
       for (let i = 0; i < args.new_template.capabilities.length; i++) {
@@ -130,6 +137,7 @@ export const extract = mutation({
         extracted_at: now,
         created_at: now,
         updated_at: now,
+        ...(orgId !== null ? { organization_id: orgId } : {}),
       });
     }
 
