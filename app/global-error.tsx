@@ -15,18 +15,18 @@ export default function GlobalError({
 
   return (
     <html lang="en">
-      <body className="min-h-screen bg-[#0a0a0a] text-[#e5e5e5] font-sans flex items-center justify-center px-6">
+      <body className="min-h-screen bg-[#FAFAF7] text-[#1A1813] font-sans flex items-center justify-center px-6">
         <div className="max-w-md text-center flex flex-col items-center gap-4">
           <h2 className="text-lg font-semibold">Something went wrong</h2>
-          <p className="text-sm text-[#999]">
+          <p className="text-sm text-[#4A4742]">
             {error.message || "An unexpected error occurred."}
           </p>
           {error.digest && (
-            <code className="text-xs text-[#666]">Digest: {error.digest}</code>
+            <code className="text-xs text-[#8A857C]">Digest: {error.digest}</code>
           )}
           <button
             onClick={() => unstable_retry()}
-            className="h-9 px-4 rounded-md bg-white text-black text-sm"
+            className="h-9 px-4 rounded-md bg-[#1A1813] text-[#FAFAF7] text-sm"
           >
             Try again
           </button>

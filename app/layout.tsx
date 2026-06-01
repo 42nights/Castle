@@ -27,6 +27,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { ConvexClientProvider } from "@/components/convex-provider";
 import { Footer } from "@/components/footer";
 import { KeyboardHelp } from "@/components/keyboard-help";
+import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { TopNav } from "@/components/top-nav";
 import { Toaster } from "@/components/ui/sonner";
 import { getToken } from "@/lib/auth-server";
@@ -56,6 +57,7 @@ export default async function RootLayout({
             <Footer />
             <CommandPalette />
             <KeyboardHelp />
+            <KeyboardShortcuts />
             <AgentPanel />
             <Toaster position="bottom-right" />
           </ChatProvider>

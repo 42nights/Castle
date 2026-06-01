@@ -42,6 +42,7 @@ import type * as seed from "../seed.js";
 import type * as suggestions from "../suggestions.js";
 import type * as templates from "../templates.js";
 import type * as userPreferences from "../userPreferences.js";
+import type * as userRecents from "../userRecents.js";
 import type * as workflowRuns from "../workflowRuns.js";
 
 import type {
@@ -85,6 +86,7 @@ declare const fullApi: ApiFromModules<{
   suggestions: typeof suggestions;
   templates: typeof templates;
   userPreferences: typeof userPreferences;
+  userRecents: typeof userRecents;
   workflowRuns: typeof workflowRuns;
 }>;
 

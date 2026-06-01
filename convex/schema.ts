@@ -726,6 +726,26 @@ export default defineSchema({
     .index("by_deployment_received", ["deployment_id", "received_at"])
     .index("by_kind", ["kind"]),
 
+  /** Per-user recently viewed entities. Capped at 10 per user (by slug),
+   *  deduped so repeated visits just bump viewed_at. Surfaced in the
+   *  command palette's default list and (later) in the overview
+   *  "pick up where you left off" strip. */
+  user_recents: defineTable({
+    user_id: v.string(),
+    kind: v.union(
+      v.literal("customer"),
+      v.literal("engagement"),
+      v.literal("fde"),
+      v.literal("template"),
+      v.literal("extraction"),
+    ),
+    slug: v.string(),
+    title: v.string(),
+    viewed_at: v.string(),
+  })
+    .index("by_user_viewed", ["user_id", "viewed_at"])
+    .index("by_user_slug", ["user_id", "slug"]),
+
   user_preferences: defineTable({
     user_id: v.string(),
     timezone: v.string(),
