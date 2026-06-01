@@ -1,4 +1,5 @@
 import { PageShell } from "@/components/page-shell";
+import { EditorialGreeting } from "@/components/editorial-greeting";
 import { AttentionList } from "@/components/sections/attention";
 import { AttentionListLive } from "@/components/sections/attention-live";
 import { HeroMetrics } from "@/components/sections/hero-metrics";
@@ -7,11 +8,13 @@ import { PhaseColumns } from "@/components/sections/phase-columns";
 import { MrrChart } from "@/components/sections/mrr-chart";
 import { TemplateOverview } from "@/components/sections/template-overview";
 import { ExtractionTimeline } from "@/components/sections/extraction-timeline";
+import { FounderHoursChart } from "@/components/sections/founder-hours-chart";
 import {
   allFdeWorkloads,
   atRiskArr,
   attentionItems,
   contractedArr,
+  deriveFounderHoursSeries,
   engagementRows,
   engagementsByPhase,
   fdeAgentsShippedRecently,
@@ -51,6 +54,7 @@ export function OverviewSections({
 }) {
   const { fdes, customers, engagements, templates, deployments, patternExtractions } = data;
   const today = new Date("2026-05-11T12:00:00Z");
+  const greetingDate = new Date("2026-05-31T12:00:00Z");
 
   const arr = contractedArr(customers);
   const paying = payingCustomerCount(customers);
@@ -75,8 +79,21 @@ export function OverviewSections({
     ])
   );
 
+  // Founder leverage chart — auto-derived from live data
+  const founderHoursPoints = deriveFounderHoursSeries(
+    fdes,
+    customers,
+    engagements,
+    8,
+    new Date(),
+  );
+
   return (
     <PageShell>
+      {/* Fraunces date greeting — the editorial opening moment */}
+      <EditorialGreeting date={greetingDate} />
+
+      {/* Hero MRR + mini-stats */}
       <HeroMetrics
         mrr={mrrPoints.at(-1)?.mrr ?? 0}
         mrrDelta={
@@ -93,16 +110,20 @@ export function OverviewSections({
         criticalCount={attention.filter((a) => a.severity === "critical").length}
       />
 
+      {/* Attention queue — grouped by severity */}
       {liveAttention ? <AttentionListLive /> : <AttentionList items={attention} />}
 
+      {/* Pipeline kanban columns */}
       <PhaseColumns groups={phaseGroups} today={today} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      {/* Operator board — bench + productization arc */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
         <FdeWorkloadBoard
           workloads={workloads}
           weeklyShipsByFde={weeklyShipsByFde}
           imbalance={imbalance}
         />
+        {/* Productization arc */}
         <div className="flex flex-col gap-4">
           <TemplateOverview usage={usage} customers={customers} limit={5} />
           <ExtractionTimeline
@@ -115,7 +136,13 @@ export function OverviewSections({
         </div>
       </div>
 
-      <MrrChart points={mrrPoints} />
+      {/* MRR trend */}
+      <div className="mb-4">
+        <MrrChart points={mrrPoints} />
+      </div>
+
+      {/* Founder leverage chart — persuasive investor narrative */}
+      <FounderHoursChart points={founderHoursPoints} />
     </PageShell>
   );
 }

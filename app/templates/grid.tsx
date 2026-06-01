@@ -1,23 +1,49 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
-import { CategoryBadge } from "@/components/atoms";
-import { TemplateTagsChips } from "@/components/controls/template-tags-input";
+// TemplateGrid — rebuilt with Paper design system per §5.3.
+// Staggered card entrance (30ms per card, 8px translateY, fade).
+// Filters: category chips + sort + text search, all client-state.
+// Respects prefers-reduced-motion by skipping animation transforms.
+
+import { useMemo, useState, useSyncExternalStore } from "react";
+import { TemplateCard } from "@/components/templates/template-card";
+import { TemplateFilters, type FilterState, type SortKey } from "@/components/templates/template-filters";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { TemplateUsage } from "@/lib/derive";
-import type { Customer, FDE, TemplateCategory } from "@/lib/types";
-import { formatDate } from "@/lib/format";
+import type { Customer, FDE } from "@/lib/types";
 
-type SortKey = "reused" | "newest" | "oldest" | "alpha";
+// Minimal grid SVG for empty state
+function LibraryIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="6" y="10" width="10" height="28" rx="2" />
+      <rect x="19" y="6" width="10" height="32" rx="2" />
+      <rect x="32" y="14" width="10" height="24" rx="2" />
+    </svg>
+  );
+}
 
-const SORTS: { value: SortKey; label: string }[] = [
-  { value: "reused", label: "Most reused" },
-  { value: "newest", label: "Newest" },
-  { value: "oldest", label: "Oldest" },
-  { value: "alpha", label: "A → Z" },
-];
+function sortUsage(list: TemplateUsage[], sort: SortKey): TemplateUsage[] {
+  const copy = [...list];
+  copy.sort((a, b) => {
+    if (sort === "alpha") return a.template.name.localeCompare(b.template.name);
+    if (sort === "newest") return b.template.created_at.localeCompare(a.template.created_at);
+    if (sort === "oldest") return a.template.created_at.localeCompare(b.template.created_at);
+    // "reused" — by deploymentCount desc, then newest
+    if (b.deploymentCount !== a.deploymentCount) return b.deploymentCount - a.deploymentCount;
+    return b.template.created_at.localeCompare(a.template.created_at);
+  });
+  return copy;
+}
 
-const CATEGORIES: TemplateCategory[] = ["GTM", "Ops", "Content", "BD", "Research"];
+function matchesSearch(u: TemplateUsage, q: string): boolean {
+  if (!q) return true;
+  const lower = q.toLowerCase();
+  if (u.template.name.toLowerCase().includes(lower)) return true;
+  if (u.template.capabilities.some((c) => c.toLowerCase().includes(lower))) return true;
+  if (u.template.tags.some((t) => t.toLowerCase().includes(lower))) return true;
+  return false;
+}
 
 export function TemplateGrid({
   usage,
@@ -28,148 +54,113 @@ export function TemplateGrid({
   customers: Customer[];
   fdes: FDE[];
 }) {
-  const [sort, setSort] = useState<SortKey>("reused");
-  const [cat, setCat] = useState<TemplateCategory | "all">("all");
-  const cById = new Map(customers.map((c) => [c.id, c]));
-  const fById = new Map(fdes.map((f) => [f.id, f]));
+  const cById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
+  const fById = useMemo(() => new Map(fdes.map((f) => [f.id, f])), [fdes]);
+
+  const [filters, setFilters] = useState<FilterState>({
+    category: "all",
+    sort: "reused",
+    search: "",
+  });
+  // `mounted` is false on the server / first render, true on the client.
+  // Pattern from components/sections/hero-metrics.tsx.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+
+  // Read prefers-reduced-motion only after mount (no SSR window).
+  const reducedMotion = useMemo(
+    () => mounted && typeof window !== "undefined"
+      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      : false,
+    [mounted],
+  );
 
   const filtered = useMemo(() => {
-    const list = usage.filter(
-      (u) => cat === "all" || u.template.category === cat
+    let list = usage.filter(
+      (u) => !u.template.archived_at &&
+        (filters.category === "all" || u.template.category === filters.category) &&
+        matchesSearch(u, filters.search)
     );
-    list.sort((a, b) => {
-      if (sort === "alpha") return a.template.name.localeCompare(b.template.name);
-      if (sort === "newest")
-        return b.template.created_at.localeCompare(a.template.created_at);
-      if (sort === "oldest")
-        return a.template.created_at.localeCompare(b.template.created_at);
-      if (b.deploymentCount !== a.deploymentCount)
-        return b.deploymentCount - a.deploymentCount;
-      return b.template.created_at.localeCompare(a.template.created_at);
-    });
+    list = sortUsage(list, filters.sort);
     return list;
-  }, [usage, sort, cat]);
+  }, [usage, filters]);
+
+  // Tag click — filter by that tag
+  const handleTagClick = (tag: string) => {
+    setFilters((prev) => ({ ...prev, search: `#${tag}` === prev.search ? "" : tag }));
+  };
+
+  const isEmpty = filtered.length === 0;
+  const hasActiveFilters = filters.category !== "all" || filters.search !== "";
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        <button
-          onClick={() => setCat("all")}
-          className={chipClass(cat === "all")}
-        >
-          All categories
-        </button>
-        {CATEGORIES.map((c) => (
-          <button key={c} onClick={() => setCat(c)} className={chipClass(cat === c)}>
-            {c}
-          </button>
-        ))}
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as SortKey)}
-          className="ml-auto h-8 rounded-sm border border-line bg-page px-2 text-[13px] text-ink-2 focus:outline-none focus:ring-1 focus:ring-ink"
-        >
-          {SORTS.map((s) => (
-            <option key={s.value} value={s.value}>
-              Sort · {s.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      <TemplateFilters value={filters} onChange={setFilters} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-line border border-line rounded-sm overflow-hidden">
-        {filtered.map((u) => {
-          const origin = cById.get(u.template.origin_customer_id);
-          const author = fById.get(u.template.authored_by_fde_id);
-          return (
-            <Link
-              key={u.template.id}
-              href={`/templates/${u.template.id}`}
-              className="group bg-page p-5 hover:bg-surface transition-colors"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="t-h3">{u.template.name}</div>
-                <CategoryBadge category={u.template.category} />
-              </div>
-              <ul className="mt-3 space-y-1 text-[13px] text-ink-2">
-                {u.template.capabilities.slice(0, 3).map((cap) => (
-                  <li key={cap} className="flex gap-2">
-                    <span className="text-ink-3">·</span>
-                    <span>{cap}</span>
-                  </li>
-                ))}
-              </ul>
-              {u.template.tags.length > 0 && (
-                <div className="mt-3">
-                  <TemplateTagsChips tags={u.template.tags} max={5} size="xs" />
-                </div>
-              )}
-              <div className="mt-4 pt-3 border-t border-line t-caption flex items-center justify-between gap-3">
-                {u.customerCount === 0 ? (
-                  <span className="text-ink-3">Not yet deployed</span>
-                ) : (
-                  <span className="num text-ink">
-                    Used by {u.customerCount} customer
-                    {u.customerCount === 1 ? "" : "s"}
-                    {u.deploymentCount > 0 && (
-                      <span className="text-ink-3">
-                        {" "}· {u.deploymentCount} deployment
-                        {u.deploymentCount === 1 ? "" : "s"}
-                      </span>
-                    )}
-                  </span>
-                )}
-                <span className="text-ink-3 text-right truncate">
-                  {origin?.name ?? "—"}, {author?.name.split(" ")[0] ?? "—"}
-                </span>
-              </div>
-              <div className="mt-2 flex items-center justify-between t-caption text-ink-3 gap-3">
-                <span className="shrink-0">
-                  Authored{" "}
-                  <span className="num">
-                    {formatDate(u.template.created_at)}
-                  </span>
-                </span>
-                <span className="flex items-center gap-2 min-w-0 justify-end">
-                  {u.template.live_url && (
-                    <a
-                      href={u.template.live_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="num text-ink-2 hover:text-ink underline underline-offset-2 decoration-line truncate max-w-[140px]"
-                      title={u.template.live_url}
-                    >
-                      ↗ {u.template.live_url.replace(/^https?:\/\//, "")}
-                    </a>
-                  )}
-                  {u.template.github_repo && (
-                    <a
-                      href={`https://github.com/${u.template.github_repo}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="num text-ink-2 hover:text-ink underline underline-offset-2 decoration-line truncate max-w-[160px]"
-                      title={u.template.github_repo}
-                    >
-                      {u.template.github_repo}
-                    </a>
-                  )}
-                </span>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
+      {isEmpty ? (
+        <EmptyState
+          illustration={<LibraryIcon />}
+          title={hasActiveFilters ? "No templates match." : "No templates yet."}
+          description={
+            hasActiveFilters
+              ? "Clear the filters or search a different term."
+              : "When you extract a pattern from an engagement, it lands here."
+          }
+          action={
+            hasActiveFilters ? (
+              <button
+                type="button"
+                onClick={() => setFilters({ category: "all", sort: "reused", search: "" })}
+                className="inline-flex h-8 items-center rounded-sm border border-line bg-canvas px-3 text-sm text-ink shadow-[var(--shadow-xs)] hover:bg-surface-1 transition-colors duration-instant focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus)]"
+              >
+                Clear filters
+              </button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <div
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+          role="list"
+          aria-label="Templates"
+        >
+          {filtered.map((u, i) => (
+            <div key={u.template.id} role="listitem">
+              <TemplateCard
+                usage={u}
+                customers={cById}
+                fdes={fById}
+                onTagClick={handleTagClick}
+                style={
+                  mounted && !reducedMotion
+                    ? {
+                        animation: `fadeSlideUp 300ms both`,
+                        animationDelay: `${i * 30}ms`,
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Card entrance keyframes — scoped to this component's output */}
+      <style>{`
+        @keyframes fadeSlideUp {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          @keyframes fadeSlideUp {
+            from { opacity: 1; transform: none; }
+            to   { opacity: 1; transform: none; }
+          }
+        }
+      `}</style>
     </>
   );
-}
-
-function chipClass(active: boolean) {
-  return [
-    "h-7 px-2.5 rounded-sm text-[12px] tracking-[-0.005em] transition-colors",
-    active
-      ? "bg-ink text-page"
-      : "border border-line bg-page text-ink-2 hover:text-ink hover:bg-surface",
-  ].join(" ");
 }

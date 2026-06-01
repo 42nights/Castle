@@ -1,10 +1,32 @@
 import type { Metadata } from "next";
-import { GeistSans } from "geist/font/sans";
-import { GeistMono } from "geist/font/mono";
+import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+
+// Editorial display — Fraunces variable, optical-size axis for the
+// soft/wonky letterforms the investor pages lean on.
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  display: "swap",
+  axes: ["opsz", "SOFT", "WONK"],
+  variable: "--font-display-src",
+});
+// UI everywhere — Inter variable.
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-sans-src",
+});
+// IDs, timestamps, money, tabular numbers — JetBrains Mono variable.
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-mono-src",
+});
 import { AgentPanel } from "@/components/agent-panel";
 import { CommandPalette } from "@/components/command-palette";
 import { ConvexClientProvider } from "@/components/convex-provider";
+import { Footer } from "@/components/footer";
+import { KeyboardHelp } from "@/components/keyboard-help";
 import { TopNav } from "@/components/top-nav";
 import { Toaster } from "@/components/ui/sonner";
 import { getToken } from "@/lib/auth-server";
@@ -24,14 +46,16 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}
+      className={`${fraunces.variable} ${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-page text-ink font-sans">
         <ConvexClientProvider initialToken={token}>
           <ChatProvider>
             <TopNav />
             {children}
+            <Footer />
             <CommandPalette />
+            <KeyboardHelp />
             <AgentPanel />
             <Toaster position="bottom-right" />
           </ChatProvider>

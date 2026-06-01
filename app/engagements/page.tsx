@@ -2,7 +2,7 @@ import { PageHeader, PageShell } from "@/components/page-shell";
 import { NewEngagementButton } from "@/components/sections/engagement-cta";
 import { loadOverview } from "@/lib/load-overview";
 import { engagementRows } from "@/lib/derive";
-import { EngagementsTable } from "./table";
+import { EngagementsList } from "@/components/engagements/engagements-list";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +12,12 @@ export default async function EngagementsPage() {
   return (
     <PageShell>
       <PageHeader
+        variant="operator"
         title="What every FDE is working on, right now."
-        description="The operational table. Red and yellow surface at top by default; click a row to open the engagement and read this week's notes."
+        description="Red and yellow surface at top by default. Click a row to read this week&rsquo;s notes."
         actions={<NewEngagementButton />}
       />
-      <EngagementsTable rows={rows} />
+      <EngagementsList rows={rows} />
     </PageShell>
   );
 }

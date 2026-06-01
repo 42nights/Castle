@@ -2,7 +2,7 @@ import { PageHeader, PageShell } from "@/components/page-shell";
 import { NewCustomerButton } from "@/components/ctas";
 import { loadOverview } from "@/lib/load-overview";
 import { customerRows } from "@/lib/derive";
-import { CustomersTable } from "./table";
+import { CustomersTableNew } from "@/components/customers/customers-table";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +12,12 @@ export default async function CustomersPage() {
   return (
     <PageShell>
       <PageHeader
-        title="Customers"
+        variant="operator"
+        title="Who we ship for."
         description="Sorted by MRR. % template indicates shared infrastructure vs. bespoke."
         actions={<NewCustomerButton />}
       />
-      <CustomersTable rows={rows} />
+      <CustomersTableNew rows={rows} />
     </PageShell>
   );
 }

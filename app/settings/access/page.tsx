@@ -9,13 +9,15 @@ export default async function AccessSettingsPage() {
   return (
     <PageShell>
       <PageHeader
-        title="Access — email allowlist"
+        variant="operator"
+        title="Who can sign in to Castle."
         description={
           <>
-            Only emails matching one of these patterns can sign in to Castle.
-            Use <span className="num text-ink">*@example.com</span> for a whole
-            domain or a full address for one person. Hardcoded rescue entries
-            (so we can&apos;t lock ourselves out) are listed read-only.
+            Only emails matching one of these patterns. Use{" "}
+            <span className="font-mono text-[12px] bg-surface-1 px-1 py-px rounded-sm">
+              *@example.com
+            </span>{" "}
+            for a whole domain or a full address for one person.
           </>
         }
       />

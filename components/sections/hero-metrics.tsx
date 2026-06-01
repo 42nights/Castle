@@ -35,16 +35,23 @@ export function HeroMetrics({
   const deltaPositive = mrrDelta >= 0;
 
   return (
-    <section className="mb-8">
+    <section
+      className="mb-10 rounded-lg bg-canvas p-6 shadow-[var(--shadow-base)]"
+      aria-label="Monthly recurring revenue and key metrics"
+    >
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-8 items-end">
+        {/* Hero MRR */}
         <div>
           <div className="t-eyebrow mb-3">Monthly recurring revenue</div>
-          <div className="flex items-baseline gap-4">
-            <span className="num text-[40px] leading-none font-medium tracking-tight text-ink">
+          <div className="flex items-baseline gap-4 flex-wrap">
+            <span
+              className="t-display-lg text-ink"
+              aria-label={`MRR: ${formatUsdCompact(mrr)}`}
+            >
               {formatUsdCompact(mrr)}
             </span>
             <span
-              className={`num text-[14px] ${deltaPositive ? "text-ok" : "text-accent"}`}
+              className={`font-mono text-[14px] tabular-nums ${deltaPositive ? "text-health-good" : "text-health-bad"}`}
             >
               {deltaPositive ? "+" : ""}
               {formatUsdCompact(mrrDelta)}
@@ -59,6 +66,7 @@ export function HeroMetrics({
           )}
         </div>
 
+        {/* Mini-stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
           <MiniStat label="Paying" value={String(payingCustomers)} />
           <MiniStat label="ARR" value={formatUsdCompact(contractedArr)} />
@@ -71,18 +79,19 @@ export function HeroMetrics({
         </div>
       </div>
 
+      {/* Attention summary chips */}
       {attentionCount > 0 && (
-        <div className="mt-4 flex items-center gap-2 text-[13px]">
+        <div className="mt-5 pt-4 border-t border-line flex items-center gap-2 text-[13px]">
           {criticalCount > 0 && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-1 text-accent">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
-              <span className="num">{criticalCount}</span> critical
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-health-soft-bad px-2.5 py-1 text-health-bad">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-health-bad" aria-hidden />
+              <span className="font-mono tabular-nums">{criticalCount}</span> critical
             </span>
           )}
           {attentionCount - criticalCount > 0 && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 text-ink-2">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-ink-3" />
-              <span className="num">{attentionCount - criticalCount}</span> more
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-ink-3" aria-hidden />
+              <span className="font-mono tabular-nums">{attentionCount - criticalCount}</span> more
             </span>
           )}
         </div>
@@ -102,10 +111,12 @@ function MiniStat({
 }) {
   return (
     <div>
-      <div className="text-[11px] text-ink-3 uppercase tracking-wide mb-0.5">
-        {label}
-      </div>
-      <div className={`num text-[18px] leading-tight font-medium ${alert ? "text-accent" : "text-ink"}`}>
+      <div className="t-eyebrow mb-1">{label}</div>
+      <div
+        className={`font-mono tabular-nums text-[18px] leading-tight font-medium ${
+          alert ? "text-health-bad" : "text-ink"
+        }`}
+      >
         {value}
       </div>
     </div>
@@ -132,7 +143,7 @@ function Sparkline({ points }: { points: MrrPoint[] }) {
     <svg
       width={width}
       height={height}
-      className="mt-2 opacity-40"
+      className="mt-3 opacity-30"
       aria-hidden
     >
       <path d={d} fill="none" stroke="currentColor" strokeWidth={1.5} />

@@ -4,8 +4,10 @@ import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Search } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { useActorSlug } from "@/lib/use-actor";
+import { Button } from "@/components/ui/button";
 import {
   disconnect,
   initiateConnection,
@@ -37,6 +39,7 @@ export function ConnectionsView({
 
   useEffect(() => {
     if (!configured || !actorSlug) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     listConnections(actorSlug)
       .then((r) => setConnections(r))
@@ -133,116 +136,153 @@ export function ConnectionsView({
   };
 
   return (
-    <>
+    <div className="space-y-4">
+      {/* OAuth return confirmation */}
       {justReturned && (
-        <div className="panel mb-4">
-          <header className="panel-header">
-            <h2 className="t-h2 text-ink">Connection complete</h2>
-          </header>
-          <p className="px-3 py-2 text-[12.5px] text-ink-2">
-            Composio confirmed the OAuth grant. Tools are now live in chat.
-          </p>
+        <div
+          role="alert"
+          className="rounded-md bg-health-soft-good px-4 py-3 text-[13px] text-health-good border border-health-good/20"
+        >
+          <span className="font-medium text-ink">Connection complete.</span>{" "}
+          Composio confirmed the OAuth grant. Tools are now live in chat.
         </div>
       )}
 
-      <section className="panel mb-4">
-        <header className="panel-header">
-          <div className="flex items-baseline gap-3">
-            <h2 className="t-h2 text-ink">Catalog</h2>
-            <span className="t-caption num">
-              {actorSlug ? `${connectedCount} connected · ` : ""}
-              {filtered.length}/{toolkits.length}
-            </span>
-          </div>
-          <span className="t-caption">
-            {actorSlug
-              ? `as ${actorSlug}${loading ? " · syncing" : ""}`
-              : "pick an actor"}
-          </span>
-        </header>
-
-        <div className="px-3 py-2 border-b border-line flex flex-wrap items-center gap-2">
+      {/* Search + filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search
+            size={14}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none"
+            aria-hidden="true"
+          />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="search 1000+ services…"
-            className="h-7 flex-1 min-w-[200px] rounded-sm border border-line bg-page px-2 text-[12.5px] text-ink placeholder:text-ink-3 focus:outline-none focus:border-ink-2"
+            placeholder="Search services…"
+            aria-label="Search toolkit catalog"
+            className="h-9 w-full rounded-sm border border-line bg-canvas pl-8 pr-3 text-[13px] text-ink placeholder:text-ink-3 focus:outline-none focus:border-line-strong focus:shadow-[var(--shadow-focus)] transition-[border-color,box-shadow]"
           />
-          <select
-            value={cat}
-            onChange={(e) => setCat(e.target.value)}
-            className="h-7 rounded-sm border border-line bg-page px-2 text-[12px] text-ink-2 focus:outline-none focus:border-ink-2"
-          >
-            <option value="">all categories</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          <label className="inline-flex items-center gap-1.5 text-[12px] text-ink-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={onlyManaged}
-              onChange={(e) => setOnlyManaged(e.target.checked)}
-              className="accent-ink"
-            />
-            one-click only
-          </label>
-          <label className="inline-flex items-center gap-1.5 text-[12px] text-ink-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={onlyConnected}
-              onChange={(e) => setOnlyConnected(e.target.checked)}
-              className="accent-ink"
-            />
-            connected only
-          </label>
         </div>
+        <select
+          value={cat}
+          onChange={(e) => setCat(e.target.value)}
+          aria-label="Filter by category"
+          className="h-9 rounded-sm border border-line bg-canvas px-2 pr-7 text-[13px] text-ink-2 focus:outline-none focus:border-line-strong focus:shadow-[var(--shadow-focus)] transition-[border-color,box-shadow]"
+        >
+          <option value="">All categories</option>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <label className="inline-flex items-center gap-1.5 text-[13px] text-ink-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={onlyManaged}
+            onChange={(e) => setOnlyManaged(e.target.checked)}
+            className="accent-[var(--color-accent)]"
+          />
+          One-click only
+        </label>
+        <label className="inline-flex items-center gap-1.5 text-[13px] text-ink-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={onlyConnected}
+            onChange={(e) => setOnlyConnected(e.target.checked)}
+            className="accent-[var(--color-accent)]"
+          />
+          Connected only
+        </label>
 
-        {filtered.length === 0 ? (
-          <p className="px-3 py-3 text-ink-3 text-[12px]">
-            No services match.
-          </p>
-        ) : (
-          <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 divide-x divide-line">
-            {filtered.map((t) => {
-              const s = statusBySlug.get(t.slug);
-              const isConnected = s?.status === "connected";
-              const isPending = s?.status === "pending";
-              return (
-                <li
-                  key={t.slug}
-                  className="px-3 py-2 border-b border-line flex items-start justify-between gap-3 hover:bg-surface"
-                >
-                  <div className="min-w-0 flex items-start gap-2">
-                    <Status status={s?.status ?? "none"} />
+        {/* Status summary */}
+        {actorSlug && (
+          <span className="t-caption text-ink-3 ml-auto">
+            {connectedCount > 0 ? `${connectedCount} connected · ` : ""}
+            {filtered.length}/{toolkits.length}{loading ? " · syncing" : ""}
+          </span>
+        )}
+        {!actorSlug && (
+          <span className="t-caption text-ink-3 ml-auto">
+            Pick an actor in the top nav to see connection status
+          </span>
+        )}
+      </div>
+
+      {/* Toolkit grid */}
+      {filtered.length === 0 ? (
+        <div className="rounded-md bg-canvas shadow-[var(--shadow-base)] px-6 py-10 text-center">
+          <p className="text-[14px] text-ink-3">No services match your search.</p>
+        </div>
+      ) : (
+        <ul
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
+          aria-label="Toolkit catalog"
+        >
+          {filtered.map((t) => {
+            const s = statusBySlug.get(t.slug);
+            const isConnected = s?.status === "connected";
+            const isPending = s?.status === "pending";
+
+            return (
+              <li
+                key={t.slug}
+                className={[
+                  "group relative rounded-md bg-canvas shadow-[var(--shadow-base)] p-4 flex flex-col gap-3",
+                  "transition-[box-shadow,transform] duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
+                  "hover:shadow-[var(--shadow-md)] hover:-translate-y-px",
+                  isConnected
+                    ? "border-l-[3px] border-l-accent"
+                    : "border-l-[3px] border-l-transparent",
+                ].join(" ")}
+              >
+                {/* Header row: logo + name + status */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <ToolkitLogo logo={t.logo} name={t.name} />
                     <div className="min-w-0">
-                      <div className="text-[13.5px] text-ink truncate">
+                      <div className="text-[14px] font-medium text-ink truncate">
                         {t.name}
                       </div>
                       <div className="text-[11px] text-ink-3 truncate">
                         {t.category}
                         {!t.managed && !t.noAuth && (
-                          <span className="ml-1.5 text-ink-3">
-                            · byo-auth
-                          </span>
+                          <span className="ml-1 text-ink-4">· custom auth</span>
                         )}
                       </div>
                     </div>
                   </div>
-                  {isConnected && s?.id ? (
-                    <button
+
+                  {/* Status badge */}
+                  <StatusBadge status={s?.status ?? "none"} />
+                </div>
+
+                {/* Description */}
+                {t.description && (
+                  <p className="text-[12px] text-ink-2 leading-[1.5] line-clamp-2 flex-1">
+                    {t.description}
+                  </p>
+                )}
+
+                {/* Action button */}
+                <div className="flex justify-end">
+                  {t.noAuth ? (
+                    <span className="text-[12px] text-ink-3">No auth required</span>
+                  ) : isConnected && s?.id ? (
+                    <Button
+                      variant="ghost"
+                      size="xs"
                       onClick={() => disco(t.slug, s.id as string)}
-                      disabled={pending || !configured}
-                      className="text-[11px] text-ink-3 hover:text-accent underline underline-offset-2 decoration-line shrink-0"
+                      disabled={pending}
+                      aria-label={`Disconnect ${t.name}`}
                     >
-                      disconnect
-                    </button>
-                  ) : t.noAuth ? (
-                    <span className="text-[11px] text-ink-3">no auth</span>
+                      Disconnect
+                    </Button>
                   ) : (
-                    <button
+                    <Button
+                      variant={isConnected ? "secondary" : "outline"}
+                      size="sm"
                       onClick={() => connect(t.slug)}
                       disabled={
                         pending ||
@@ -250,49 +290,79 @@ export function ConnectionsView({
                         !actorSlug ||
                         (!t.managed && !t.noAuth)
                       }
-                      className="h-6 px-2 rounded-sm bg-ink text-page text-[11px] disabled:opacity-40 shrink-0"
+                      loading={busy === t.slug}
+                      aria-label={`Connect ${t.name}`}
                       title={
                         !t.managed && !t.noAuth
-                          ? "Requires bringing your own OAuth app — set it up in Composio dashboard"
+                          ? "Requires custom OAuth setup in Composio dashboard"
                           : undefined
                       }
                     >
                       {busy === t.slug
-                        ? "…"
+                        ? "Connecting…"
                         : isPending
-                          ? "retry"
-                          : "connect"}
-                    </button>
+                          ? "Retry connect"
+                          : "Connect"}
+                    </Button>
                   )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-    </>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 
-function Status({ status }: { status: ConnectionStatus }) {
+function ToolkitLogo({ logo, name }: { logo: string; name: string }) {
+  const [errored, setErrored] = useState(false);
+  const initial = (name[0] ?? "?").toUpperCase();
+  const colors = ["bg-chip-deal", "bg-chip-build", "bg-chip-live", "bg-chip-wind"];
+  const colorIdx = name.charCodeAt(0) % colors.length;
+
+  if (logo && !errored) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={logo}
+        alt={`${name} logo`}
+        width={32}
+        height={32}
+        onError={() => setErrored(true)}
+        className="size-8 rounded-sm object-contain shrink-0"
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`size-8 rounded-sm shrink-0 flex items-center justify-center text-[13px] font-semibold text-ink ${colors[colorIdx]}`}
+      aria-hidden="true"
+    >
+      {initial}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: ConnectionStatus | "none" }) {
   if (status === "connected") {
     return (
-      <span
-        className="mt-[2px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-ink text-page text-[10px] leading-none shrink-0"
-        aria-label="connected"
-      >
-        ✓
+      <span className="inline-flex items-center gap-1 text-[11px] text-health-good font-medium shrink-0">
+        <span className="size-1.5 rounded-full bg-health-good" aria-hidden="true" />
+        Connected
       </span>
     );
   }
   if (status === "pending") {
     return (
-      <span
-        className="mt-[6px] hp shrink-0"
-        data-health="yellow"
-        aria-label="pending"
-      />
+      <span className="inline-flex items-center gap-1 text-[11px] text-health-warn font-medium shrink-0">
+        <span className="size-1.5 rounded-full bg-health-warn" aria-hidden="true" />
+        Pending
+      </span>
     );
   }
-  return <span className="mt-[6px] hp shrink-0" aria-label="not connected" />;
+  return (
+    <span className="text-[11px] text-ink-4 shrink-0">Not connected</span>
+  );
 }

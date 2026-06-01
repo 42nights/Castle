@@ -17,35 +17,47 @@ export default async function ConnectionsPage({
   return (
     <PageShell>
       <PageHeader
-        title="Connections"
-        description={`${toolkits.length || "—"} services in Composio's catalog. Filter by category, search by name, click connect on any with one-click OAuth.`}
+        variant="operator"
+        title="Tools Castle and Hermes can use."
+        description="Composio bridges our agent to the outside world. Click connect on any service to wire it in with one-click OAuth."
+        meta={
+          toolkits.length > 0
+            ? `${toolkits.length} services in catalog`
+            : undefined
+        }
       />
 
+      {/* Setup required banner — soft amber, not a plain panel */}
       {!configured && (
-        <div className="rounded-lg bg-surface border border-line overflow-hidden mb-4">
-          <header className="px-4 py-3 border-b border-line">
-            <h2 className="t-h2">Setup required</h2>
-          </header>
-          <div className="px-4 py-3 text-[13px] text-ink-2 leading-snug space-y-2">
-            <p>
-              Composio drives external services. Add{" "}
-              <span className="num text-ink">COMPOSIO_API_KEY</span> to{" "}
-              <span className="num text-ink">.env.local</span> and restart{" "}
-              <span className="num text-ink">pnpm dev</span>.
-            </p>
-            <p className="text-ink-3 text-[12px]">
-              Get a key at{" "}
-              <a
-                href="https://app.composio.dev/api-keys"
-                target="_blank"
-                rel="noreferrer"
-                className="text-ink hover:underline underline-offset-2 decoration-line"
-              >
-                app.composio.dev/api-keys
-              </a>
-              .
-            </p>
-          </div>
+        <div
+          role="alert"
+          className="rounded-md bg-accent-soft px-4 py-3 mb-6 text-[13px] text-accent-ink border border-accent/20"
+        >
+          <p className="font-medium text-ink mb-0.5">Setup required</p>
+          <p>
+            Add{" "}
+            <span className="font-mono text-[12px] bg-canvas px-1 py-px rounded-sm">
+              COMPOSIO_API_KEY
+            </span>{" "}
+            to{" "}
+            <span className="font-mono text-[12px] bg-canvas px-1 py-px rounded-sm">
+              .env.local
+            </span>{" "}
+            and restart{" "}
+            <span className="font-mono text-[12px] bg-canvas px-1 py-px rounded-sm">
+              pnpm dev
+            </span>
+            . Get a key at{" "}
+            <a
+              href="https://app.composio.dev/api-keys"
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2 hover:text-ink transition-colors"
+            >
+              app.composio.dev/api-keys
+            </a>
+            .
+          </p>
         </div>
       )}
 
