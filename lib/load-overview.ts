@@ -74,6 +74,11 @@ export async function trySignedIn(): Promise<{ isOperator: boolean }> {
  */
 export async function requireOperator(): Promise<void> {
   if (!process.env.NEXT_PUBLIC_CONVEX_URL) return;
+  // DEV-ONLY auto-operator bypass: skip the redirect so every operator page
+  // renders without GitHub OAuth. Gated by CASTLE_DEV_AUTH=1 in .env.local
+  // (local only, gitignored). Data still flows via the Convex-side bypass in
+  // convex/lib/assertOperator.ts. NEVER set this in production.
+  if (process.env.CASTLE_DEV_AUTH === "1") return;
   let user: { isOperator?: boolean } | null = null;
   try {
     const { fetchAuthQuery } = await import("@/lib/auth-server");

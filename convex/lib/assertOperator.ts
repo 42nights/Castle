@@ -5,6 +5,15 @@ import { isEmailAllowedAgainst } from "../../lib/auth-allowlist";
 export async function isOperator(
   ctx: QueryCtx | MutationCtx,
 ): Promise<string | null> {
+  // DEV-ONLY auto-operator bypass. Fires only when CASTLE_DEV_AUTH=1 is set on
+  // the Convex deployment — set this on a LOCAL backend only, NEVER in prod.
+  // It lets the app render every operator surface without GitHub OAuth (used
+  // for the demo-Loom smoke test). The dev identity matches the *@42nights.dev
+  // rescue allowlist, so it is a real operator for audit purposes.
+  if (process.env.CASTLE_DEV_AUTH === "1") {
+    return "dev@42nights.dev";
+  }
+
   const identity = await ctx.auth.getUserIdentity();
 
   // Admin-auth path (deploy key + actingAs identity) — e.g. castle-mcp

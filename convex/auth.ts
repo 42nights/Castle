@@ -105,6 +105,27 @@ const KNOWN_SLUG_MAP: Record<string, string> = {
 export const getCurrentUser = query({
   args: {},
   handler: async (ctx) => {
+    // DEV-ONLY auto-operator bypass (see convex/lib/assertOperator.ts). Returns
+    // a synthetic operator linked to the seeded "idan" FDE so every gated page
+    // renders without GitHub OAuth. Inert unless CASTLE_DEV_AUTH=1 is set on the
+    // Convex deployment — LOCAL ONLY, never prod.
+    if (process.env.CASTLE_DEV_AUTH === "1") {
+      const devFde = await ctx.db
+        .query("fdes")
+        .withIndex("by_slug", (q) => q.eq("slug", "idan"))
+        .first();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return {
+        _id: "dev-operator",
+        email: "dev@42nights.dev",
+        name: "Dev Operator",
+        image: null,
+        isOperator: true,
+        fde_slug: devFde?.slug ?? "dev",
+        linked_fde_id: devFde?._id ?? null,
+      } as any;
+    }
+
     const user = await authComponent.safeGetAuthUser(ctx);
     if (!user) return null;
     const patterns = (await ctx.db

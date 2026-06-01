@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { HealthPip, PhaseBadge } from "@/components/atoms";
 import { WeeklyHoursInput } from "@/components/controls/weekly-hours-input";

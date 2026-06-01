@@ -41,6 +41,12 @@ export type AuthUser = {
 export async function requireUser(
   ctx: QueryCtx | MutationCtx,
 ): Promise<AuthUser> {
+  // DEV-ONLY auto-operator bypass (see convex/lib/assertOperator.ts). Returns a
+  // synthetic dev user so chat/conversation queries don't throw "unauthenticated"
+  // without GitHub OAuth. Inert unless CASTLE_DEV_AUTH=1 (local backend only).
+  if (process.env.CASTLE_DEV_AUTH === "1") {
+    return { _id: "dev-operator", email: "dev@42nights.dev", slug: "idan" };
+  }
   const user = await authComponent.safeGetAuthUser(ctx);
   if (!user) throw new Error("unauthenticated");
   const u = user as { _id?: string; userId?: string; email?: string | null };
