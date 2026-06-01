@@ -6,6 +6,9 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   if (!process.env.NEXT_PUBLIC_CONVEX_URL) return <ChatLanding />;
+  // DEV-ONLY auto-operator: render the operator chat surface without GitHub
+  // OAuth. Gated by CASTLE_DEV_AUTH=1 in .env.local (local only, gitignored).
+  if (process.env.CASTLE_DEV_AUTH === "1") return <ChatLanding />;
 
   let user: { isOperator?: boolean } | null = null;
   try {

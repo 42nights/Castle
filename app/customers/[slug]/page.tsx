@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { HealthPip, PhaseBadge } from "@/components/atoms";
 import { BackedByInput } from "@/components/controls/backed-by-input";
 import { CustomerHealthMenu } from "@/components/controls/customer-health-menu";
 import { CustomerStatusMenu } from "@/components/controls/customer-status-menu";
@@ -9,11 +8,11 @@ import {
   DeploymentHoursInput,
 } from "@/components/controls/deployment-inline";
 import { InlineName } from "@/components/controls/inline-name";
-import { MrrInput } from "@/components/controls/mrr-input";
-import { WeeklyHoursInput } from "@/components/controls/weekly-hours-input";
+import { CustomerHeroStats } from "@/components/customers/hero-stats";
+import { EngagementCards } from "@/components/customers/engagement-cards";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { loadOverview } from "@/lib/load-overview";
-import { formatDate, formatHours, formatUsd } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 
 export default async function CustomerDetail({
   params,
@@ -38,14 +37,10 @@ export default async function CustomerDetail({
     (p) => p.source_customer_id === customer.id
   );
 
-  const totalHours = myDeployments.reduce(
-    (s, d) => s + d.hours_replaced_per_week,
-    0
-  );
-
   return (
     <PageShell>
       <PageHeader
+        variant="operator"
         kicker={
           <Link href="/customers" className="hover:text-ink">
             ← Customers
@@ -76,7 +71,7 @@ export default async function CustomerDetail({
           </span>
         }
         actions={
-          <div className="flex items-center gap-3 text-[12px]">
+          <div className="flex items-center gap-2">
             <CustomerStatusMenu
               customerSlug={customer.id}
               current={customer.status}
@@ -89,132 +84,92 @@ export default async function CustomerDetail({
         }
       />
 
-      <Panel title="Stats">
-        <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-line">
-          <Stat label="MRR">
-            <MrrInput
-              customerSlug={customer.id}
-              current={customer.current_mrr}
-            />
-          </Stat>
-          <Stat label="ARR run-rate">
-            <span className="num">{formatUsd(customer.current_mrr * 12)}</span>
-          </Stat>
-          <Stat label="Live agents">
-            <span className="num">{myDeployments.length}</span>
-          </Stat>
-          <Stat label="Hrs / wk replaced">
-            <span className="num">{formatHours(totalHours)}</span>
-          </Stat>
-        </div>
-      </Panel>
+      {/* Hero metric strip — MRR inline-editable with dotted-underline affordance */}
+      <CustomerHeroStats customer={customer} deployments={myDeployments} />
 
+      {/* Engagements — hero card grid */}
       <Panel title="Engagements" count={myEngagements.length}>
-        {myEngagements.length === 0 ? (
-          <p className="px-3 py-2 text-ink-3 text-[12px]">
-            No engagements logged.
-          </p>
-        ) : (
-          <ul className="ledger">
-            {myEngagements.map((e) => (
-              <li
-                key={e.id}
-                className="px-3 py-2 grid grid-cols-[14px_1fr_auto_auto] items-baseline gap-3"
-              >
-                <HealthPip value={e.health} />
-                <Link
-                  href={`/engagements/${e.id}`}
-                  className="min-w-0 truncate text-ink text-[13.5px] hover:underline underline-offset-2 decoration-line"
-                >
-                  {e.notes.split(".")[0]}
-                </Link>
-                <span className="t-caption inline-flex items-center gap-1.5">
-                  <PhaseBadge phase={e.phase} />
-                  <span className="num">{formatDate(e.start_date)}</span>
-                  <span className="text-ink-3">→</span>
-                  <span className="num">
-                    {formatDate(e.expected_end_date)}
-                  </span>
-                </span>
-                <span className="text-[12px] text-ink-2 inline-flex items-baseline gap-0.5">
-                  <WeeklyHoursInput
-                    engagementSlug={e.id}
-                    current={e.weekly_hours}
-                  />
-                  <span>/wk</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <EngagementCards engagements={myEngagements} />
       </Panel>
 
+      {/* Deployments — supporting ledger */}
       <Panel title="Deployments" count={myDeployments.length}>
         {myDeployments.length === 0 ? (
-          <p className="px-3 py-2 text-ink-3 text-[12px]">
-            Nothing deployed yet.
-          </p>
+          <p className="text-ink-3 text-[13px]">Nothing deployed yet.</p>
         ) : (
-          <ul className="ledger">
-            {myDeployments.map((d) => {
-              const tpl = d.template_id ? tplById.get(d.template_id) : null;
-              return (
-                <li
-                  key={d.id}
-                  className="px-3 py-2 grid grid-cols-[1fr_auto_auto_auto] items-baseline gap-4"
-                >
-                  <span className="min-w-0 truncate text-ink text-[13.5px]">
-                    {d.agent_name}
-                    <span className="ml-2 t-caption">
-                      {tpl ? (
-                        <>
-                          from{" "}
-                          <Link
-                            href={`/templates/${tpl.id}`}
-                            className="text-ink-2 hover:text-ink underline underline-offset-2 decoration-line"
-                          >
-                            {tpl.name}
-                          </Link>
-                        </>
-                      ) : (
-                        <>custom</>
-                      )}
-                    </span>
-                  </span>
-                  <span className="text-[12px] text-ink-2 inline-flex items-baseline">
-                    <DeploymentCustomPctInput
-                      deploymentId={d.id}
-                      current={d.customization_pct}
-                    />
-                    <span className="ml-0.5">custom</span>
-                  </span>
-                  <span className="num text-[12px] text-ink-3">
-                    {formatDate(d.deployed_at)}
-                  </span>
-                  <span className="text-[12px] text-ink-2 inline-flex items-baseline">
-                    <DeploymentHoursInput
-                      deploymentId={d.id}
-                      current={d.hours_replaced_per_week}
-                    />
-                    <span className="ml-0.5">/wk</span>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="border border-line rounded-sm overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-line text-ink-3 uppercase tracking-[0.06em] text-[10px]">
+                  <th className="text-left h-9 px-4 font-medium">Agent</th>
+                  <th className="text-left h-9 px-3 font-medium hidden md:table-cell">Template</th>
+                  <th className="text-right h-9 px-3 font-medium hidden md:table-cell">Custom %</th>
+                  <th className="text-right h-9 px-3 font-medium">Hrs/wk</th>
+                  <th className="text-right h-9 px-3 font-medium hidden sm:table-cell">Deployed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myDeployments.map((d) => {
+                  const tpl = d.template_id ? tplById.get(d.template_id) : null;
+                  return (
+                    <tr
+                      key={d.id}
+                      className="border-b border-line last:border-b-0 hover:bg-surface-1 transition-colors duration-instant"
+                    >
+                      <td className="px-4 py-3.5 text-ink text-[13.5px]">
+                        {d.agent_name}
+                        <span className="ml-2 text-[12px] text-ink-3">
+                          {tpl ? (
+                            <>
+                              from{" "}
+                              <Link
+                                href={`/templates/${tpl.id}`}
+                                className="text-ink-2 hover:text-ink underline underline-offset-2 decoration-line"
+                              >
+                                {tpl.name}
+                              </Link>
+                            </>
+                          ) : (
+                            "custom"
+                          )}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3.5 hidden md:table-cell">
+                        <span className="text-[12px] text-ink-2 inline-flex items-baseline">
+                          <DeploymentCustomPctInput
+                            deploymentId={d.id}
+                            current={d.customization_pct}
+                          />
+                          <span className="ml-0.5">custom</span>
+                        </span>
+                      </td>
+                      <td className="px-3 py-3.5 num text-right text-ink-3 text-[12px] hidden sm:table-cell">
+                        {formatDate(d.deployed_at)}
+                      </td>
+                      <td className="px-3 py-3.5 text-[12px] text-ink-2 inline-flex items-baseline text-right">
+                        <DeploymentHoursInput
+                          deploymentId={d.id}
+                          current={d.hours_replaced_per_week}
+                        />
+                        <span className="ml-0.5">/wk</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </Panel>
 
+      {/* Patterns extracted */}
       {myExtractions.length > 0 && (
         <Panel title="Patterns extracted" count={myExtractions.length}>
-          <ul className="ledger">
+          <ul className="space-y-3">
             {myExtractions.map((p) => {
               const tpl = tplById.get(p.extracted_into_template_id);
               return (
-                <li
-                  key={p.id}
-                  className="px-3 py-2 grid grid-cols-[1fr_auto] items-baseline gap-4"
-                >
+                <li key={p.id} className="flex items-baseline justify-between gap-4">
                   <span className="min-w-0">
                     <Link
                       href={`/templates/${tpl?.id ?? ""}`}
@@ -226,7 +181,7 @@ export default async function CustomerDetail({
                       {p.source_engagement_summary}
                     </span>
                   </span>
-                  <span className="t-caption">
+                  <span className="t-caption shrink-0">
                     reused at{" "}
                     <span className="num text-ink-2">
                       {p.reused_at_customer_ids.length}
@@ -239,52 +194,59 @@ export default async function CustomerDetail({
           </ul>
         </Panel>
       )}
-    </PageShell>
-  );
-}
 
-function Stat({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="px-3 py-3">
-      <div className="text-[10px] tracking-[0.06em] text-ink-3 uppercase mb-1">
-        {label}
-      </div>
-      <div className="text-ink text-[18px] leading-[24px] font-medium num">
-        {children}
-      </div>
-    </div>
+      {/* Danger zone */}
+      <DangerZone customerName={customer.name} customerId={customer.id} />
+    </PageShell>
   );
 }
 
 function Panel({
   title,
   count,
-  right,
   children,
 }: {
   title: string;
   count?: number;
-  right?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg bg-surface border border-line overflow-hidden mb-4">
-      <header className="flex items-baseline justify-between gap-4 px-4 py-3 border-b border-line">
-        <div className="flex items-baseline gap-2">
-          <h2 className="t-h2">{title}</h2>
-          {typeof count === "number" && (
-            <span className="num text-[12px] text-ink-3">{count}</span>
-          )}
-        </div>
-        {right}
+    <section className="rounded-md bg-canvas border border-line shadow-[var(--shadow-base)] overflow-hidden mb-4">
+      <header className="flex items-baseline gap-2 px-5 py-3.5 border-b border-line">
+        <h2 className="t-h2">{title}</h2>
+        {typeof count === "number" && (
+          <span className="num text-[12px] text-ink-3">{count}</span>
+        )}
       </header>
-      <div>{children}</div>
+      <div className="px-5 py-4">{children}</div>
     </section>
   );
 }
+
+function DangerZone({
+  customerName,
+  customerId,
+}: {
+  customerName: string;
+  customerId: string;
+}) {
+  return (
+    <section className="rounded-md border border-health-bad/30 bg-health-soft-bad/20 overflow-hidden mt-8 mb-4">
+      <header className="px-5 py-3.5 border-b border-health-bad/20">
+        <h2 className="t-h2 text-health-bad">Danger zone</h2>
+      </header>
+      <div className="px-5 py-4">
+        <p className="text-[13px] text-ink-2 mb-3">
+          Deleting <strong>{customerName}</strong> removes all associated engagements and deployments.
+          This cannot be undone.
+        </p>
+        <p className="t-caption text-ink-3">
+          Use customer-id:{" "}
+          <span className="num text-ink-2">{customerId}</span>
+        </p>
+      </div>
+    </section>
+  );
+}
+
+import * as React from "react";

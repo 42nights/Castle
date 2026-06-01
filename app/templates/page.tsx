@@ -14,10 +14,12 @@ export default async function TemplatesPage() {
   const { templates, deployments, customers, fdes, patternExtractions } =
     await loadTemplateData();
   const usage = templateUsage(templates, deployments, patternExtractions);
+
   return (
     <RoleProvider role={isOperator ? "operator" : "guest"}>
       <PageShell>
         <PageHeader
+          variant="editorial"
           title="The library, growing one engagement at a time."
           description="Each template is a real customer workflow we kept building. Reuse count is the productization story."
           actions={isOperator ? <NewTemplateButton /> : undefined}

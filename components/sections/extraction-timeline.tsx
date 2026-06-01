@@ -23,13 +23,16 @@ export function ExtractionTimeline({
   const shown = limit ? list.slice(0, limit) : list;
 
   return (
-    <div className="rounded-lg bg-surface border border-line overflow-hidden">
+    <div
+      className="rounded-lg bg-canvas shadow-[var(--shadow-base)] overflow-hidden"
+      aria-label="Recent pattern extractions"
+    >
       <header className="flex items-baseline justify-between px-4 py-3 border-b border-line">
         <h2 className="t-h2">Flywheel</h2>
         {showLinkAll && (
           <Link
             href="/extractions"
-            className="text-[12px] text-ink-3 hover:text-ink transition-colors"
+            className="text-[12px] text-ink-3 hover:text-ink transition-colors duration-instant"
           >
             all
           </Link>
@@ -46,25 +49,27 @@ export function ExtractionTimeline({
           return (
             <li
               key={p.id}
-              className={`px-4 py-3 ${i > 0 ? "border-t border-line" : ""}`}
+              className={`px-4 py-3 hover:bg-surface-1 transition-colors duration-instant ${
+                i > 0 ? "border-t border-line" : ""
+              }`}
             >
               <div className="flex items-baseline justify-between gap-2 mb-1">
-                <div className="text-[13px] text-ink leading-snug">
+                <div className="text-[13px] text-ink leading-snug min-w-0 truncate">
                   {src?.id ? (
                     <Link
                       href={`/customers/${src.id}`}
-                      className="hover:underline"
+                      className="hover:underline underline-offset-2 decoration-line/40"
                     >
-                      {src?.name ?? "Unknown"}
+                      {src.name}
                     </Link>
                   ) : (
                     <span>{src?.name ?? "Unknown"}</span>
                   )}
-                  <span className="text-ink-3 mx-1.5">-&gt;</span>
+                  <span className="text-ink-4 mx-1.5">→</span>
                   {tpl ? (
                     <Link
                       href={`/templates/${tpl.id}`}
-                      className="hover:underline"
+                      className="hover:underline underline-offset-2 decoration-line/40"
                     >
                       {tpl.name}
                     </Link>
@@ -72,13 +77,16 @@ export function ExtractionTimeline({
                     <span className="text-ink-3">removed</span>
                   )}
                 </div>
-                <span className="num text-[11px] text-ink-3 shrink-0">
+                <span className="font-mono tabular-nums text-[11px] text-ink-3 shrink-0">
                   {formatDate(p.extracted_at)}
                 </span>
               </div>
               {reused.length > 0 && (
                 <div className="text-[12px] text-ink-3">
-                  Reused at <span className="num text-ink-2">{reused.length}</span>{" "}
+                  Reused at{" "}
+                  <span className="font-mono tabular-nums text-ink-2">
+                    {reused.length}
+                  </span>{" "}
                   {reused.length === 1 ? "customer" : "customers"}
                 </div>
               )}

@@ -11,14 +11,17 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useChatContext } from "@/lib/chat-context";
 import { useChatDraft } from "@/lib/use-chat-draft";
-import { type ChatMessage, type ToolActivity } from "@/lib/use-hermes-chat";
-import { ChatMarkdown } from "@/components/chat-markdown";
+import type { ToolActivity } from "@/lib/use-hermes-chat";
 import { ChatSidebar } from "@/components/chat-sidebar";
 import { ConnectionsRail } from "@/components/connections-rail";
 import { DotLoader } from "@/components/ui/dot-loader";
+import { ActionCard } from "@/components/chat/action-card";
+import { Composer } from "@/components/chat/composer";
+import { EmptyState } from "@/components/chat/empty-state";
+import { MessageAssistant } from "@/components/chat/message-assistant";
 
-// Searching-style scan around a 7x7 dot grid. Used as the "thinking"
-// indicator — the agent is hunting for context before any text arrives.
+// Keep the scanning dot-grid animation for the legacy Thinking component
+// (shown when streaming but no text yet) — preserved from original.
 const THINKING_FRAMES: number[][] = [
   [9, 16, 17, 15, 23],
   [10, 17, 18, 16, 24],
@@ -33,9 +36,6 @@ const THINKING_FRAMES: number[][] = [
   [16, 23, 24, 22, 30],
 ];
 
-/** Fallback list rendered if `api.suggestions.list` hasn't responded yet
- *  (transient) or errors out (degraded). Same shape Hermes can answer;
- *  the dynamic query just replaces these with state-aware variants. */
 const FALLBACK_SUGGESTIONS = [
   "what's red right now?",
   "list FDEs and their utilization",
@@ -44,12 +44,6 @@ const FALLBACK_SUGGESTIONS = [
   "remember: jerry prefers terse one-line answers",
 ];
 
-/**
- * Per-minute ticker for the suggestions reactive query — matches the
- * pattern in components/sections/attention-live.tsx. Causes Convex to
- * re-run when state would have shifted (snooze expiry, a red flag
- * appearing, an FDE going overcommitted).
- */
 function useNowBucket() {
   const [b, setB] = useState(() => Math.floor(Date.now() / 60_000));
   useEffect(() => {
@@ -63,15 +57,14 @@ function useNowBucket() {
  * Castle chat landing. Three-column layout:
  *   ChatSidebar (220) · chat (flex) · ConnectionsRail (240)
  *
- * Each conversation in the sidebar has its own Hermes session, so
- * memory is per-thread. Pick an existing chat from the rail or hit
- * `+ new` to start fresh.
+ * Orchestrates: ChatSidebar, Composer, EmptyState, message list (with
+ * MessageAssistant for NarrationRibbon + ToolResult), ActionCard for
+ * propose_mutation, ConnectCta for composio_connect.
+ *
+ * Chat stream state lives in ChatProvider (app/layout.tsx) so it
+ * survives navigation.
  */
 export function ChatLanding() {
-  // Chat state lives in a provider at app/layout.tsx so it survives
-  // navigation. Without that hoist, leaving `/` mid-stream wiped the
-  // thinking dots + tool activity + streaming text until the assistant
-  // turn finally landed in Convex history.
   const {
     actorSlug,
     conversationId,
@@ -86,36 +79,45 @@ export function ChatLanding() {
     thought,
     tools,
   } = useChatContext();
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+
   const tailRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  // Sticky-bottom: only auto-scroll on new content if the user is
-  // already near the bottom. Re-engaged via the "jump to latest" pill.
   const [stuckToBottom, setStuckToBottom] = useState(true);
   const STICKY_THRESHOLD_PX = 80;
+
   const clearTranscript = useMutation(api.agentMessages.clear);
+
+  // Full action row shape from Convex — covers both composio_connect and
+  // propose_mutation. Cast is needed because the generated types don't yet
+  // include the new propose_mutation fields (frozen schema, other agent's side).
+  type FullActionRow = {
+    _id: Id<"agent_actions">;
+    kind: "composio_connect" | "propose_mutation";
+    toolkit: string;
+    url: string;
+    created_at: string;
+    dismissed_at: string | null;
+    tool_name?: string;
+    verb?: string;
+    target?: string;
+    reason?: string;
+    side_effects?: string[];
+    payload_json?: string;
+    expires_at?: string;
+    resolved_outcome?: "accepted" | "rejected" | "dismissed" | "expired";
+    resolved_at?: string;
+    undo_until?: string;
+    result_json?: string;
+  };
+
   const proposed = useQuery(
     api.agentActions.listOpen,
     actorSlug ? { actor_slug: actorSlug } : "skip",
-  ) as
-    | Array<{
-        _id: Id<"agent_actions">;
-        toolkit: string;
-        url: string;
-        created_at: string;
-      }>
-    | undefined;
+  ) as FullActionRow[] | undefined;
+
   const dismissAction = useMutation(api.agentActions.dismiss);
   const [draft, setDraft, clearDraft] = useChatDraft(conversationId ?? null);
 
-  // Dynamic suggestions for the empty state. Three cadences stack:
-  //   nowBucket      — reactive within ~60s of state changes
-  //   rotationBucket — daily variety axis (same operator, different day,
-  //                    different ordering, even with the same state)
-  //   mountSeed      — stable within a single mount; refreshes on
-  //                    conversation switch (re-runs the ref initializer
-  //                    via the key). UX freebie: "give me different
-  //                    suggestions" = click a chat and back.
   const nowBucket = useNowBucket();
   const rotationBucket = Math.floor(Date.now() / 86_400_000);
   const mountSeedRef = useRef(Math.floor(Math.random() * 1e9));
@@ -126,37 +128,14 @@ export function ChatLanding() {
   }) as Array<{ id: string; prompt: string }> | undefined;
   const suggestions =
     (dynamicSuggestions ?? []).length > 0
-      ? (dynamicSuggestions as Array<{ id: string; prompt: string }>).map(
-          (s) => s.prompt,
-        )
+      ? (dynamicSuggestions as Array<{ id: string; prompt: string }>).map((s) => s.prompt)
       : FALLBACK_SUGGESTIONS;
-
-  // Focus the input when the user switches conversations. Draft
-  // hydration is handled inside useChatDraft (per-conversation
-  // localStorage key) so a switch restores the unsent text instead of
-  // wiping it.
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, [conversationId]);
-
-  useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.style.height = "auto";
-      inputRef.current.style.height = `${Math.min(
-        inputRef.current.scrollHeight,
-        200,
-      )}px`;
-    }
-  }, [draft]);
 
   useEffect(() => {
     if (!stuckToBottom) return;
     tailRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages.length, status, stuckToBottom]);
 
-  // One-shot scroll when a new connect CTA lands — overrides the sticky
-  // guard so the operator never misses the button. Keyed on the latest
-  // open action id so re-renders don't re-scroll repeatedly.
   const ctaTopId = proposed?.[0]?._id ?? null;
   useEffect(() => {
     if (!ctaTopId) return;
@@ -164,9 +143,6 @@ export function ChatLanding() {
     setStuckToBottom(true);
   }, [ctaTopId]);
 
-  // Track whether the user is near the bottom. When they scroll up
-  // we drop stuckToBottom so streaming text doesn't fight them; the
-  // "jump to latest" pill lets them re-engage on demand.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -184,85 +160,9 @@ export function ChatLanding() {
     tailRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   };
 
-  // Pending attachments staged in the composer before send. Uploaded
-  // to Convex storage on file-pick; rendered as chips above the
-  // textarea. Cleared on send.
-  type StagedAttachment = {
-    storageId: string;
-    name: string;
-    contentType?: string;
-    size?: number;
-  };
-  const [pendingAttachments, setPendingAttachments] = useState<
-    StagedAttachment[]
-  >([]);
-  const [uploadingCount, setUploadingCount] = useState(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const generateUploadUrl = useMutation(
-    api.agentMessages.generateAttachmentUploadUrl,
-  );
-
-  const onPickFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    setUploadingCount((n) => n + files.length);
-    const uploaded: StagedAttachment[] = [];
-    for (const file of Array.from(files)) {
-      try {
-        const url = await generateUploadUrl({});
-        const res = await fetch(url, {
-          method: "POST",
-          headers: file.type ? { "Content-Type": file.type } : undefined,
-          body: file,
-        });
-        if (!res.ok) throw new Error(`upload ${res.status}`);
-        const { storageId } = (await res.json()) as { storageId: string };
-        uploaded.push({
-          storageId,
-          name: file.name,
-          contentType: file.type || undefined,
-          size: file.size,
-        });
-      } catch (err) {
-        toast.error(
-          `Couldn't upload ${file.name}: ${
-            err instanceof Error ? err.message : "unknown"
-          }`,
-        );
-      }
-    }
-    setUploadingCount((n) => Math.max(0, n - files.length));
-    if (uploaded.length > 0) {
-      setPendingAttachments((prev) => [...prev, ...uploaded]);
-    }
-  };
-
-  const removeAttachment = (storageId: string) => {
-    setPendingAttachments((prev) =>
-      prev.filter((a) => a.storageId !== storageId),
-    );
-  };
-
-  const submit = () => {
-    const text = draft.trim();
-    if ((!text && pendingAttachments.length === 0) || status === "streaming" || uploadingCount > 0) {
-      return;
-    }
-    sendMessage(
-      text,
-      pendingAttachments.length ? pendingAttachments : undefined,
-    );
-    clearDraft();
-    setPendingAttachments([]);
-  };
-
   const onClear = async () => {
     if (!conversationId) return;
-    if (
-      !confirm(
-        "Clear this chat's visible transcript? Hermes' own session memory is untouched.",
-      )
-    )
-      return;
+    if (!confirm("Clear this chat's visible transcript? Hermes' own session memory is untouched.")) return;
     try {
       await clearTranscript({ conversation_id: conversationId });
       toast.success("Transcript cleared.");
@@ -282,10 +182,7 @@ export function ChatLanding() {
       />
       <div className="flex-1 flex flex-col min-w-0">
         {conversationId ? <ChatHeader conversationId={conversationId} /> : null}
-        <div
-          ref={scrollRef}
-          className="relative flex-1 min-h-0 overflow-y-auto"
-        >
+        <div ref={scrollRef} className="relative flex-1 min-h-0 overflow-y-auto">
           {!stuckToBottom && (
             <div className="sticky bottom-3 z-10 flex justify-center pointer-events-none">
               <button
@@ -298,52 +195,23 @@ export function ChatLanding() {
           )}
           <div className="mx-auto max-w-[720px] px-6 pt-8 pb-10">
             {empty ? (
-              <EmptyState
-                suggestions={suggestions}
-                onPick={(s) => setDraft(s)}
-              />
+              <EmptyState suggestions={suggestions} onPick={(s) => setDraft(s)} />
             ) : (
               <div className="flex flex-col gap-4">
                 {(() => {
-                  // Render messages, attaching pending connect CTAs to
-                  // the last assistant message.
-                  //
-                  // Gating is PER-ACTION, not on a single global
-                  // timestamp. An action belongs to the current turn iff
-                  // it was created AFTER the last user message — the
-                  // user prompt always precedes the tool call, while the
-                  // assistant row is stamped at turn START (before the
-                  // tool runs), so we can't compare against the
-                  // assistant timestamp. Per-action filtering means a
-                  // stale undismissed action from an earlier turn can't
-                  // (a) drag a global `min` back and hide the whole
-                  // block, nor (b) dangle under an unrelated later turn.
-                  //
-                  // We also require the last assistant message to belong
-                  // to the current turn (created >= last user msg) so a
-                  // fresh action doesn't briefly attach to a PREVIOUS
-                  // turn's assistant while the new assistant row is
-                  // still empty/streaming (filtered out below) — the
-                  // "connect button pop" jump.
-                  const visible = messages.filter(
-                    (m) => !(m.streaming && m.text === ""),
-                  );
+                  // Same gating logic as original: per-action freshness check,
+                  // last-assistant-must-belong-to-current-turn guard.
+                  const visible = messages.filter((m) => !(m.streaming && m.text === ""));
                   const open = proposed ?? [];
                   let lastAssistantIdx = -1;
                   let lastUserIdx = -1;
                   for (let i = visible.length - 1; i >= 0; i--) {
-                    if (lastAssistantIdx < 0 && visible[i].role === "assistant") {
-                      lastAssistantIdx = i;
-                    }
-                    if (lastUserIdx < 0 && visible[i].role === "user") {
-                      lastUserIdx = i;
-                    }
+                    if (lastAssistantIdx < 0 && visible[i].role === "assistant") lastAssistantIdx = i;
+                    if (lastUserIdx < 0 && visible[i].role === "user") lastUserIdx = i;
                     if (lastAssistantIdx >= 0 && lastUserIdx >= 0) break;
                   }
-                  const lastUser =
-                    lastUserIdx >= 0 ? visible[lastUserIdx] : null;
-                  const lastAssistant =
-                    lastAssistantIdx >= 0 ? visible[lastAssistantIdx] : null;
+                  const lastUser = lastUserIdx >= 0 ? visible[lastUserIdx] : null;
+                  const lastAssistant = lastAssistantIdx >= 0 ? visible[lastAssistantIdx] : null;
                   const lastUserAt = lastUser?.createdAt ?? null;
                   const assistantIsCurrentTurn =
                     lastAssistant !== null &&
@@ -352,33 +220,87 @@ export function ChatLanding() {
                   const freshActions = lastUserAt
                     ? open.filter((a) => a.created_at > lastUserAt)
                     : [];
-                  const showCtas =
-                    assistantIsCurrentTurn && freshActions.length > 0;
+                  const showCtas = assistantIsCurrentTurn && freshActions.length > 0;
+
                   return visible.map((m, i) => {
-                    const attached =
-                      showCtas && i === lastAssistantIdx ? freshActions : [];
+                    const attached = showCtas && i === lastAssistantIdx ? freshActions : [];
+
+                    if (m.role === "user") {
+                      return (
+                        <div key={m.id} className="group flex justify-end">
+                          <div className="flex flex-col items-end gap-1.5 max-w-[80%]">
+                            {m.text && (
+                              <div className="rounded-sm bg-ink text-page px-2.5 py-1.5 text-[13.5px] leading-snug whitespace-pre-wrap relative">
+                                {m.text}
+                                <UserTimestamp iso={m.createdAt} />
+                              </div>
+                            )}
+                            {m.attachments && m.attachments.length > 0 && (
+                              <div className="flex flex-wrap justify-end gap-1.5">
+                                {m.attachments.map((a) => (
+                                  <AttachmentChip key={a.storageId} attachment={a} />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // assistant turn — the last assistant during streaming gets live tools
+                    const isThisStreamingTurn =
+                      i === lastAssistantIdx && status === "streaming";
+
                     return (
-                      <Turn
+                      <MessageAssistant
                         key={m.id}
                         message={m}
-                        actions={attached.length > 0 ? attached : null}
-                        actorSlug={actorSlug}
+                        streamingTools={isThisStreamingTurn ? tools : undefined}
+                        thought={isThisStreamingTurn ? thought : undefined}
+                        status={status}
+                        totalMessages={visible.length}
+                        messageIndex={i}
                         isLastAssistant={i === lastAssistantIdx}
                         canRegenerate={canRegenerate}
                         onRegenerate={regenerate}
-                        onDismissAction={(id) => dismissAction({ id })}
-                      />
+                      >
+                        {/* Render attached actions under this assistant turn */}
+                        {attached.map((a) =>
+                          a.kind === "propose_mutation" ? (
+                            <ActionCard
+                              key={a._id}
+                              action={a}
+                              onDismiss={(id) => dismissAction({ id })}
+                            />
+                          ) : (
+                            <ConnectCta
+                              key={a._id}
+                              toolkit={a.toolkit}
+                              url={a.url}
+                              actorSlug={actorSlug}
+                              onDismiss={() => dismissAction({ id: a._id })}
+                            />
+                          ),
+                        )}
+                      </MessageAssistant>
                     );
                   });
                 })()}
-                {status === "streaming" && (
+
+                {/* Thinking indicator: shown while streaming but NO text has arrived yet
+                    AND NarrationRibbon (inside MessageAssistant) hasn't taken over.
+                    NarrationRibbon handles its own pre-text state, so this only fires
+                    when there are zero visible assistant rows yet. */}
+                {status === "streaming" &&
+                  messages.filter((m) => !(m.streaming && m.text === "")).every((m) => m.role === "user") && (
                   <Thinking
                     key={messages.length}
                     tools={tools}
                     thought={thought}
-                    compact={(messages[messages.length - 1]?.text ?? "") !== ""}
+                    compact={false}
                   />
                 )}
+
                 {error && (
                   <div className="text-accent text-[12.5px]">{error}</div>
                 )}
@@ -388,146 +310,36 @@ export function ChatLanding() {
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-line bg-page">
-          <div className="mx-auto max-w-[720px] px-6 py-3">
-            <div className="rounded-md border border-line bg-page focus-within:border-ink-2 transition-colors">
-              {(pendingAttachments.length > 0 || uploadingCount > 0) && (
-                <div className="flex flex-wrap items-center gap-1.5 px-3 pt-2">
-                  {pendingAttachments.map((a) => (
-                    <span
-                      key={a.storageId}
-                      className="inline-flex items-center gap-1.5 h-6 pl-2 pr-1 rounded-sm border border-line bg-surface text-[11.5px] text-ink"
-                      title={
-                        a.size
-                          ? `${a.name} · ${Math.round(a.size / 1024)} KB`
-                          : a.name
-                      }
-                    >
-                      <span className="truncate max-w-[160px]">{a.name}</span>
-                      <button
-                        onClick={() => removeAttachment(a.storageId)}
-                        className="text-ink-3 hover:text-accent text-[12px] px-0.5"
-                        aria-label={`Remove ${a.name}`}
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  ))}
-                  {uploadingCount > 0 && (
-                    <span className="text-[11px] text-ink-3 num">
-                      uploading {uploadingCount}…
-                    </span>
-                  )}
-                </div>
-              )}
-              <textarea
-                ref={inputRef}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    submit();
-                  }
-                }}
-                placeholder={
-                  conversationId
-                    ? "Ask Castle anything…"
-                    : "Pick or start a chat from the left."
-                }
-                rows={1}
-                disabled={!conversationId}
-                className="block w-full resize-none bg-transparent text-[14px] leading-[22px] text-ink placeholder:text-ink-3 outline-none px-3 pt-2.5 pb-1 min-h-[42px] max-h-[200px] disabled:opacity-50"
-              />
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                hidden
-                onChange={(e) => {
-                  onPickFiles(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-              <div className="flex items-center justify-between px-2 pb-2">
-                <span className="text-[11px] text-ink-3 inline-flex items-center gap-3">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={!conversationId}
-                    className="text-ink-3 hover:text-ink disabled:opacity-40"
-                    aria-label="Attach files"
-                    title="Attach files"
-                  >
-                    📎
-                  </button>
-                  <span>
-                    castle ·{" "}
-                    <span className="text-ink-2">
-                      {actorSlug ?? "no actor"}
-                    </span>
-                  </span>
-                  {messages.length > 0 && (
-                    <button
-                      onClick={onClear}
-                      className="text-ink-3 hover:text-accent underline underline-offset-2 decoration-line"
-                    >
-                      clear
-                    </button>
-                  )}
-                </span>
-                {status === "streaming" ? (
-                  <button
-                    onClick={stop}
-                    className="h-7 px-3 rounded-sm border border-line text-[12px] text-ink-2 hover:text-ink"
-                  >
-                    stop
-                  </button>
-                ) : (
-                  <button
-                    onClick={submit}
-                    disabled={
-                      (!draft.trim() && pendingAttachments.length === 0) ||
-                      !conversationId
-                    }
-                    className="h-7 px-3 rounded-sm bg-ink text-page text-[12px] disabled:opacity-40 inline-flex items-center gap-1.5"
-                  >
-                    send <kbd className="num text-[10px] opacity-70">⏎</kbd>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <Composer
+          draft={draft}
+          setDraft={setDraft}
+          clearDraft={clearDraft}
+          conversationId={conversationId}
+          actorSlug={actorSlug}
+          status={status}
+          hasMessages={messages.length > 0}
+          onSend={sendMessage}
+          onStop={stop}
+          onClear={onClear}
+        />
       </div>
       <ConnectionsRail />
     </div>
   );
 }
 
-function ChatHeader({
-  conversationId,
-}: {
-  conversationId: Id<"agent_conversations">;
-}) {
+// ─── ChatHeader ───────────────────────────────────────────────────────────────
+
+function ChatHeader({ conversationId }: { conversationId: Id<"agent_conversations"> }) {
   const { isAuthenticated } = useConvexAuth();
   const personal = useQuery(
     api.agentMessages.listPersonal,
     isAuthenticated ? {} : "skip",
-  ) as
-    | Array<{
-        _id: Id<"agent_conversations">;
-        visibility?: "personal" | "shared";
-      }>
-    | undefined;
+  ) as Array<{ _id: Id<"agent_conversations">; visibility?: "personal" | "shared" }> | undefined;
   const shared = useQuery(
     api.agentMessages.listShared,
     isAuthenticated ? {} : "skip",
-  ) as
-    | Array<{
-        _id: Id<"agent_conversations">;
-        visibility?: "personal" | "shared";
-      }>
-    | undefined;
+  ) as Array<{ _id: Id<"agent_conversations">; visibility?: "personal" | "shared" }> | undefined;
   const setVisibility = useMutation(api.agentMessages.setVisibility);
   const all = [...(personal ?? []), ...(shared ?? [])];
   const me = all.find((c) => c._id === conversationId);
@@ -543,29 +355,17 @@ function ChatHeader({
     if (!confirm(blurb)) return;
     try {
       await setVisibility({ id: conversationId, visibility: target });
-      toast.success(
-        target === "shared" ? "Chat is now shared." : "Chat is now personal.",
-      );
+      toast.success(target === "shared" ? "Chat is now shared." : "Chat is now personal.");
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Could not change visibility.",
-      );
+      toast.error(err instanceof Error ? err.message : "Could not change visibility.");
     }
   };
 
   return (
     <div className="shrink-0 border-b border-line bg-page">
       <div className="mx-auto max-w-[720px] px-6 py-2 flex items-center justify-between gap-3">
-        <span
-          className={`text-[10.5px] uppercase tracking-wider num inline-flex items-center gap-1.5 ${
-            visibility === "shared" ? "text-ink" : "text-ink-3"
-          }`}
-        >
-          <span
-            className={`inline-block size-1.5 rounded-full ${
-              visibility === "shared" ? "bg-ink" : "bg-ink-3"
-            }`}
-          />
+        <span className={`text-[10.5px] uppercase tracking-wider num inline-flex items-center gap-1.5 ${visibility === "shared" ? "text-ink" : "text-ink-3"}`}>
+          <span className={`inline-block size-1.5 rounded-full ${visibility === "shared" ? "bg-ink" : "bg-ink-3"}`} />
           {visibility}
         </span>
         <button
@@ -579,128 +379,10 @@ function ChatHeader({
   );
 }
 
-function EmptyState({
-  suggestions,
-  onPick,
-}: {
-  suggestions: string[];
-  onPick: (s: string) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-ink">
-          What needs handling?
-        </h1>
-        <p className="mt-1 text-[12.5px] text-ink-3 leading-snug">
-          Each chat in the left rail has its own session, so memory is scoped
-          per thread.
-        </p>
-      </div>
-      <ul className="flex flex-col gap-1">
-        {suggestions.map((s) => (
-          <li key={s}>
-            <button
-              type="button"
-              onClick={() => onPick(s)}
-              className="group w-full text-left rounded-sm border border-line bg-page px-3 py-2 text-[13px] text-ink-2 hover:text-ink hover:border-line-strong flex items-center justify-between transition-colors"
-            >
-              <span>{s}</span>
-              <span className="text-ink-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                →
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+// ─── User message helpers ─────────────────────────────────────────────────────
 
-type ProposedAction = {
-  _id: Id<"agent_actions">;
-  toolkit: string;
-  url: string;
-};
-
-function Turn({
-  message,
-  actions,
-  actorSlug,
-  isLastAssistant,
-  canRegenerate,
-  onRegenerate,
-  onDismissAction,
-}: {
-  message: ChatMessage;
-  actions: ProposedAction[] | null;
-  actorSlug: string | null;
-  isLastAssistant: boolean;
-  canRegenerate: boolean;
-  onRegenerate: () => void;
-  onDismissAction: (id: Id<"agent_actions">) => void;
-}) {
-  if (message.role === "user") {
-    return (
-      <div className="group flex justify-end">
-        <div className="flex flex-col items-end gap-1.5 max-w-[80%]">
-          {message.text && (
-            <div className="rounded-sm bg-ink text-page px-2.5 py-1.5 text-[13.5px] leading-snug whitespace-pre-wrap relative">
-              {message.text}
-              <Timestamp
-                iso={message.createdAt}
-                className="absolute -bottom-4 right-1"
-              />
-            </div>
-          )}
-          {message.attachments && message.attachments.length > 0 && (
-            <div className="flex flex-wrap justify-end gap-1.5">
-              {message.attachments.map((a) => (
-                <AttachmentChip key={a.storageId} attachment={a} />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="group">
-      <ChatMarkdown streaming={message.streaming}>{message.text}</ChatMarkdown>
-      <div className="mt-1 flex items-center gap-3 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-        <Timestamp iso={message.createdAt} />
-        {isLastAssistant && !message.streaming && canRegenerate && (
-          <button
-            onClick={onRegenerate}
-            className="text-[11px] text-ink-3 hover:text-ink underline underline-offset-2 decoration-line"
-          >
-            regenerate
-          </button>
-        )}
-        <CopyButton text={message.text} />
-      </div>
-      {actions && actions.length > 0 && (
-        <div className="mt-2 flex flex-col gap-1.5">
-          {actions.map((a) => (
-            <ConnectCta
-              key={a._id}
-              toolkit={a.toolkit}
-              url={a.url}
-              actorSlug={actorSlug}
-              onDismiss={() => onDismissAction(a._id)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Timestamp({ iso, className }: { iso: string; className?: string }) {
+function UserTimestamp({ iso }: { iso: string }) {
   const [label, setLabel] = useState(() => relativeTime(iso));
-  // Tick once a minute so "just now" → "1m ago" etc. without a hard
-  // refresh. Cheap; one interval per visible timestamp is fine for a
-  // chat of <100 messages.
   useEffect(() => {
     const id = setInterval(() => setLabel(relativeTime(iso)), 60_000);
     return () => clearInterval(id);
@@ -710,48 +392,25 @@ function Timestamp({ iso, className }: { iso: string; className?: string }) {
     <time
       dateTime={iso}
       title={absolute}
-      className={`text-[10.5px] text-ink-3 num ${className ?? ""}`}
+      className="absolute -bottom-4 right-1 text-[10.5px] text-ink-3 num"
     >
       {label}
     </time>
   );
 }
 
-function relativeTime(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const s = Math.floor(ms / 1000);
-  if (s < 10) return "just now";
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
-
-function AttachmentChip({
-  attachment,
-}: {
-  attachment: { storageId: string; name: string; size?: number };
-}) {
+function AttachmentChip({ attachment }: { attachment: { storageId: string; name: string; size?: number } }) {
   const url = useQuery(api.agentMessages.attachmentUrl, {
     storageId: attachment.storageId as Id<"_storage">,
   }) as string | null | undefined;
   return (
     <a
       href={url ?? "#"}
-      onClick={(e) => {
-        if (!url) e.preventDefault();
-      }}
+      onClick={(e) => { if (!url) e.preventDefault(); }}
       target="_blank"
       rel="noreferrer"
       className="inline-flex items-center gap-1.5 h-6 px-2 rounded-sm border border-line bg-page text-[11.5px] text-ink hover:bg-surface"
-      title={
-        attachment.size
-          ? `${attachment.name} · ${Math.round(attachment.size / 1024)} KB`
-          : attachment.name
-      }
+      title={attachment.size ? `${attachment.name} · ${Math.round(attachment.size / 1024)} KB` : attachment.name}
     >
       <span className="text-ink-3">📎</span>
       <span className="truncate max-w-[180px]">{attachment.name}</span>
@@ -759,26 +418,7 @@ function AttachmentChip({
   );
 }
 
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  if (!text.trim()) return null;
-  return (
-    <button
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        } catch {
-          /* clipboard denied — silent */
-        }
-      }}
-      className="text-[11px] text-ink-3 hover:text-ink"
-    >
-      {copied ? "copied" : "copy"}
-    </button>
-  );
-}
+// ─── ConnectCta (composio_connect) ───────────────────────────────────────────
 
 function ConnectCta({
   toolkit,
@@ -799,14 +439,8 @@ function ConnectCta({
     setRegenerating(true);
     try {
       const res = await initiateConnection(toolkit, actorSlug);
-      if ("error" in res) {
-        toast.error(res.error);
-        return;
-      }
-      if (!res.redirectUrl) {
-        toast.error("Composio returned no URL.");
-        return;
-      }
+      if ("error" in res) { toast.error(res.error); return; }
+      if (!res.redirectUrl) { toast.error("Composio returned no URL."); return; }
       window.location.href = res.redirectUrl;
     } finally {
       setRegenerating(false);
@@ -816,23 +450,10 @@ function ConnectCta({
   const dismiss = async () => {
     if (dismissing) return;
     setDismissing(true);
-    // Cancel the INITIATED Composio connection alongside marking the
-    // agent_action dismissed — otherwise the right rail keeps the
-    // toolkit pinned as `pending` until Composio sweeps it. Best-effort:
-    // we still call onDismiss() even if the server cancel fails, so the
-    // chat CTA reliably disappears.
     if (actorSlug) {
-      try {
-        await cancelPendingConnections(toolkit, actorSlug);
-      } catch {
-        /* non-fatal — see comment above */
-      }
+      try { await cancelPendingConnections(toolkit, actorSlug); } catch { /* non-fatal */ }
     }
     onDismiss();
-    // Nudge the ConnectionsRail to re-fetch — listConnections lives in
-    // its own client-side useEffect that only re-runs on actor change,
-    // so without an event the `pending` row sticks around even though
-    // Composio just dropped it.
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("castle:connections-changed"));
     }
@@ -841,10 +462,7 @@ function ConnectCta({
   return (
     <div className="flex items-center justify-between gap-3 text-[12.5px]">
       <div className="inline-flex items-center gap-2 min-w-0 text-ink-3">
-        <a
-          href={url}
-          className="h-7 px-3 rounded-sm bg-ink text-page inline-flex items-center hover:opacity-90"
-        >
+        <a href={url} className="h-7 px-3 rounded-sm bg-ink text-page inline-flex items-center hover:opacity-90">
           connect {toolkit} →
         </a>
         <button
@@ -866,6 +484,8 @@ function ConnectCta({
   );
 }
 
+// ─── Thinking (legacy fallback — shown only before any assistant row exists) ─
+
 function Thinking({
   tools = [],
   thought = "",
@@ -873,16 +493,8 @@ function Thinking({
 }: {
   tools?: ToolActivity[];
   thought?: string;
-  /** Slim variant rendered alongside assistant text mid-stream. Shows
-   *  the same dot loader + elapsed + recent tools but drops the
-   *  thought preview (redundant with the streamed text). */
   compact?: boolean;
 }) {
-  // Tick once a second so the operator can tell the agent is alive
-  // through long tool calls (Composio MCP roundtrips, especially the
-  // first call against a new connection, can take 5–15s before any
-  // text streams). Counter resets via `key=` whenever a new turn
-  // starts.
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const start = Date.now();
@@ -892,30 +504,14 @@ function Thinking({
     return () => clearInterval(id);
   }, []);
 
-  // Show the latest 3 tools — older ones collapse silently. Running
-  // tools stay until they get a tool_end event.
   const recent = tools.slice(-3);
-  const lastThoughtLine = thought
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .slice(-1)[0];
+  const lastThoughtLine = thought.trim().split("\n").filter(Boolean).slice(-1)[0];
   const runningToolName = tools.find((t) => t.status === "running")?.name;
 
-  // Compact mode: shown alongside assistant text while it's streaming.
-  // A single inline row — dot loader + label + running tool name if
-  // any — so the operator can see the agent is actively doing
-  // something even when text isn't moving (e.g. mid long tool call).
   if (compact) {
     return (
       <div className="flex items-center gap-2 px-0.5 py-1 text-[11.5px] text-ink-3 num">
-        <DotLoader
-          frames={THINKING_FRAMES}
-          duration={140}
-          repeatCount={-1}
-          className="gap-px"
-          dotClassName="size-[3px] rounded-[1px] bg-ink/15 [&.active]:bg-ink"
-        />
+        <DotLoader frames={THINKING_FRAMES} duration={140} repeatCount={-1} className="gap-px" dotClassName="size-[3px] rounded-[1px] bg-ink/15 [&.active]:bg-ink" />
         <span>
           {runningToolName ? (
             <>
@@ -933,42 +529,40 @@ function Thinking({
   return (
     <div className="flex flex-col gap-1 px-0.5 py-1 text-[12px] text-ink-3">
       <div className="flex items-center gap-2.5">
-        <DotLoader
-          frames={THINKING_FRAMES}
-          duration={140}
-          repeatCount={-1}
-          className="gap-px"
-          dotClassName="size-[3px] rounded-[1px] bg-ink/15 [&.active]:bg-ink"
-        />
-        <span className="num">
-          thinking{elapsed > 0 ? ` · ${elapsed}s` : "…"}
-        </span>
+        <DotLoader frames={THINKING_FRAMES} duration={140} repeatCount={-1} className="gap-px" dotClassName="size-[3px] rounded-[1px] bg-ink/15 [&.active]:bg-ink" />
+        <span className="num">thinking{elapsed > 0 ? ` · ${elapsed}s` : "…"}</span>
       </div>
       {recent.length > 0 && (
         <div className="flex flex-col gap-0.5 pl-4">
           {recent.map((t) => (
             <span key={t.id} className="num text-[11.5px]">
               <span className="text-ink-2">⚡</span>{" "}
-              <span className={t.status === "error" ? "text-accent" : ""}>
-                {t.name}
-              </span>
+              <span className={t.status === "error" ? "text-accent" : ""}>{t.name}</span>
               {t.status === "running" ? (
                 <span className="text-ink-3">…</span>
               ) : t.durationMs ? (
-                <span className="text-ink-3">
-                  {" "}
-                  · {(t.durationMs / 1000).toFixed(1)}s
-                </span>
+                <span className="text-ink-3"> · {(t.durationMs / 1000).toFixed(1)}s</span>
               ) : null}
             </span>
           ))}
         </div>
       )}
       {lastThoughtLine && (
-        <div className="pl-4 italic text-ink-3/80 line-clamp-1">
-          {lastThoughtLine}
-        </div>
+        <div className="pl-4 italic text-ink-3/80 line-clamp-1">{lastThoughtLine}</div>
       )}
     </div>
   );
+}
+
+function relativeTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(ms / 1000);
+  if (s < 10) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
 }

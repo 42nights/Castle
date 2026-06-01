@@ -30,25 +30,27 @@ export function TopNav() {
   const links = isOp ? operatorLinks : guestLinks;
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-page/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-12 max-w-[1280px] items-center gap-8 px-6 md:px-8">
+    <header className="sticky top-0 z-[var(--z-sticky,10)] border-b border-line bg-paper/90">
+      <div className="mx-auto flex h-14 max-w-[1280px] items-center gap-6 px-6 md:px-8">
+        {/* Brand */}
         <Link
           href={isOp ? "/" : "/templates"}
-          className="group flex items-center gap-2"
-          aria-label="Castle"
+          className="group flex items-center gap-2 pr-2 shrink-0"
+          aria-label="Castle home"
         >
           <span className="relative inline-flex text-ink">
-            <CastleIcon size={15} strokeWidth={1.75} aria-hidden />
+            <CastleIcon size={18} strokeWidth={1.75} aria-hidden />
             <span className="absolute -top-1 -right-1">
               <InFlightDot />
             </span>
           </span>
-          <span className="text-[15px] font-semibold tracking-tight text-ink group-hover:opacity-80 transition-opacity">
+          <span className="text-[16px] font-semibold tracking-tight text-ink group-hover:opacity-75 transition-opacity duration-quick">
             Castle
           </span>
         </Link>
 
-        <nav className="flex items-center gap-0.5">
+        {/* Nav links — accent-underline active state (::after 2px in accent) */}
+        <nav aria-label="Main navigation" className="flex items-center gap-0.5">
           {links.map((link) => {
             const active =
               link.href === "/"
@@ -60,10 +62,13 @@ export function TopNav() {
                 href={link.href}
                 aria-current={active ? "page" : undefined}
                 className={[
-                  "relative px-2.5 py-1.5 rounded-md text-[13px] transition-colors",
+                  // Base shape
+                  "relative h-8 px-3 flex items-center rounded-sm text-sm transition-colors duration-quick",
+                  // Active: ink text + 2px accent underline via pseudo
+                  // Inactive: ink-3, hover lifts to ink + surface bg
                   active
-                    ? "text-ink bg-surface"
-                    : "text-ink-3 hover:text-ink hover:bg-surface/50",
+                    ? "text-ink after:absolute after:bottom-0 after:left-3 after:right-3 after:h-[2px] after:rounded-full after:bg-accent"
+                    : "text-ink-3 hover:text-ink hover:bg-surface-1",
                 ].join(" ")}
               >
                 {link.label}
@@ -72,17 +77,44 @@ export function TopNav() {
           })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-4">
+        {/* Right slot: ⌘K hint + profile */}
+        <div className="ml-auto flex items-center gap-3">
           {isOp && (
-            <span className="hidden lg:inline text-[11px] text-ink-3">
-              <kbd className="num text-[10px] text-ink-2 bg-surface px-1.5 py-0.5 rounded">
-                &#8984;K
-              </kbd>
-            </span>
+            // "Ask Castle ⌘K" — real button, visible md+, opens palette
+            // 'use client' component so the click can dispatch the keyboard event
+            <CmdKHint />
           )}
           <ProfileMenu />
         </div>
       </div>
     </header>
+  );
+}
+
+// Separate component so we can use the window event without polluting TopNav
+function CmdKHint() {
+  const open = () => {
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }),
+    );
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={open}
+      aria-label="Open command palette (⌘K)"
+      className={[
+        "hidden md:inline-flex items-center gap-1.5 h-7 px-2.5 rounded-sm",
+        "text-ink-3 text-[13px] hover:bg-surface-1 hover:text-ink",
+        "transition-colors duration-quick outline-none",
+        "focus-visible:shadow-[var(--shadow-focus)]",
+      ].join(" ")}
+    >
+      Ask Castle
+      <kbd className="font-mono text-[11px] text-ink-3 bg-surface-1 border border-line px-1 py-px rounded-sm leading-none">
+        ⌘K
+      </kbd>
+    </button>
   );
 }
