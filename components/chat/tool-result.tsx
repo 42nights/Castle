@@ -20,6 +20,8 @@ import {
   type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import {
   getRenderer,
   normalizeToolName,
@@ -274,10 +276,11 @@ function ToolResultCards({
         {sorted.map((item, i) => {
           const sev = safeStr(item.severity);
           const style = SEVERITY_COLORS[sev] ?? SEVERITY_COLORS.medium;
-          return (
-            <div key={i} className={`flex items-start gap-3 px-3 py-2.5 border-l-2 ${style.border}`}>
+          const href = typeof item.href === "string" && item.href ? item.href : null;
+          const inner = (
+            <>
               <span className={`mt-1 inline-block size-1.5 rounded-full shrink-0 ${style.dot}`} aria-hidden />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className={`text-[10px] uppercase tracking-wider font-medium ${style.label}`}>{sev}</span>
                 </div>
@@ -290,7 +293,20 @@ function ToolResultCards({
                   </p>
                 )}
               </div>
-            </div>
+            </>
+          );
+          const base = `flex items-start gap-3 px-3 py-2.5 border-l-2 ${style.border}`;
+          return href ? (
+            <Link
+              key={i}
+              href={href}
+              className={`${base} group/card hover:bg-surface-1 transition-colors duration-[var(--duration-instant)] outline-none focus-visible:bg-surface-1`}
+            >
+              {inner}
+              <ChevronRight className="ml-auto self-center size-3.5 text-ink-3 opacity-0 group-hover/card:opacity-100 transition-opacity shrink-0" />
+            </Link>
+          ) : (
+            <div key={i} className={base}>{inner}</div>
           );
         })}
       </div>

@@ -21,6 +21,9 @@ export type ChatMessage = {
   /** ISO timestamp the row was inserted into Convex. Surfaced for
    *  hover-revealed timestamps and CTA-timing logic. */
   createdAt: string;
+  /** The agent_turns row that produced this assistant message. Lets the
+   *  transcript re-render the turn's tool-result widgets in history. */
+  turnId?: string;
   /** Files attached when the operator sent this message. Empty/absent
    *  for assistant rows and user rows sent without attachments. */
   attachments?: ChatAttachment[];
@@ -187,6 +190,7 @@ export function useHermesChat({
         streaming: isStreaming,
         status: m.status,
         createdAt: m.created_at,
+        turnId: m.turn_id as string | undefined,
         attachments: (m as { attachments?: ChatAttachment[] }).attachments,
       };
     });

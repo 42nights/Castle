@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { NarrationFooter, NarrationRibbon } from "@/components/chat/narration-ribbon";
 import { ToolResult } from "@/components/chat/tool-result";
+import { HistoricalToolResults } from "@/components/chat/historical-tool-results";
 import type { ChatMessage, ToolActivity } from "@/lib/use-hermes-chat";
 
 type Props = {
@@ -122,13 +123,19 @@ export function MessageAssistant({
         />
       )}
 
-      {/* Tool results — shown inline between ribbon and text */}
+      {/* Tool results — live (streaming) inline between ribbon and text */}
       {toolsWithResults.length > 0 && (
         <div className="mb-2 flex flex-col gap-2">
           {toolsWithResults.map((t) => (
             <ToolResult key={t.id} tool={t} turnsAgo={turnsAgo} />
           ))}
         </div>
+      )}
+
+      {/* Tool results — persisted for completed turns (re-rendered from
+          agent_tool_events so the widgets stay in the response history). */}
+      {!isStreaming && message.turnId && toolsWithResults.length === 0 && (
+        <HistoricalToolResults turnId={message.turnId} turnsAgo={turnsAgo} />
       )}
 
       {/* Assistant text */}
