@@ -13,9 +13,14 @@ export type RendererCtx = {
 
 export type ToolRenderer = (result: unknown, ctx: RendererCtx) => ReactNode;
 
-// Strip "castle." or "castle_" prefix from a raw tool name.
+// Strip MCP-server and "castle" prefixes from a raw tool name so the real
+// MCP tool name (e.g. "mcp_castle_list_attention") maps to its renderer
+// ("list_attention").
 export function normalizeToolName(raw: string): string {
-  return raw.replace(/^castle[._]/i, "").toLowerCase();
+  return raw
+    .replace(/^mcp[._]/i, "")
+    .replace(/^castle[._]/i, "")
+    .toLowerCase();
 }
 
 // The registry itself — populated in tool-result.tsx where the actual

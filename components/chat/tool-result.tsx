@@ -53,6 +53,38 @@ function safeStr(v: unknown): string {
   return String(v);
 }
 
+// Hermes wraps every MCP tool result for prompt-injection safety as
+//   { type: "text", text: '<untrusted_tool_result source="mcp_castle_X">\n<preamble>\n\n{json}' }
+// and reports the tool-event name as the generic "other". Recover the real
+// tool source from the wrapper and the structured payload — castle-mcp
+// double-encodes the rows as { result: "<json string>" }, so we parse twice.
+function unwrapToolResult(name: string, result: unknown): { name: string; result: unknown } {
+  if (
+    result &&
+    typeof result === "object" &&
+    (result as { type?: unknown }).type === "text" &&
+    typeof (result as { text?: unknown }).text === "string"
+  ) {
+    const text = (result as { text: string }).text;
+    const src = text.match(/<untrusted_tool_result\s+source="([^"]+)"/);
+    const source = src?.[1] ?? name;
+    const body = text.replace(/<\/untrusted_tool_result>\s*$/, "").trim();
+    const jsonStart = body.indexOf("{");
+    if (jsonStart >= 0) {
+      try {
+        let parsed: unknown = JSON.parse(body.slice(jsonStart));
+        const inner = (parsed as { result?: unknown }).result;
+        if (typeof inner === "string") {
+          try { parsed = JSON.parse(inner); } catch { /* keep outer parsed */ }
+        }
+        return { name: source, result: parsed };
+      } catch { /* not JSON — fall through to raw text */ }
+    }
+    return { name: source, result };
+  }
+  return { name, result };
+}
+
 const COLLAPSE_LS_PREFIX = "castle_tool_collapse_";
 
 function useCollapsed(key: string, turnsAgo: number): [boolean, () => void] {
@@ -534,21 +566,25 @@ for (const name of ["engagement_mark_touched", "attention_snooze", "attention_re
 
 export function ToolResult({ tool, turnsAgo }: { tool: ToolActivity; turnsAgo: number }) {
   const ctx: RendererCtx = { turnsAgo };
-  const renderer = getRenderer(tool.name);
 
   if (tool.result === undefined) return null;
 
+  // Recover the real MCP tool name + structured payload from the
+  // <untrusted_tool_result> wrapper (live + historical both hit this path).
+  const { name, result } = unwrapToolResult(tool.name, tool.result);
+  const renderer = getRenderer(name);
+
   if (renderer) {
-    const node = renderer(tool.result, ctx);
+    const node = renderer(result, ctx);
     if (!node) return null;
     return <div className="mt-2">{node}</div>;
   }
 
   // Unknown tool → JSON fallback
-  const collapseKey = `unknown_${normalizeToolName(tool.name)}_${turnsAgo}`;
+  const collapseKey = `unknown_${normalizeToolName(name)}_${turnsAgo}`;
   return (
     <div className="mt-2">
-      <JsonFallback result={tool.result} ctx={ctx} collapseKey={collapseKey} />
+      <JsonFallback result={result} ctx={ctx} collapseKey={collapseKey} />
     </div>
   );
 }
