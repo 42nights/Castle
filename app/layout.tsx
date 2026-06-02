@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 // Editorial display — Fraunces variable, optical-size axis for the
@@ -49,6 +50,14 @@ export default async function RootLayout({
       lang="en"
       className={`${fraunces.variable} ${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
+      {/* Blocking script — runs before paint, prevents flash of light on dark pref */}
+      <Script
+        id="castle-theme-init"
+        strategy="beforeInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `(function(){try{var t=localStorage.getItem('castle-theme');if(t==='dark')document.documentElement.classList.add('dark');}catch(e){}})();`,
+        }}
+      />
       <body className="min-h-full bg-page text-ink font-sans">
         <ConvexClientProvider initialToken={token}>
           <ChatProvider>

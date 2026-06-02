@@ -7,6 +7,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { InFlightDot } from "@/components/in-flight-dot";
 import { ProfileMenu } from "@/components/profile-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const operatorLinks = [
   { href: "/", label: "Ask" },
@@ -84,6 +85,7 @@ export function TopNav() {
             // 'use client' component so the click can dispatch the keyboard event
             <CmdKHint />
           )}
+          <ThemeToggle />
           <ProfileMenu />
         </div>
       </div>

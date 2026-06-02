@@ -7,47 +7,49 @@
 /* Castle design system — light-mode "Paper" (castle_design_overhaul.md §2).
    Existing token NAMES (page/surface/ink/line/accent) are remapped to light
    values so every component flips to light with zero code change; the richer
-   new vocabulary is added on top for the rebuilt components. */
+   new vocabulary is added on top for the rebuilt components.
+   TOKEN INDIRECTION: @theme inline tokens reference --pal-* vars so that
+   the .dark class can swap the palette at runtime without re-baking utilities. */
 @theme inline {
   /* Background ladder */
-  --color-page: #fafaf7;
-  --color-paper: #fafaf7;
-  --color-canvas: #ffffff;
-  --color-surface: #f4f4f0;
-  --color-surface-1: #f4f4f0;
-  --color-surface-2: #ecece6;
-  --color-surface-hover: #f1f1ec;
-  --color-overlay: rgba(20, 18, 14, 0.04);
+  --color-page: var(--pal-page);
+  --color-paper: var(--pal-paper);
+  --color-canvas: var(--pal-canvas);
+  --color-surface: var(--pal-surface);
+  --color-surface-1: var(--pal-surface-1);
+  --color-surface-2: var(--pal-surface-2);
+  --color-surface-hover: var(--pal-surface-hover);
+  --color-overlay: var(--pal-overlay);
 
   /* Ink ladder — warm near-black */
-  --color-ink: #1a1813;
-  --color-ink-2: #4a4742;
-  --color-ink-3: #8a857c;
-  --color-ink-4: #b8b3a8;
+  --color-ink: var(--pal-ink);
+  --color-ink-2: var(--pal-ink-2);
+  --color-ink-3: var(--pal-ink-3);
+  --color-ink-4: var(--pal-ink-4);
 
   /* Lines */
-  --color-line: rgba(26, 24, 19, 0.08);
-  --color-line-strong: rgba(26, 24, 19, 0.14);
-  --color-line-focus: rgba(26, 24, 19, 0.4);
+  --color-line: var(--pal-line);
+  --color-line-strong: var(--pal-line-strong);
+  --color-line-focus: var(--pal-line-focus);
 
   /* Single accent — honey amber */
-  --color-accent: #c9851f;
-  --color-accent-soft: #f5e6cc;
-  --color-accent-ink: #6b4513;
+  --color-accent: var(--pal-accent);
+  --color-accent-soft: var(--pal-accent-soft);
+  --color-accent-ink: var(--pal-accent-ink);
 
   /* Health — softened, not stoplight */
-  --color-health-good: #6b9a6b;
-  --color-health-warn: #c9851f;
-  --color-health-bad: #b25548;
-  --color-health-soft-good: #e4ede4;
-  --color-health-soft-warn: #f5e6cc;
-  --color-health-soft-bad: #f0ddd8;
+  --color-health-good: var(--pal-health-good);
+  --color-health-warn: var(--pal-health-warn);
+  --color-health-bad: var(--pal-health-bad);
+  --color-health-soft-good: var(--pal-health-soft-good);
+  --color-health-soft-warn: var(--pal-health-soft-warn);
+  --color-health-soft-bad: var(--pal-health-soft-bad);
 
   /* Status chip tints */
-  --color-chip-deal: #e8e2d6;
-  --color-chip-build: #dae5da;
-  --color-chip-live: #f5e6cc;
-  --color-chip-wind: #e8e2de;
+  --color-chip-deal: var(--pal-chip-deal);
+  --color-chip-build: var(--pal-chip-build);
+  --color-chip-live: var(--pal-chip-live);
+  --color-chip-wind: var(--pal-chip-wind);
 
   /* shadcn aliases (remapped to light) */
   --color-background: var(--color-page);
@@ -114,7 +116,44 @@
   --radius-2xl: 16px;
 }
 
+/* Light palette — the original hex values, now as --pal-* for runtime indirection */
 :root {
+  color-scheme: light;
+
+  --pal-page: #fafaf7;
+  --pal-paper: #fafaf7;
+  --pal-canvas: #ffffff;
+  --pal-surface: #f4f4f0;
+  --pal-surface-1: #f4f4f0;
+  --pal-surface-2: #ecece6;
+  --pal-surface-hover: #f1f1ec;
+  --pal-overlay: rgba(20, 18, 14, 0.04);
+
+  --pal-ink: #1a1813;
+  --pal-ink-2: #4a4742;
+  --pal-ink-3: #8a857c;
+  --pal-ink-4: #b8b3a8;
+
+  --pal-line: rgba(26, 24, 19, 0.08);
+  --pal-line-strong: rgba(26, 24, 19, 0.14);
+  --pal-line-focus: rgba(26, 24, 19, 0.4);
+
+  --pal-accent: #c9851f;
+  --pal-accent-soft: #f5e6cc;
+  --pal-accent-ink: #6b4513;
+
+  --pal-health-good: #6b9a6b;
+  --pal-health-warn: #c9851f;
+  --pal-health-bad: #b25548;
+  --pal-health-soft-good: #e4ede4;
+  --pal-health-soft-warn: #f5e6cc;
+  --pal-health-soft-bad: #f0ddd8;
+
+  --pal-chip-deal: #e8e2d6;
+  --pal-chip-build: #dae5da;
+  --pal-chip-live: #f5e6cc;
+  --pal-chip-wind: #e8e2de;
+
   /* Shadows as raw custom properties — consume via shadow-[var(--shadow-base)] */
   --shadow-xs: 0 1px 1px rgba(26, 20, 12, 0.04);
   --shadow-sm: 0 1px 2px rgba(26, 20, 12, 0.04), 0 1px 3px rgba(26, 20, 12, 0.03);
@@ -147,6 +186,53 @@
   --chart-3: var(--color-accent);
   --chart-4: var(--color-health-good);
   --chart-5: var(--color-health-warn);
+}
+
+/* Dark palette — warm tinted blacks, brighter amber accent */
+.dark {
+  color-scheme: dark;
+
+  --pal-page: #14120e;
+  --pal-paper: #14120e;
+  --pal-canvas: #1c1915;
+  --pal-surface: #211d18;
+  --pal-surface-1: #211d18;
+  --pal-surface-2: #2a251f;
+  --pal-surface-hover: #272219;
+  --pal-overlay: rgba(0, 0, 0, 0.32);
+
+  --pal-ink: #f1ede5;
+  --pal-ink-2: #c6c0b4;
+  --pal-ink-3: #928d81;
+  --pal-ink-4: #6a655c;
+
+  --pal-line: rgba(240, 236, 228, 0.10);
+  --pal-line-strong: rgba(240, 236, 228, 0.17);
+  --pal-line-focus: rgba(240, 236, 228, 0.42);
+
+  --pal-accent: #e3a73f;
+  --pal-accent-soft: rgba(227, 167, 63, 0.16);
+  --pal-accent-ink: #f3d8a6;
+
+  --pal-health-good: #82b682;
+  --pal-health-warn: #e3a73f;
+  --pal-health-bad: #d67d6e;
+  --pal-health-soft-good: rgba(130, 182, 130, 0.16);
+  --pal-health-soft-warn: rgba(227, 167, 63, 0.16);
+  --pal-health-soft-bad: rgba(214, 125, 110, 0.16);
+
+  --pal-chip-deal: #2a251f;
+  --pal-chip-build: #232b23;
+  --pal-chip-live: #2e2820;
+  --pal-chip-wind: #2a2622;
+
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-base: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.4), 0 16px 48px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 8px 16px rgba(0, 0, 0, 0.45), 0 32px 64px rgba(0, 0, 0, 0.55);
+  --shadow-focus: 0 0 0 3px rgba(227, 167, 63, 0.28);
 }
 
 @layer base {
