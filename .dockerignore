@@ -6,14 +6,8 @@
 .cache
 .interface-design
 .env*
-data
 node_modules
 *.log
 .DS_Store
 .husky
 deploy
-public
-app
-components
-hooks
-styles
