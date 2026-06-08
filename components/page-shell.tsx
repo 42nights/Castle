@@ -63,7 +63,10 @@ export function PageHeader({
         </h1>
 
         {description && (
-          <p
+          // <div>, not <p>: some pages (e.g. customer detail) pass block-level
+          // controls like BackedByInput as the description, which are invalid
+          // inside a <p> and trigger hydration errors. Typography is unchanged.
+          <div
             className={[
               "mt-2 text-ink-2 max-w-[60ch]",
               isEditorial
@@ -72,7 +75,7 @@ export function PageHeader({
             ].join(" ")}
           >
             {description}
-          </p>
+          </div>
         )}
       </div>
 
