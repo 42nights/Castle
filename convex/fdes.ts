@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { assertOperatorRead } from "./lib/assertOperator";
+import { assertOperator, assertOperatorRead } from "./lib/assertOperator";
 import { checkNonNegative } from "./lib/bounds";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
 import { resolveOrgId, scopeToOrg } from "./lib/org";
@@ -17,11 +17,13 @@ export const list = query({
 
 export const getBySlug = query({
   args: { slug: v.string() },
-  handler: async (ctx, { slug }) =>
-    ctx.db
+  handler: async (ctx, { slug }) => {
+    await assertOperatorRead(ctx);
+    return ctx.db
       .query("fdes")
       .withIndex("by_slug", (q) => q.eq("slug", slug))
-      .first(),
+      .first();
+  },
 });
 
 export const create = mutation({
@@ -39,6 +41,7 @@ export const create = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, args) => {
+    await assertOperator(ctx);
     checkNonNegative("capacity_hours_per_week", args.capacity_hours_per_week);
     const slug = await uniqueSlug(ctx, "fdes", slugify(args.name));
     const now = nowIso();
@@ -88,6 +91,7 @@ export const update = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, patch, actor_fde_id }) => {
+    await assertOperator(ctx);
     const fde = await ctx.db.get(id);
     if (!fde) throw new Error("FDE not found");
     if (patch.capacity_hours_per_week !== undefined) {
@@ -114,6 +118,7 @@ export const setTags = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, tags, actor_fde_id }) => {
+    await assertOperator(ctx);
     await ctx.db.patch(id, {
       tags: cleanTags(tags),
       updated_at: nowIso(),
@@ -131,6 +136,7 @@ export const addTag = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, tag, actor_fde_id }) => {
+    await assertOperator(ctx);
     const fde = await ctx.db.get(id);
     if (!fde) throw new Error("FDE not found");
     const next = cleanTags([...(fde.tags ?? []), tag]);
@@ -151,6 +157,7 @@ export const removeTag = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, tag, actor_fde_id }) => {
+    await assertOperator(ctx);
     const fde = await ctx.db.get(id);
     if (!fde) throw new Error("FDE not found");
     const needle = tag.trim().toLowerCase();
@@ -189,6 +196,7 @@ export const setCapacity = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, capacity_hours_per_week, actor_fde_id }) => {
+    await assertOperator(ctx);
     if (capacity_hours_per_week < 0)
       throw new Error("capacity must be non-negative");
     await ctx.db.patch(id, {
@@ -206,6 +214,7 @@ export const logHours = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, delta, actor_fde_id }) => {
+    await assertOperator(ctx);
     const fde = await ctx.db.get(id);
     if (!fde) throw new Error("FDE not found");
     const next = Math.max(0, fde.hours_this_week + delta);
@@ -220,6 +229,7 @@ export const logHours = mutation({
 export const remove = mutation({
   args: { id: v.id("fdes") },
   handler: async (ctx, { id }) => {
+    await assertOperator(ctx);
     await ctx.db.delete(id);
   },
 });

@@ -252,7 +252,7 @@ export function AssistantDigestView({
     setSpeaking(true);
   }, [digest, speaking]);
 
-  const sendToSlack = useCallback(() => {
+  const sendByEmail = useCallback(() => {
     if (!digest) return;
     const subject = encodeURIComponent(`Morning Brief — ${digest.date}`);
     const body = encodeURIComponent(digest.markdown);
@@ -294,11 +294,11 @@ export function AssistantDigestView({
             <Button
               variant="outline"
               size="sm"
-              onClick={sendToSlack}
+              onClick={sendByEmail}
               aria-label="Send brief via email"
             >
               <Send size={14} aria-hidden="true" />
-              Send to Slack
+              Email brief
             </Button>
             <Button
               variant="ghost"

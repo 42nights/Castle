@@ -19,7 +19,9 @@ export default function GlobalError({
         <div className="max-w-md text-center flex flex-col items-center gap-4">
           <h2 className="text-lg font-semibold">Something went wrong</h2>
           <p className="text-sm text-[#4A4742]">
-            {error.message || "An unexpected error occurred."}
+            {process.env.NODE_ENV === "development"
+              ? error.message || "An unexpected error occurred."
+              : "An unexpected error occurred. Try again."}
           </p>
           {error.digest && (
             <code className="text-xs text-[#8A857C]">Digest: {error.digest}</code>

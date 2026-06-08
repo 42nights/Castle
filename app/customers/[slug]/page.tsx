@@ -102,10 +102,9 @@ export default async function CustomerDetail({
               <thead>
                 <tr className="border-b border-line text-ink-3 uppercase tracking-[0.06em] text-[10px]">
                   <th className="text-left h-9 px-4 font-medium">Agent</th>
-                  <th className="text-left h-9 px-3 font-medium hidden md:table-cell">Template</th>
                   <th className="text-right h-9 px-3 font-medium hidden md:table-cell">Custom %</th>
-                  <th className="text-right h-9 px-3 font-medium">Hrs/wk</th>
                   <th className="text-right h-9 px-3 font-medium hidden sm:table-cell">Deployed</th>
+                  <th className="text-right h-9 px-3 font-medium">Hrs/wk</th>
                 </tr>
               </thead>
               <tbody>

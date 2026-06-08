@@ -1,4 +1,5 @@
 import { query } from "./_generated/server";
+import { assertOperatorRead } from "./lib/assertOperator";
 import { resolveOrgId, scopeToOrg } from "./lib/org";
 
 /**
@@ -12,6 +13,7 @@ import { resolveOrgId, scopeToOrg } from "./lib/org";
 export const overview = query({
   args: {},
   handler: async (ctx) => {
+    await assertOperatorRead(ctx);
     const orgId = await resolveOrgId(ctx);
     const [
       fdes,

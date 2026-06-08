@@ -238,7 +238,11 @@ export function ChatLanding() {
                             {m.attachments && m.attachments.length > 0 && (
                               <div className="flex flex-wrap justify-end gap-1.5">
                                 {m.attachments.map((a) => (
-                                  <AttachmentChip key={a.storageId} attachment={a} />
+                                  <AttachmentChip
+                                    key={a.storageId}
+                                    attachment={a}
+                                    conversationId={conversationId}
+                                  />
                                 ))}
                               </div>
                             )}
@@ -399,10 +403,22 @@ function UserTimestamp({ iso }: { iso: string }) {
   );
 }
 
-function AttachmentChip({ attachment }: { attachment: { storageId: string; name: string; size?: number } }) {
-  const url = useQuery(api.agentMessages.attachmentUrl, {
-    storageId: attachment.storageId as Id<"_storage">,
-  }) as string | null | undefined;
+function AttachmentChip({
+  attachment,
+  conversationId,
+}: {
+  attachment: { storageId: string; name: string; size?: number };
+  conversationId: Id<"agent_conversations"> | null;
+}) {
+  const url = useQuery(
+    api.agentMessages.attachmentUrl,
+    conversationId
+      ? {
+          storageId: attachment.storageId as Id<"_storage">,
+          conversation_id: conversationId,
+        }
+      : "skip",
+  ) as string | null | undefined;
   return (
     <a
       href={url ?? "#"}

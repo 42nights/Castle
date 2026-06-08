@@ -27,36 +27,17 @@ export default async function ConnectionsPage({
         }
       />
 
-      {/* Setup required banner — soft amber, not a plain panel */}
+      {/* Integrations not yet connected — neutral, investor-facing empty state */}
       {!configured && (
         <div
-          role="alert"
+          role="status"
           className="rounded-md bg-accent-soft px-4 py-3 mb-6 text-[13px] text-accent-ink border border-accent/20"
         >
-          <p className="font-medium text-ink mb-0.5">Setup required</p>
+          <p className="font-medium text-ink mb-0.5">Integrations coming online</p>
           <p>
-            Add{" "}
-            <span className="font-mono text-[12px] bg-canvas px-1 py-px rounded-sm">
-              COMPOSIO_API_KEY
-            </span>{" "}
-            to{" "}
-            <span className="font-mono text-[12px] bg-canvas px-1 py-px rounded-sm">
-              .env.local
-            </span>{" "}
-            and restart{" "}
-            <span className="font-mono text-[12px] bg-canvas px-1 py-px rounded-sm">
-              pnpm dev
-            </span>
-            . Get a key at{" "}
-            <a
-              href="https://app.composio.dev/api-keys"
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-2 hover:text-ink transition-colors"
-            >
-              app.composio.dev/api-keys
-            </a>
-            .
+            The integration catalog is being provisioned for this workspace.
+            Once connected, you&apos;ll be able to wire any service to Castle and
+            Hermes with one-click OAuth.
           </p>
         </div>
       )}

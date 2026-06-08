@@ -302,11 +302,28 @@ export const generateAttachmentUploadUrl = mutation({
 
 /** Resolve a storage id to a (signed) URL — used by the chat renderer
  *  to display attachment chips with click-to-download links. Returns
- *  null for missing/expired ids. */
+ *  null for missing/expired ids. Object-level authz: the caller must own
+ *  (or share) the conversation AND the storage id must actually be
+ *  attached to a message in that conversation — otherwise any operator
+ *  could resolve a signed URL for any attachment by id (horizontal IDOR). */
 export const attachmentUrl = query({
-  args: { storageId: v.id("_storage") },
-  handler: async (ctx, { storageId }) => {
-    await requireUser(ctx);
+  args: {
+    storageId: v.id("_storage"),
+    conversation_id: v.id("agent_conversations"),
+  },
+  handler: async (ctx, { storageId, conversation_id }) => {
+    const access = await tryConversation(ctx, conversation_id);
+    if (!access) return null;
+    const owns = await ctx.db
+      .query("agent_messages")
+      .withIndex("by_conversation_time", (q) =>
+        q.eq("conversation_id", conversation_id),
+      )
+      .collect();
+    const attached = owns.some((m) =>
+      m.attachments?.some((a) => a.storageId === storageId),
+    );
+    if (!attached) return null;
     return await ctx.storage.getUrl(storageId);
   },
 });

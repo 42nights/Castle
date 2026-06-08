@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { assertOperator, assertOperatorRead } from "./lib/assertOperator";
 import { logEngagementUpdate } from "./lib/audit";
 import { checkNonNegative, checkPercent } from "./lib/bounds";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
@@ -21,6 +22,7 @@ const health = v.union(
 export const list = query({
   args: {},
   handler: async (ctx) => {
+    await assertOperatorRead(ctx);
     const orgId = await resolveOrgId(ctx);
     const rows = await ctx.db.query("engagements").collect();
     return scopeToOrg(rows, orgId);
@@ -29,35 +31,42 @@ export const list = query({
 
 export const getBySlug = query({
   args: { slug: v.string() },
-  handler: async (ctx, { slug }) =>
-    ctx.db
+  handler: async (ctx, { slug }) => {
+    await assertOperatorRead(ctx);
+    return ctx.db
       .query("engagements")
       .withIndex("by_slug", (q) => q.eq("slug", slug))
-      .first(),
+      .first();
+  },
 });
 
 export const listAssignments = query({
   args: { engagement_id: v.id("engagements") },
-  handler: async (ctx, { engagement_id }) =>
-    ctx.db
+  handler: async (ctx, { engagement_id }) => {
+    await assertOperatorRead(ctx);
+    return ctx.db
       .query("engagement_assignments")
       .withIndex("by_engagement", (q) => q.eq("engagement_id", engagement_id))
-      .collect(),
+      .collect();
+  },
 });
 
 export const listUpdatesByEngagement = query({
   args: { engagement_id: v.id("engagements") },
-  handler: async (ctx, { engagement_id }) =>
-    ctx.db
+  handler: async (ctx, { engagement_id }) => {
+    await assertOperatorRead(ctx);
+    return ctx.db
       .query("engagement_updates")
       .withIndex("by_engagement", (q) => q.eq("engagement_id", engagement_id))
       .order("desc")
-      .collect(),
+      .collect();
+  },
 });
 
 export const listUpdatesByActor = query({
   args: { actor_fde_id: v.id("fdes"), limit: v.optional(v.number()) },
   handler: async (ctx, { actor_fde_id, limit }) => {
+    await assertOperatorRead(ctx);
     const q = ctx.db
       .query("engagement_updates")
       .withIndex("by_actor", (q) => q.eq("actor_fde_id", actor_fde_id))
@@ -68,12 +77,14 @@ export const listUpdatesByActor = query({
 
 export const listNotesByEngagement = query({
   args: { engagement_id: v.id("engagements") },
-  handler: async (ctx, { engagement_id }) =>
-    ctx.db
+  handler: async (ctx, { engagement_id }) => {
+    await assertOperatorRead(ctx);
+    return ctx.db
       .query("engagement_notes")
       .withIndex("by_engagement", (q) => q.eq("engagement_id", engagement_id))
       .order("desc")
-      .collect(),
+      .collect();
+  },
 });
 
 async function activeAssignments(
@@ -102,6 +113,7 @@ export const create = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, args) => {
+    await assertOperator(ctx);
     checkNonNegative("weekly_hours", args.weekly_hours);
     checkPercent("progress_pct", args.progress_pct);
     const customer = await ctx.db.get(args.customer_id);
@@ -161,6 +173,7 @@ export const update = mutation({
     actor_fde_id: v.id("fdes"),
   },
   handler: async (ctx, { id, patch, actor_fde_id }) => {
+    await assertOperator(ctx);
     if (patch.weekly_hours !== undefined) {
       checkNonNegative("weekly_hours", patch.weekly_hours);
     }
@@ -175,6 +188,7 @@ export const markTouched = mutation({
     note: v.optional(v.string()),
   },
   handler: async (ctx, { id, actor_fde_id, note }) => {
+    await assertOperator(ctx);
     const now = nowIso();
     await ctx.db.patch(id, {
       last_update_at: now,
@@ -197,6 +211,7 @@ export const movePhase = mutation({
     phase,
   },
   handler: async (ctx, { id, actor_fde_id, phase: nextPhase }) => {
+    await assertOperator(ctx);
     const eng = await ctx.db.get(id);
     if (!eng) throw new Error("engagement not found");
     const now = nowIso();
@@ -223,6 +238,7 @@ export const setProgress = mutation({
     pct: v.number(),
   },
   handler: async (ctx, { id, actor_fde_id, pct }) => {
+    await assertOperator(ctx);
     if (pct < 0 || pct > 100) throw new Error("progress must be 0-100");
     const eng = await ctx.db.get(id);
     if (!eng) throw new Error("engagement not found");
@@ -256,6 +272,7 @@ export const setHealth = mutation({
     health,
   },
   handler: async (ctx, { id, actor_fde_id, health: nextHealth }) => {
+    await assertOperator(ctx);
     const eng = await ctx.db.get(id);
     if (!eng) throw new Error("engagement not found");
     const now = nowIso();
@@ -281,6 +298,7 @@ export const reassign = mutation({
     fde_ids: v.array(v.id("fdes")),
   },
   handler: async (ctx, { id, actor_fde_id, fde_ids }) => {
+    await assertOperator(ctx);
     const eng = await ctx.db.get(id);
     if (!eng) throw new Error("engagement not found");
     // Dedupe input — same FDE picked twice in the dialog shouldn't write two rows.
@@ -342,6 +360,7 @@ export const saveNotes = mutation({
     client_id: v.string(),
   },
   handler: async (ctx, { id, actor_fde_id, body, base_version, client_id }) => {
+    await assertOperator(ctx);
     if (!Number.isInteger(base_version) || base_version < 1) {
       throw new Error(
         "base_version must be a positive integer (clients start at 1)",
@@ -387,6 +406,7 @@ export const saveNotes = mutation({
 export const remove = mutation({
   args: { id: v.id("engagements"), actor_fde_id: v.id("fdes") },
   handler: async (ctx, { id, actor_fde_id }) => {
+    await assertOperator(ctx);
     const assignments = await ctx.db
       .query("engagement_assignments")
       .withIndex("by_engagement", (q) => q.eq("engagement_id", id))

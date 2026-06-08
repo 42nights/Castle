@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { assertOperatorRead } from "./lib/assertOperator";
+import { assertOperator, assertOperatorRead } from "./lib/assertOperator";
 import { checkNonNegative } from "./lib/bounds";
 import { nowIso, slugify, uniqueSlug } from "./lib/util";
 import { resolveOrgId, scopeToOrg } from "./lib/org";
@@ -28,11 +28,13 @@ export const list = query({
 
 export const getBySlug = query({
   args: { slug: v.string() },
-  handler: async (ctx, { slug }) =>
-    ctx.db
+  handler: async (ctx, { slug }) => {
+    await assertOperatorRead(ctx);
+    return ctx.db
       .query("customers")
       .withIndex("by_slug", (q) => q.eq("slug", slug))
-      .first(),
+      .first();
+  },
 });
 
 export const create = mutation({
@@ -47,6 +49,7 @@ export const create = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, args) => {
+    await assertOperator(ctx);
     checkNonNegative("current_mrr", args.current_mrr);
     const slug = await uniqueSlug(ctx, "customers", slugify(args.name));
     const now = nowIso();
@@ -84,6 +87,7 @@ export const update = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, patch, actor_fde_id }) => {
+    await assertOperator(ctx);
     await ctx.db.patch(id, {
       ...patch,
       updated_at: nowIso(),
@@ -99,6 +103,7 @@ export const setHealth = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, health: nextHealth, actor_fde_id }) => {
+    await assertOperator(ctx);
     await ctx.db.patch(id, {
       health: nextHealth,
       updated_at: nowIso(),
@@ -114,6 +119,7 @@ export const setStatus = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, status: nextStatus, actor_fde_id }) => {
+    await assertOperator(ctx);
     await ctx.db.patch(id, {
       status: nextStatus,
       updated_at: nowIso(),
@@ -148,6 +154,7 @@ export const setBackedBy = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, backed_by, actor_fde_id }) => {
+    await assertOperator(ctx);
     const clean = Array.from(
       new Set(backed_by.map((b) => b.trim()).filter(Boolean)),
     );
@@ -166,6 +173,7 @@ export const setMrr = mutation({
     actor_fde_id: v.union(v.id("fdes"), v.null()),
   },
   handler: async (ctx, { id, current_mrr, actor_fde_id }) => {
+    await assertOperator(ctx);
     if (current_mrr < 0) throw new Error("MRR must be non-negative");
     await ctx.db.patch(id, {
       current_mrr,
@@ -178,6 +186,7 @@ export const setMrr = mutation({
 export const remove = mutation({
   args: { id: v.id("customers") },
   handler: async (ctx, { id }) => {
+    await assertOperator(ctx);
     await ctx.db.delete(id);
   },
 });

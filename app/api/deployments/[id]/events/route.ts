@@ -9,15 +9,20 @@ export async function POST(
 ) {
   const { id: deploymentId } = await params;
 
-  // Secret verification. If CASTLE_WEBHOOK_SECRET is unset we allow the
-  // request through — local-first posture: no secret configured = open.
-  // In production this MUST be set so only trusted emitters can write.
+  // Secret verification — fail closed. If CASTLE_WEBHOOK_SECRET is unset the
+  // receiver refuses all writes (503) rather than silently accepting forged
+  // events. When set, only emitters presenting the matching header pass (401
+  // otherwise). This must be configured in every environment that accepts
+  // deployment events.
   const secret = process.env.CASTLE_WEBHOOK_SECRET;
-  if (secret) {
-    const header = req.headers.get("x-castle-secret");
-    if (header !== secret) {
-      return Response.json({ error: "unauthorized" }, { status: 401 });
-    }
+  if (!secret) {
+    console.error(
+      "[deployments/events] CASTLE_WEBHOOK_SECRET unset — rejecting webhook",
+    );
+    return Response.json({ error: "receiver not configured" }, { status: 503 });
+  }
+  if (req.headers.get("x-castle-secret") !== secret) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 
   let body: unknown;
